@@ -72,6 +72,31 @@ describe('AgentTeamService', () => {
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_commit')
     expect(ASSISTANT_BUILDER_PROMPT).not.toContain('assistant_builder_create')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('必须等待新的用户消息')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('不要询问或限制工具')
+  })
+
+  it('lists only model-invocable Skills for the chosen Agent Preset', async () => {
+    const { service } = createHarness()
+
+    await expect(service.skillCatalog('default')).resolves.toEqual({
+      agentPresetId: 'default',
+      skills: [{
+        name: 'code-review',
+        description: 'Review code changes.',
+        source: 'user-agents',
+      }],
+    })
+  })
+
+  it('localizes built-in permission preset names while preserving their ids', async () => {
+    const { service } = createHarness()
+
+    await expect(service.catalog()).resolves.toMatchObject({
+      permissionPresets: [
+        { value: 'standard', name: '标准' },
+        { value: 'workspace-write', name: '工作区可写' },
+      ],
+    })
   })
 
   it('validates an assistant draft without storing it', async () => {
@@ -127,9 +152,23 @@ describe('AgentTeamService', () => {
     } as never)).rejects.toThrow()
   })
 
-  it('migrates legacy paused teams to active exactly once', async () => {
+  it('discards legacy tool restrictions from assistant input', async () => {
+    const { service } = createHarness()
+    const assistant = await service.createAssistant({
+      ...assistantInput(),
+      toolAllowlist: ['bash', 'skill'],
+    })
+
+    expect(assistant.toolAllowlist).toEqual([])
+  })
+
+  it('migrates legacy team state and tool restrictions exactly once', async () => {
     const { service, store } = createHarness()
     const assistant = await service.createAssistant(assistantInput())
+    await store.updateAssistant(assistant.id, current => ({
+      ...current,
+      toolAllowlist: ['bash'],
+    }))
     const draft = await service.createTeamDraft({
       name: 'Legacy Paused Team',
       workspaceId: 'workspace-1',
@@ -144,12 +183,14 @@ describe('AgentTeamService', () => {
       ])),
     }))
 
-    await service.migrateLegacyTeamStates()
+    await service.migrateLegacyData()
     const migrated = service.getTeam(draft.id)
-    await service.migrateLegacyTeamStates()
+    await service.migrateLegacyData()
 
     expect(migrated.state).toBe('active')
     expect(Object.values(migrated.members).map(member => member.displayName)).toEqual(['Codex Lead'])
+    expect(Object.values(migrated.members).map(member => member.assistantSnapshot.toolAllowlist)).toEqual([[]])
+    expect(service.getAssistant(assistant.id).toolAllowlist).toEqual([])
     expect(migrated.revision).toBe(legacy.revision + 1)
     expect(service.getTeam(draft.id).revision).toBe(migrated.revision)
   })
@@ -447,6 +488,28 @@ function createHarness(): {
   ctx.provide('agentPresets', {
     list: async () => [{ id: 'default', name: 'Default' }],
     resolve: async (id: string) => ({ id, name: id }),
+    standingKeyFor: async () => ({ kind: 'preset-scope' }),
+  } as never)
+  ctx.provide('tools', {
+    get: (name: string) => name === 'skill' ? { name: 'skill' } : undefined,
+  } as never)
+  ctx.provide('skills', {
+    list: async () => [
+      {
+        name: 'code-review',
+        description: 'Review code changes.',
+        invocation: { modelInvocable: true, userInvocable: true },
+        source: 'user-agents',
+        provider: 'filesystem',
+      },
+      {
+        name: 'manual-only',
+        description: 'Only users may invoke this.',
+        invocation: { modelInvocable: false, userInvocable: true },
+        source: 'user-agents',
+        provider: 'filesystem',
+      },
+    ],
   } as never)
   const permissionSet = vi.fn()
   ctx.provide('permissionPresets', {

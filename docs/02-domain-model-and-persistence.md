@@ -26,7 +26,11 @@ type AssistantTemplate = {
 };
 ```
 
-Provider 和 Model 是可启动模板的必填字段。候选项来自 `ctx.llm.listProviders()` 和 `ctx.llm.listModels(provider)`；UI 使用 Provider 联动的模型下拉框完整展示这些候选项，并保留“自定义模型 ID”选项。模型目录是建议列表，不是路由白名单，因此适配器支持但未列出的模型仍可填写，并用 `ctx.llm.resolveModelInfo()` 做最终校验。
+`skillAllowlist` 是为兼容首版持久化结构保留的内部字段名；产品语义是“这个助手已选择、可以使用的 Skills”，不是面向用户的白名单。空数组表示不使用任何 Skill。Skill 正文不进入模板，成员执行任务时由 Harness 根据名称按需加载当前 Workspace 中的胜出定义。
+
+`toolAllowlist` 同样只作为首版记录的兼容字段保留。新建和更新时强制写为空数组，启动迁移会清除历史值，成员运行时不会读取它；工具能力完全由 Agent Preset 和权限预设决定。
+
+Provider 和 Model 是可启动模板的必填字段。候选项来自 `ctx.llm.listProviders()` 和 `ctx.llm.listModels(provider)`；UI 使用 Provider 联动的模型下拉框完整展示真实候选项，不提供自定义模型 ID。后端仍用 `ctx.llm.resolveModelInfo()` 做最终校验。
 
 模板只保存 Provider 路由和模型 ID，不保存 API Key、Token 或 Harness Settings 内容。
 

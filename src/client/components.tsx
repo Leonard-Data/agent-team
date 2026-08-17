@@ -29,6 +29,7 @@ interface AssistantView {
   model: string
   agentPresetId: string
   permissionPresetId: string
+  skillAllowlist: string[]
   revision: number
 }
 
@@ -69,6 +70,15 @@ interface CatalogView {
   workspaces: Array<{ id: string; path: string; title: string; status: 'ok' | 'missing-dir' }>
 }
 
+interface SkillCatalogView {
+  agentPresetId: string
+  skills: Array<{
+    name: string
+    description: string
+    source: string
+  }>
+}
+
 export interface WorkspaceChoice {
   id: string
   path: string
@@ -79,8 +89,6 @@ interface Page<T> {
   items: T[]
   total: number
 }
-
-const CUSTOM_MODEL_VALUE = '__agent_team_custom_model__'
 
 const TEAM_STATE_LABELS: Record<string, string> = {
   draft: '待启动',
@@ -636,7 +644,12 @@ function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onC
     <article className={css.card}>
       <strong>{assistant.name}</strong>
       <span className={css.muted}>{assistant.provider} / {assistant.model}</span>
-      <span className={css.muted}>Preset: {assistant.agentPresetId} · 权限: {assistant.permissionPresetId}</span>
+      <span className={css.muted}>
+        Preset: {assistant.agentPresetId} · 权限: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId}
+      </span>
+      <span className={css.muted}>
+        Skills: {assistant.skillAllowlist.length > 0 ? assistant.skillAllowlist.join('、') : '未选择'}
+      </span>
       {assistant.description && <p className={css.description}>{assistant.description}</p>}
       <div className={css.actions}>
         <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void clone() }}>复制</button>
@@ -665,11 +678,12 @@ function AssistantForm({
   const [provider, setProvider] = useState(providers[0]?.id ?? '')
   const models = catalog?.models[provider] ?? []
   const [modelChoice, setModelChoice] = useState('')
-  const [customModel, setCustomModel] = useState('')
   const [agentPresetId, setAgentPresetId] = useState(presets[0]?.id ?? '')
   const [permissionPresetId, setPermissionPresetId] = useState(permissions[0]?.value ?? '')
-  const [toolAllowlist, setToolAllowlist] = useState('')
-  const [skillAllowlist, setSkillAllowlist] = useState('')
+  const [availableSkills, setAvailableSkills] = useState<SkillCatalogView['skills']>([])
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([])
+  const [skillsLoading, setSkillsLoading] = useState(false)
+  const [skillsError, setSkillsError] = useState<string>()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -680,12 +694,39 @@ function AssistantForm({
   }, [agentPresetId, permissionPresetId, permissions, presets, provider, providers])
   useEffect(() => {
     setModelChoice(current => {
-      if (current === CUSTOM_MODEL_VALUE || models.some(candidate => candidate.id === current)) return current
-      return models[0]?.id ?? CUSTOM_MODEL_VALUE
+      if (models.some(candidate => candidate.id === current)) return current
+      return models[0]?.id ?? ''
     })
   }, [models])
+  useEffect(() => {
+    let active = true
+    if (!agentPresetId) {
+      setAvailableSkills([])
+      setSelectedSkills([])
+      return () => { active = false }
+    }
+    setSkillsLoading(true)
+    setSkillsError(undefined)
+    void callAgentTeam<SkillCatalogView>('skill.catalog', { agentPresetId })
+      .then(value => {
+        if (!active) return
+        setAvailableSkills(value.skills)
+        const availableNames = new Set(value.skills.map(skill => skill.name))
+        setSelectedSkills(current => current.filter(name => availableNames.has(name)))
+      })
+      .catch(cause => {
+        if (!active) return
+        setAvailableSkills([])
+        setSelectedSkills([])
+        setSkillsError(cause instanceof Error ? cause.message : String(cause))
+      })
+      .finally(() => {
+        if (active) setSkillsLoading(false)
+      })
+    return () => { active = false }
+  }, [agentPresetId])
 
-  const model = modelChoice === CUSTOM_MODEL_VALUE ? customModel.trim() : modelChoice
+  const model = modelChoice
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -699,8 +740,8 @@ function AssistantForm({
         model,
         agentPresetId,
         permissionPresetId,
-        toolAllowlist: commaList(toolAllowlist),
-        skillAllowlist: commaList(skillAllowlist),
+        toolAllowlist: [],
+        skillAllowlist: selectedSkills,
       })
       await onCreated()
     } catch (cause) {
@@ -729,29 +770,20 @@ function AssistantForm({
                 {item.name === item.id ? item.id : `${item.name}（${item.id}）`}
               </option>
             ))}
-            <option value={CUSTOM_MODEL_VALUE}>自定义模型 ID…</option>
           </select>
-          {modelChoice === CUSTOM_MODEL_VALUE && (
-            <input
-              required
-              value={customModel}
-              onChange={event => { setCustomModel(event.target.value) }}
-              placeholder="输入 Provider 支持的模型 ID"
-              aria-label="自定义模型 ID"
-              className={css.input}
-            />
-          )}
         </Field>
         <Field label="Agent Preset">
           <select required value={agentPresetId} onChange={event => { setAgentPresetId(event.target.value) }} className={css.input}>
-            <option value="">请选择</option>
             {presets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </Field>
         <Field label="权限预设">
           <select required value={permissionPresetId} onChange={event => { setPermissionPresetId(event.target.value) }} className={css.input}>
-            <option value="">请选择</option>
-            {permissions.map(item => <option key={item.value} value={item.value}>{item.name}</option>)}
+            {permissions.map(item => (
+              <option key={item.value} value={item.value}>
+                {PERMISSION_LABELS[item.value] ?? item.name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="助手规则（可选）" className={css.fullWidth ?? ''}>
@@ -764,8 +796,36 @@ function AssistantForm({
           />
           <span className={css.hint}>随助手模板保存，在成员启动时加入系统提示词；这里不填写具体任务。</span>
         </Field>
-        <Field label="工具白名单（逗号分隔）"><input value={toolAllowlist} onChange={event => { setToolAllowlist(event.target.value) }} placeholder="留空表示不额外限制" className={css.input} /></Field>
-        <Field label="Skill 白名单（逗号分隔）"><input value={skillAllowlist} onChange={event => { setSkillAllowlist(event.target.value) }} placeholder="留空表示不额外限制" className={css.input} /></Field>
+        <Field
+          label={`可用 Skills（已选择 ${selectedSkills.length} 个）`}
+          className={css.fullWidth ?? ''}
+        >
+          <div className={css.skillPicker} role="group" aria-label="选择助手可使用的 Skills">
+            {skillsLoading && <span className={css.hint}>正在读取该 Preset 的 Skills…</span>}
+            {!skillsLoading && skillsError && <span className={css.composerError}>{skillsError}</span>}
+            {!skillsLoading && !skillsError && availableSkills.length === 0 && (
+              <span className={css.hint}>该 Agent Preset 没有可用的 Skill。</span>
+            )}
+            {!skillsLoading && availableSkills.map(skill => (
+              <label key={skill.name} className={css.skillOption}>
+                <input
+                  type="checkbox"
+                  checked={selectedSkills.includes(skill.name)}
+                  onChange={event => {
+                    setSelectedSkills(current => event.target.checked
+                      ? [...current, skill.name].sort()
+                      : current.filter(name => name !== skill.name))
+                  }}
+                />
+                <span className={css.skillOptionText}>
+                  <strong>{skill.name}</strong>
+                  <small>{skill.description}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+          <span className={css.hint}>只选择这个助手执行任务时可能需要的 Skills；运行时会按任务需要加载具体 Skill 指令。</span>
+        </Field>
       </div>
       {error && <div role="alert" className={css.inlineError}>{error}</div>}
       <div className={css.formActions}>
@@ -1842,8 +1902,4 @@ function Empty({ text, hint }: { text: string; hint?: string }): JSX.Element {
       </div>
     </div>
   )
-}
-
-function commaList(value: string): string[] {
-  return [...new Set(value.split(',').map(item => item.trim()).filter(Boolean))]
 }

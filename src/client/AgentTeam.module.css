@@ -1178,6 +1178,60 @@ textarea.input {
   line-height: 18px;
 }
 
+.skillPicker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 248px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.skillOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-layer-2);
+  cursor: pointer;
+}
+
+.skillOption input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.skillOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.skillOptionText strong {
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.skillOptionText small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .empty {
   min-height: 300px;
   display: grid;
@@ -2343,6 +2397,10 @@ textarea.input {
 
   .formGrid,
   .teamBuilderGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .skillPicker {
     grid-template-columns: 1fr;
   }
 

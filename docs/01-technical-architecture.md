@@ -119,7 +119,6 @@ const handle = await ctx.agents.create({
       order: 11,
       text: renderTeamRole(member),
     })
-    agentCtx.tools.restrict({ allow: snapshot.toolAllowlist })
     registerTeamTools(agentCtx, member)
 
     const agent = agentCtx.agent
@@ -142,8 +141,8 @@ await workspace.attachSession(handle.agent.id)
 - `provider` 和 `model` 在可启动模板中必须同时存在；Agent 请求边界最终要求二者齐全。
 - 模板提示词作为唯一命名的补充段落注册，避免与 Preset 自带的 `deployment:persona` 冲突。
 - Preset 可能贡献 `complete: true` 的完整 Prompt，从而排除其他段；`setup` 使用公开 `assembleContextFor()` 和 `systemPrompt.assemble()` 预检两个团队段确实生效。不兼容时在发布前抛错，由原子创建窗口回滚。
-- `tools.restrict()` 只限制继承的全局工具；随后注册的 Agent scope 团队工具仍然可见，符合 Harness 约定。
-- 如果启用 Skill 白名单，启动时从 Agent scope Skill Catalog 校验名称，并用 Agent-scope `ctx.tools.guard()` 单调拒绝不在白名单中的 `skill` 调用；不假设 SkillRegistry 存在白名单 API。
+- 工具集合直接继承 Agent Preset；插件不提供模板级工具限制。随后在 Agent scope 注册团队协作工具。
+- 创建助手时通过 Preset standing scope 展示可用 Skills。成员启动时从实际 Workspace 的 Agent scope Skill Catalog 校验所选名称，并在成员最近层用不可调用的同名 Skill 遮蔽未选择项，同时用 `ctx.tools.guard()` 做执行兜底。这样模型目录、`skill` 工具和用户直接 Skill 调用都只保留已选择项；具体正文仍由 Harness 在任务匹配时按需加载。
 - 不填写 `origin`、`parentSession`、`seedLength` 或 `delegationDepth`，因此成员没有 Subagent 血统。
 
 恢复时调用 `ctx.agents.resume({ resumeSessionId, agentOptions, setup })`。Workspace 来自已持久化的 Session Header；恢复后必须验证它仍与团队 Workspace 一致。

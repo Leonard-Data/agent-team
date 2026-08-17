@@ -3,7 +3,7 @@ import { readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import { isSkillName } from '@deepseek-ai/dsh-skill'
+import { isModelInvocable, isSkillName } from '@deepseek-ai/dsh-skill'
 import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
 import {
@@ -69,6 +69,22 @@ export interface CatalogSnapshot {
   }>
 }
 
+export interface SkillCatalogSnapshot {
+  agentPresetId: string
+  skills: Array<{
+    name: string
+    description: string
+    source: string
+  }>
+}
+
+const PERMISSION_PRESET_LABELS: Readonly<Record<string, string>> = {
+  'read-only': '只读',
+  'workspace-write': '工作区可写',
+  'danger-full-access': '完全访问',
+  standard: '标准',
+}
+
 export class AgentTeamService extends Service {
   private readonly listeners = new Set<(change: AgentTeamChange) => void>()
   private cursor = 0
@@ -98,18 +114,33 @@ export class AgentTeamService extends Service {
     this.assistantBuilderRuntime = runtime
   }
 
-  async migrateLegacyTeamStates(): Promise<void> {
+  async migrateLegacyData(): Promise<void> {
+    for (const assistant of this.store.listAssistants()) {
+      if (assistant.toolAllowlist.length === 0) continue
+      await this.store.updateAssistant(assistant.id, current => ({
+        ...current,
+        toolAllowlist: [],
+        revision: current.revision + 1,
+        updatedAt: new Date().toISOString(),
+      }))
+    }
     for (const team of this.store.listTeams()) {
       const hasLegacyState = team.state === 'paused'
       const hasMemberAliases = Object.values(team.members)
         .some(member => member.displayName !== member.assistantSnapshot.name)
-      if (!hasLegacyState && !hasMemberAliases) continue
+      const hasToolRestrictions = Object.values(team.members)
+        .some(member => member.assistantSnapshot.toolAllowlist.length > 0)
+      if (!hasLegacyState && !hasMemberAliases && !hasToolRestrictions) continue
       await this.store.updateTeam(team.id, current => ({
         ...current,
         state: current.state === 'paused' ? 'active' : current.state,
         members: Object.fromEntries(Object.entries(current.members).map(([slotId, member]) => [
           slotId,
-          { ...member, displayName: member.assistantSnapshot.name },
+          {
+            ...member,
+            displayName: member.assistantSnapshot.name,
+            assistantSnapshot: { ...member.assistantSnapshot, toolAllowlist: [] },
+          },
         ])),
         revision: current.revision + 1,
         updatedAt: new Date().toISOString(),
@@ -143,8 +174,41 @@ export class AgentTeamService extends Service {
         ...(preset.description === undefined ? {} : { description: preset.description }),
         ...(preset.broken === undefined ? {} : { broken: preset.broken }),
       })),
-      permissionPresets: this.ctx.permissionPresets.names.map(name => this.ctx.permissionPresets.optionOf(name)),
+      permissionPresets: this.ctx.permissionPresets.names.map(name => {
+        const option = this.ctx.permissionPresets.optionOf(name)
+        return {
+          ...option,
+          name: PERMISSION_PRESET_LABELS[option.value] ?? option.name,
+        }
+      }),
       workspaces,
+    }
+  }
+
+  async skillCatalog(agentPresetId: string): Promise<SkillCatalogSnapshot> {
+    try {
+      await this.ctx.agentPresets.resolve(agentPresetId)
+      const scope = await this.ctx.agentPresets.standingKeyFor(agentPresetId)
+      if (this.ctx.tools.get('skill', scope) === undefined) {
+        return { agentPresetId, skills: [] }
+      }
+      const skills = await this.ctx.skills.list({ scope })
+      return {
+        agentPresetId,
+        skills: skills.filter(isModelInvocable).map(skill => ({
+          name: skill.name,
+          description: skill.description,
+          source: skill.source,
+        })),
+      }
+    } catch (error) {
+      if (error instanceof AgentTeamError) throw error
+      throw new AgentTeamError(
+        'PRESET_REFERENCE_INVALID',
+        `Cannot read Skills for agent preset '${agentPresetId}'`,
+        undefined,
+        { cause: error },
+      )
     }
   }
 
@@ -729,7 +793,7 @@ function normalizeAssistantInput(input: CreateAssistantInput): CreateAssistantIn
     model: input.model.trim(),
     agentPresetId: input.agentPresetId.trim(),
     permissionPresetId: input.permissionPresetId.trim(),
-    toolAllowlist: unique(input.toolAllowlist),
+    toolAllowlist: [],
     skillAllowlist: unique(input.skillAllowlist),
   }
 }

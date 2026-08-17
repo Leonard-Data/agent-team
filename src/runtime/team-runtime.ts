@@ -605,35 +605,68 @@ export class TeamRuntime {
           order: 11,
           text: () => rosterPrompt(this.service.getTeam(team.id)),
         })
-        if (member.assistantSnapshot.toolAllowlist.length > 0) {
-          agentCtx.tools.restrict({ allow: member.assistantSnapshot.toolAllowlist })
-        }
         this.registerTeamTools(agentCtx, team, member)
         const agent = agentCtx.agent
         if (agent === undefined) throw new Error('Harness did not bind the unpublished agent context')
-        if (member.assistantSnapshot.skillAllowlist.length > 0) {
-          const allowedSkills = new Set(member.assistantSnapshot.skillAllowlist)
-          const skills = await this.ctx.skills.list({
-            cwd: team.workspacePath,
-            scope: agent,
-          })
-          const available = new Set(skills.filter(isModelInvocable).map(skill => skill.name))
-          const missing = [...allowedSkills].filter(name => !available.has(name))
-          if (missing.length > 0) {
-            throw new AgentTeamError(
-              'SKILL_REFERENCE_INVALID',
-              `Member '${member.displayName}' cannot access Skill(s): ${missing.join(', ')}`,
-              { memberId: member.id, missing },
-            )
-          }
-          agentCtx.tools.guard(execution => {
-            if (execution.name !== 'skill') return undefined
-            const name = skillNameFromArguments(execution.arguments)
-            return name !== undefined && allowedSkills.has(name)
-              ? undefined
-              : 'This Skill is outside the assistant template allowlist.'
-          })
+        const selectedSkills = new Set(member.assistantSnapshot.skillAllowlist)
+        const skills = await this.ctx.skills.list({
+          cwd: team.workspacePath,
+          scope: agent,
+        })
+        const available = new Set(skills.filter(isModelInvocable).map(skill => skill.name))
+        const missing = [...selectedSkills].filter(name => !available.has(name))
+        if (missing.length > 0) {
+          throw new AgentTeamError(
+            'SKILL_REFERENCE_INVALID',
+            `Member '${member.displayName}' cannot access selected Skill(s): ${missing.join(', ')}`,
+            { memberId: member.id, missing },
+          )
         }
+        if (selectedSkills.size > 0 && agentCtx.tools.get('skill', agent) === undefined) {
+          throw new AgentTeamError(
+            'SKILL_REFERENCE_INVALID',
+            `Member '${member.displayName}' selected Skills, but its Agent Preset does not expose the skill loader`,
+            { memberId: member.id },
+          )
+        }
+        const presetScope = await this.ctx.agentPresets.standingKeyFor(
+          member.assistantSnapshot.agentPresetId,
+        )
+        const skillSelectionProvider = `agent-team-selection-${member.id}`
+        agentCtx.skills.registerProvider(() => ({
+          name: skillSelectionProvider,
+          list: async options => {
+            const inherited = await this.ctx.skills.list({
+              cwd: options.cwd,
+              signal: options.signal,
+              scope: presetScope,
+            })
+            return inherited.filter(skill => !selectedSkills.has(skill.name)).map(skill => ({
+              name: skill.name,
+              description: skill.description,
+              invocation: { modelInvocable: false, userInvocable: false },
+              source: 'runtime',
+              provider: skillSelectionProvider,
+              rank: 0,
+              locator: skill.name,
+            }))
+          },
+          get: async candidate => ({
+            name: candidate.name,
+            description: candidate.description,
+            invocation: { modelInvocable: false, userInvocable: false },
+            source: 'runtime',
+            provider: skillSelectionProvider,
+            content: '',
+          }),
+        }))
+        agentCtx.tools.guard(execution => {
+          if (execution.name !== 'skill') return undefined
+          const name = skillNameFromArguments(execution.arguments)
+          return name !== undefined && selectedSkills.has(name)
+            ? undefined
+            : 'This Skill is not selected for the assistant.'
+        })
         this.ctx.permissionPresets.set(
           agent.session,
           member.permissionPresetId ?? member.assistantSnapshot.permissionPresetId,

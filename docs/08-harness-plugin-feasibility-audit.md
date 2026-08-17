@@ -49,8 +49,8 @@
 | Preset | `ctx.agentPresets.mount(agentCtx, id)` | 可实现 |
 | 助手提示词 | Agent scope `ctx.systemPrompt.section` | 可实现，需避开名称冲突 |
 | Prompt 兼容性预检 | `assembleContextFor` + `systemPrompt.assemble` | 可实现；拒绝排除团队段的 complete Prompt |
-| 工具白名单 | Agent scope `ctx.tools.restrict({ allow })` | 可实现 |
-| Skill 白名单 | Agent scope Catalog 校验 + `ctx.tools.guard()` 限制 `skill` 参数 | 可实现，但不是 Registry 原生白名单 |
+| Agent 工具 | 直接继承 Agent Preset，并追加团队协作工具 | 可实现；助手模板不二次限制 |
+| 助手可用 Skills | Preset standing scope Catalog + Agent 最近层同名遮蔽 + `ctx.tools.guard()` 兜底 | 可实现；Harness 在调用 `skill(name)` 时按需加载正文 |
 | 权限预设 | `ctx.permissionPresets.set(session, name)` | 可实现 |
 | 共享 Workspace | `workspaceRegistry` + `CreateAgentOptions.meta.cwd` | 可实现 |
 | 多列完整成员对话 | `session/event` + `sessionPersistence.inspect/readFrom` + `shell.overlay` 自定义 renderer | 可实现；官方 Conversation 内部组件不直接复用 |

@@ -36,9 +36,9 @@ Team Runtime 维护内存 Handle Registry，但真相来源是领域存储和 Ha
 - 通过 `ctx.agentPresets.mount(agentCtx, id)` 挂载成员快照指定的 Agent Preset。
 - 注册名为 `agent-team:assistant` 与 `agent-team:role` 的 Agent scope 补充提示段落，避免覆盖 Preset 的 Persona 槽位。
 - 在 `setup` 内用 `systemPrompt.assemble(assembleContextFor(agentCtx.agent))` 预检两个补充段仍在最终组装中；Preset 若用 `complete: true` 排除它们，则创建在发布前失败。
-- 用 `agentCtx.tools.restrict({ allow })` 限制继承的全局工具。
-- 在 Agent scope 注册 Agent Team 协作工具；局部工具按 Harness 规则不受全局工具 restriction 遮蔽。
-- 如需 Skill 白名单，在启动时校验 Agent-scope Catalog，并用 Agent-scope `tools.guard()` 拒绝白名单外的 `skill` 调用；当前公开 SkillRegistry 没有原生 restriction。
+- 直接继承 Agent Preset 提供的工具，不做模板级工具限制。
+- 在 Agent scope 注册 Agent Team 协作工具。
+- 在启动时校验助手选择的 Skills；对其他目录项注册 Agent 最近层的不可调用同名定义，使原生 Skill Catalog、模型 loader 和用户直接调用都只看到已选择项，再用 Agent-scope `tools.guard()` 作为执行兜底。所选 Skill 的完整正文不预加载，由 Harness 在任务需要时通过 `skill(name)` 加载。
 - Agent 创建完成、首次投递前，用 `ctx.permissionPresets.set(session, id)` 应用成员当前权限；新成员以助手模板权限为默认值，聊天窗口可独立切换，恢复 Session 时优先使用成员持久化的当前权限。
 - 明确告知 Agent：它是独立团队成员，不是 Subagent；不能假设共享其他成员对话。
 

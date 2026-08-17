@@ -44,7 +44,7 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
   try {
     const store = new DomainAgentTeamStore(domain)
     const service = new AgentTeamService(ctx, config, store)
-    await service.migrateLegacyTeamStates()
+    await service.migrateLegacyData()
     runtime = new TeamRuntime(ctx, config, service)
     assistantBuilderRuntime = new AssistantBuilderRuntime(ctx, config, service)
     service.attachRuntime(runtime)

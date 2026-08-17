@@ -83,7 +83,7 @@ Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件�
 - [x] 通过 `ctx.agentPresets.list` 与 `permissionPresets` 暴露可选项。
 - [x] 校验 Provider/Model 必填、Preset 存在；工具名在 Agent setup 的官方 restriction 边界校验。
 - [x] 实现不可变成员快照。
-- [x] 对 Skill 白名单采用 Agent-scope Catalog 校验和 `tools.guard()`，不假设 Registry 白名单。
+- [x] 创建时按 Preset 展示并保存所选 Skills；运行时以 Agent-scope 同名遮蔽收束目录和直接调用，并用 `tools.guard()` 兜底。
 
 退出标准：服务层可完整管理模板，不保存 Provider 凭据。
 

@@ -42,7 +42,9 @@ type AgentTeamRequest = {
 | `catalog.permissionPresets` | `ctx.permissionPresets.names/optionOf()` |
 | `catalog.tools` | Host 工具 Schema 摘要；不返回 execute 函数 |
 
-助手表单中的 Provider 与模型选择联动：模型控件是原生下拉框，展示所选 Provider 由 `listModels()` 返回的全部候选项及数量；末项提供“自定义模型 ID”，用于目录尚未收录但适配器能够解析的模型。
+助手表单中的 Provider 与模型选择联动：模型控件是原生下拉框，只展示所选 Provider 由 `listModels()` 返回的真实候选项及数量，不接受自定义模型 ID。
+
+内置权限预设在中文界面显示为“只读”“工作区可写”“完全访问”，提交与持久化仍使用 Harness 原始 ID：`read-only`、`workspace-write`、`danger-full-access`。
 
 “助手规则”是模板级长期指令，会在成员 Agent 启动时加入其系统提示词；它用于定义职责、约束、代码规范和汇报方式，不承载某次团队任务。插件不持有 `maxTokens` 字段，输出上限完全交由所选模型和 Harness 配置决定。
 
@@ -57,6 +59,7 @@ type AgentTeamRequest = {
 
 | 方法 | 用途 |
 | --- | --- |
+| `skill.catalog` | 按 Agent Preset standing scope 返回创建助手时可选择的模型可调用 Skills |
 | `assistant.create/update/clone/delete` | 助手模板生命周期 |
 | `assistant.builder.configure/send/stop` | 选择模型、驱动或停止内置“团队 Agent 小助手”对话 |
 | `team.createDraft/start` | 团队创建与启动；`start` 也用于启动失败后的重试 |
@@ -138,7 +141,7 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 - 顶部固定显示不进入模板存储的“团队 Agent 小助手”；它通过独立 Session 对话收集配置。创建使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并在内存暂存草稿；用户必须在后续新消息中精确回复“确认创建”，`assistant_builder_commit` 才能落库。同轮提交、非用户来源、其他确认表达或已被新草稿替代的旧草稿都会被拒绝；进程重启后需重新准备。对话栏可选择 Provider/模型；切换时先 flush 并释放旧 Agent，再以相同 SessionId 和新模型恢复历史。
 - Provider/Model 由 Host Catalog API 返回。
 - Provider 和 Model 必填；未列出的模型 ID 可以手动输入并由 Host 校验。
-- 选择 Agent Preset、Permission Preset、全局工具白名单和可选 Skill 白名单。
+- 选择 Agent Preset、Permission Preset，以及该 Preset 下这个助手可以使用的 Skills。Skill 使用可勾选目录，不使用白名单/黑名单文案；未选择表示助手不使用 Skill。工具直接使用 Agent Preset 的能力集合，创建界面不提供二次限制。
 - 编辑后提示活动成员仍使用旧快照。
 
 ### 团队组建器

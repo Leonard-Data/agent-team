@@ -18,11 +18,11 @@ export const ASSISTANT_BUILDER_PROMPT = `
 
 工作规则：
 1. 先理解用户希望这个助手承担的职责、工作边界、输出方式和协作习惯。
-2. 创建前必须收集名称、Provider、模型、Agent Preset、权限预设和长期提示词。说明、工具白名单、Skill 白名单按需要收集。
-3. 必须先调用 assistant_builder_get_catalog 获取当前真实可选项；Provider、模型、Preset 和权限只能使用目录中存在的标识，不能编造。
+2. 创建前必须收集名称、Provider、模型、Agent Preset、权限预设和长期提示词。说明按需要收集；可用 Skills 由用户从真实目录中选择，可以不选。
+3. 必须先调用 assistant_builder_get_catalog 获取当前真实可选项；Provider、模型、Preset 和权限只能使用目录中存在的标识，不能编造。确定 Agent Preset 后，再携带 agentPresetId 调用一次目录工具，取得该 Preset 可用的 Skills。
 4. 参数不完整或意图含糊时，一次只追问最关键的少量问题，并给出基于目录的简短选项和建议。
 5. 长期提示词应描述稳定职责、约束、工作流程和验收要求，不要写入用户眼前的一次性任务。
-6. 工具或 Skill 白名单留空表示不额外限制。只有用户明确要求限制并提供确切名称时才填写，不能猜测名称。
+6. 只保存用户明确选择的可用 Skills；未选择表示该助手不使用 Skill，不能猜测名称。不要询问或限制工具，工具能力由 Agent Preset 提供。
 7. 配置完整后调用 assistant_builder_prepare 校验并暂存草稿；此步骤不会创建助手，新草稿会替代旧草稿。
 8. 用简洁清单复述最终配置，并要求用户精确回复“确认创建”。必须等待新的用户消息，不得在同一轮代替用户确认。
 9. 只有用户按要求明确回复后才能调用 assistant_builder_commit。不得把其他表达理解为确认。
@@ -311,15 +311,20 @@ export class AssistantBuilderRuntime {
   private registerTools(agentCtx: Context): void {
     agentCtx.tools.register(defineTool({
       name: 'assistant_builder_get_catalog',
-      description: 'Read the exact providers, models, Agent Presets, permission presets, and existing assistant names available for creating an assistant template.',
-      parameters: {},
+      description: 'Read exact creation options. Pass agentPresetId after choosing a preset to also return the Skills that preset can load.',
+      parameters: {
+        agentPresetId: { type: 'string', description: 'Chosen Agent Preset id used to discover available Skills.' },
+      },
       output: {
         schema: { type: 'object', additionalProperties: true },
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
       },
-      execute: async (_args, exec) => {
+      execute: async (args, exec) => {
         this.assertToolIdentity(exec.agent?.id)
         const catalog = await this.service.catalog()
+        const skillCatalog = args.agentPresetId === undefined
+          ? undefined
+          : await this.service.skillCatalog(args.agentPresetId)
         return {
           providers: catalog.providers.map(provider => ({ id: provider.id, name: provider.name })),
           models: catalog.models,
@@ -330,6 +335,7 @@ export class AssistantBuilderRuntime {
             ...(preset.description === undefined ? {} : { description: preset.description }),
           })),
           existingAssistants: this.service.listAssistants().items.map(assistant => assistant.name),
+          ...(skillCatalog === undefined ? {} : { skills: skillCatalog.skills }),
         }
       },
     }))
@@ -344,8 +350,11 @@ export class AssistantBuilderRuntime {
         model: { type: 'string', required: true },
         agentPresetId: { type: 'string', required: true },
         permissionPresetId: { type: 'string', required: true },
-        toolAllowlist: { type: 'array', items: { type: 'string' } },
-        skillAllowlist: { type: 'array', items: { type: 'string' } },
+        skills: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Exact Skill names explicitly selected by the user from the chosen preset catalog.',
+        },
       },
       output: {
         schema: { type: 'object', additionalProperties: true },
@@ -367,8 +376,8 @@ export class AssistantBuilderRuntime {
           model: args.model,
           agentPresetId: args.agentPresetId,
           permissionPresetId: args.permissionPresetId,
-          toolAllowlist: args.toolAllowlist ?? [],
-          skillAllowlist: args.skillAllowlist ?? [],
+          toolAllowlist: [],
+          skillAllowlist: args.skills ?? [],
         })
         this.pendingDraft = {
           input,

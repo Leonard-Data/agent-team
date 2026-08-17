@@ -15,6 +15,7 @@ const requestSchema = z.object({
   requestId: z.string().trim().min(1).max(200),
   method: z.enum([
     'catalog.get',
+    'skill.catalog',
     'assistant.list',
     'assistant.get',
     'assistant.create',
@@ -168,6 +169,10 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
     : { expectedRevision: request.expectedRevision }
   switch (request.method) {
     case 'catalog.get': return service.catalog()
+    case 'skill.catalog': {
+      const payload = z.object({ agentPresetId: z.string().trim().min(1).max(200) }).strict().parse(request.payload)
+      return service.skillCatalog(payload.agentPresetId)
+    }
     case 'assistant.list': return service.listAssistants()
     case 'assistant.get': return service.getAssistant(idPayload.parse(request.payload).id)
     case 'assistant.create': return service.createAssistant(request.payload as never)
