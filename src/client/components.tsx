@@ -1083,8 +1083,36 @@ function TeamCard({
   const [busy, setBusy] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
   const [error, setError] = useState<string>()
+  const addMemberButtonRef = useRef<HTMLButtonElement>(null)
+  const addMemberMenuRef = useRef<HTMLDivElement>(null)
   const members = Object.values(team.members)
   const tasks = Object.values(team.tasks)
+
+  useEffect(() => {
+    if (!addingMember) return
+
+    function closeOnPointerDown(event: PointerEvent): void {
+      if (!(event.target instanceof Node)) return
+      if (addMemberButtonRef.current?.contains(event.target)) return
+      if (addMemberMenuRef.current?.contains(event.target)) return
+      setAddingMember(false)
+    }
+
+    function closeOnKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setAddingMember(false)
+      addMemberButtonRef.current?.focus()
+    }
+
+    document.addEventListener('pointerdown', closeOnPointerDown)
+    document.addEventListener('keydown', closeOnKeyDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointerDown)
+      document.removeEventListener('keydown', closeOnKeyDown, true)
+    }
+  }, [addingMember])
 
   async function action(method: 'team.start'): Promise<void> {
     setBusy(true)
@@ -1213,15 +1241,51 @@ function TeamCard({
           <strong>团队成员</strong>
           <span className={css.teamSectionActions}>
             <span>{members.length} 人</span>
-            <button
-              type="button"
-              className={css.addMemberButton}
-              disabled={busy || assistants.length === 0}
-              onClick={() => { setAddingMember(value => !value) }}
-            >
-              <IconPlusOutline16 size={14} />
-              {addingMember ? '收起' : '添加成员'}
-            </button>
+            <span className={css.addMemberPopover}>
+              <button
+                ref={addMemberButtonRef}
+                type="button"
+                className={css.addMemberButton}
+                disabled={busy || assistants.length === 0}
+                aria-expanded={addingMember}
+                aria-haspopup="dialog"
+                onClick={() => { setAddingMember(value => !value) }}
+              >
+                <IconPlusOutline16 size={14} />
+                添加成员
+              </button>
+              {addingMember && (
+                <div
+                  ref={addMemberMenuRef}
+                  className={css.addMemberMenu}
+                  role="dialog"
+                  aria-label="选择要添加的助手"
+                >
+                  <div className={css.addMemberMenuHeader}>
+                    <strong>选择助手</strong>
+                    <span>{assistants.length} 个</span>
+                  </div>
+                  <div className={css.addMemberMenuList}>
+                    {assistants.map(assistant => (
+                      <button
+                        key={assistant.id}
+                        type="button"
+                        className={css.addMemberOption}
+                        disabled={busy}
+                        onClick={() => { void addMember(assistant.id) }}
+                      >
+                        <span className={css.addMemberAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
+                        <span className={css.addMemberCopy}>
+                          <strong>{assistant.name}</strong>
+                          <span>{assistant.provider} / {assistant.model}</span>
+                        </span>
+                        <IconPlusOutline16 size={14} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </span>
           </span>
         </div>
         <div className={css.memberGrid}>
@@ -1253,26 +1317,6 @@ function TeamCard({
             </div>
           ))}
         </div>
-        {addingMember && (
-          <div className={css.addMemberPanel} aria-label="选择要添加的助手">
-            {assistants.map(assistant => (
-              <button
-                key={assistant.id}
-                type="button"
-                className={css.addMemberOption}
-                disabled={busy}
-                onClick={() => { void addMember(assistant.id) }}
-              >
-                <span className={css.addMemberAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
-                <span className={css.addMemberCopy}>
-                  <strong>{assistant.name}</strong>
-                  <span>{assistant.provider} / {assistant.model}</span>
-                </span>
-                <IconPlusOutline16 size={14} />
-              </button>
-            ))}
-          </div>
-        )}
       </section>
       {tasks.length > 0 && (
         <div className={css.taskList}>
