@@ -521,17 +521,22 @@ export class AgentTeamService extends Service {
     await Promise.all(queued.map(message => this.store.putMessage({ ...message, deliveryState: 'failed' })))
   }
 
-  async dissolveDraft(teamId: string, confirmation: string): Promise<void> {
+  async dissolveTeam(
+    teamId: string,
+    confirmation: string,
+    options: MutationOptions = {},
+  ): Promise<void> {
     const team = requireTeam(this.store, teamId)
+    assertRevision('team', team.revision, options.expectedRevision)
     if (confirmation !== team.name) {
       throw new AgentTeamError('INVALID_REQUEST', 'Team name confirmation does not match')
     }
-    if (team.state !== 'draft') {
-      throw new AgentTeamError(
-        'SESSION_DELETE_UNSUPPORTED',
-        'Permanent deletion of a started team is unavailable because Harness SessionPersistence has no public delete API',
-      )
-    }
+    if (team.state !== 'draft') return this.requireRuntime().dissolveTeam(teamId)
+    await this.deleteTeamRecords(teamId)
+  }
+
+  async deleteTeamRecords(teamId: string): Promise<void> {
+    const team = requireTeam(this.store, teamId)
     await Promise.all(this.store.listMessages(teamId).map(message => this.store.deleteMessage(message.id)))
     await Promise.all(this.store.listActivities(teamId).map(activity => this.store.deleteActivity(activity.id)))
     await this.store.deleteTeam(teamId)

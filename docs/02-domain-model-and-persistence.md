@@ -153,7 +153,7 @@ Host 插件启动时：
 - 非删除终态 TeamAggregate 必须有且仅有一个 Leader。
 - `leaderSlotId` 指向 `members` 中角色为 `leader` 的成员。
 - 同一 TeamAggregate 内 `sessionId` 唯一；启动时还要检查全局 `ctx.agents`/Session 列表碰撞。
-- `members` 与 `retiredSessions` 的 Session ID 不能重复；永久解散必须覆盖两者。
+- `members` 与 `retiredSessions` 的 Session ID 不能重复；解散必须解除两者的团队与 Workspace 活动归属。
 - 成员 `sessionId` 使用插件命名空间并保持不可变，使 Client Composer 的纯 selector 可识别团队 Session；团队归属真相仍来自 Domain，不从 ID 反推授权。
 - `assistantId` 可以重复，`slotId` 必须唯一。
 - `workspacePath` 必须等于 `workspaceRegistry.get(workspaceId).path`。
@@ -171,7 +171,7 @@ Host 插件启动时：
 3. 对保留 Session 的同步，先 `agent.cancel()`、`await agent.whenIdle()`、`await ctx.sessions.flush(session)`、`await handle.dispose()`。
 4. 原子更新成员快照。
 5. 使用同一 `sessionId` 调用 `ctx.agents.resume()` 并重新执行 `setup`。
-6. 如果用户选择新 Session，则生成新 ID、创建 Agent、attach 到 Workspace，并把旧 Session 索引移入 `retiredSessions` 只读历史。若用户额外要求立即永久删除旧历史，该动作仍受删除能力阻塞。
+6. 如果用户选择新 Session，则生成新 ID、创建 Agent、attach 到 Workspace，并把旧 Session 索引移入 `retiredSessions` 只读历史。Harness 没有公开 Session 物理删除接口，因此插件不提供“立即擦除旧日志”。
 
 ## Workspace 关联
 
@@ -180,7 +180,7 @@ Host 插件启动时：
 - Agent 创建成功后调用 `workspace.attachSession(sessionId)`，使标准 Harness Session UI 能发现它。
 - 恢复前调用 `workspace.status()` 并校验 Session Header cwd。
 - 移除成员时调用 `workspace.detachSession(sessionId)` 只会解除活动列表关联，不会删除目录或 Session 日志。
-- 解散在当前基线停止于 `delete_blocked` 时保留 Workspace 关联；上游永久删除可用后，再按其 sidecar 契约执行 delete/detach，避免先隐藏会话却无法完成删除。
+- 解散时解除现任成员与 `retiredSessions` 的 Workspace 活动关联；这不会删除目录或 Harness Session 日志。
 
 ## 消息幂等投递
 
@@ -202,23 +202,25 @@ Host 插件启动时：
 - 重新扫描 `queued` 消息，根据稳定 MessageId 判断是否需要投递。
 - Client SSE 重连不回放全部进程事件，而是重新查询团队快照后从新 Cursor 继续。
 
-## 永久解散状态机
+## 团队解散状态机
 
 ```mermaid
 stateDiagram-v2
     [*] --> Active
     Active --> Deleting: exact name confirmation
     Deleting --> RuntimeStopped: cancel / idle / flush / dispose
-    RuntimeStopped --> DeleteBlocked: SessionPersistence has no delete
-    RuntimeStopped --> SessionsDeleted: future supported delete API
-    SessionsDeleted --> DomainDeleted: delete messages + aggregate
+    RuntimeStopped --> WorkspaceDetached: detach current + retired sessions
+    WorkspaceDetached --> DomainDeleted: delete messages + activities + aggregate
     DomainDeleted --> Deleted
-    DeleteBlocked --> RuntimeStopped: retry after capability upgrade
+    Deleting --> DeleteBlocked: cleanup failed
+    RuntimeStopped --> DeleteBlocked: cleanup failed
+    WorkspaceDetached --> DeleteBlocked: cleanup failed
+    DeleteBlocked --> Deleting: retry
 ```
 
-当前 Harness 提交只能可靠完成到 `RuntimeStopped`，随后必须进入 `delete_blocked`，不能删除团队领域数据并谎称完成。补齐公开 Session 删除能力后，插件才能继续删除所有现任与已移除成员 Session、Workspace 关联、消息、活动、TeamAggregate 和清理操作记录。`assistants` 表不属于解散删除集合，任何 AssistantTemplate 都必须保留。
+解散会处理所有现任与已移除成员索引，停止并释放仍由插件拥有的运行时，解除 Workspace 活动关联，然后删除消息、活动和 TeamAggregate。任一阶段失败时进入 `delete_blocked` 并允许重试。`assistants` 表和 Workspace 文件不属于解散删除集合，任何 AssistantTemplate 都必须保留。
 
-`SessionPersistence.locate()` 返回的是位置提示，不是删除授权；SQLite 后端返回 `undefined`。任何实现都禁止直接删除 Harness 内部文件。
+`SessionPersistence.locate()` 返回的是位置提示，不是删除授权；SQLite 后端返回 `undefined`。任何实现都禁止直接删除 Harness 内部文件，因此底层 Session 日志可能保留，但删除后的团队不会恢复、展示或继续拥有这些 Session。
 
 ## 验收标准
 
@@ -227,4 +229,4 @@ stateDiagram-v2
 - 记录升级可中断重试；Domain descriptor version 变化不被误当作受支持的原地迁移。
 - Agent 的 `meta.cwd` 与 Workspace 规范路径一致。
 - 消息重投使用稳定 MessageId 去重，不承诺无法证明的端到端 exactly-once。
-- 在 Session 删除能力缺失时，永久解散明确进入阻塞态，不丢失清理所需索引。
+- 解散失败时进入 `delete_blocked`，保留重试所需索引；成功后删除团队领域数据并保留助手模板与 Workspace 文件。

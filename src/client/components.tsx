@@ -1103,7 +1103,9 @@ function TeamCard({
   }
 
   async function dissolve(): Promise<void> {
-    const confirmation = window.prompt(`永久解散团队“${team.name}”。请输入完整团队名称确认：`)
+    const confirmation = window.prompt(
+      `解散团队“${team.name}”。这会停止所有成员并永久删除团队任务、消息和配置；助手模板与 Workspace 文件不会删除。旧 Session 日志仍由 Harness 保留，但不会再归属于团队。\n\n请输入完整团队名称确认：`,
+    )
     if (confirmation === null) return
     setBusy(true)
     try {
@@ -1234,7 +1236,6 @@ function TeamCard({
         {team.state === 'active' && <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void action('team.pause') }}>暂停</button>}
         {team.state === 'paused' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.resume') }}>{busy ? '恢复中…' : '继续运行'}</button>}
         {team.state === 'error' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.resume') }}>{busy ? '重试中…' : '重试启动'}</button>}
-        {team.state === 'draft' && <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void dissolve() }}>解散</button>}
       </div>
       <div className={css.managementTools}>
         <div className={css.managementTool}>
@@ -1296,16 +1297,31 @@ function TeamCard({
           <button type="submit" className={css.primaryButton} disabled={busy}>发送</button>
         </form>
       )}
-      <div className={css.contextResetPanel}>
-        <div className={css.contextResetCopy}>
-          <strong>清空任务与上下文</strong>
-          <span>停止所有成员并清空任务板，为每位成员换用全新 Session。Workspace 文件和团队配置不变。</span>
+      {team.state !== 'deleting' && team.state !== 'delete_blocked' && (
+        <div className={css.contextResetPanel}>
+          <div className={css.contextResetCopy}>
+            <strong>清空任务与上下文</strong>
+            <span>停止所有成员并清空任务板，为每位成员换用全新 Session。Workspace 文件和团队配置不变。</span>
+          </div>
+          <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void resetTeam() }}>
+            {busy ? '处理中…' : '清空'}
+          </button>
         </div>
-        <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void resetTeam() }}>
-          {busy ? '处理中…' : '清空'}
+      )}
+      <div className={`${css.contextResetPanel} ${css.dissolvePanel}`}>
+        <div className={css.contextResetCopy}>
+          <strong>解散团队</strong>
+          <span>永久删除团队、任务和团队消息；助手模板与 Workspace 文件保留，旧 Session 日志不再恢复。</span>
+        </div>
+        <button
+          type="button"
+          className={css.dangerButton}
+          disabled={busy || team.state === 'deleting'}
+          onClick={() => { void dissolve() }}
+        >
+          {team.state === 'deleting' ? '解散中…' : team.state === 'delete_blocked' ? '重试解散' : '解散团队'}
         </button>
       </div>
-      {team.state !== 'draft' && <span className={css.warning}>当前 Harness 无公开 Session 删除 API，已启动团队暂不能永久解散。</span>}
       {error && <div role="alert" className={css.inlineError}>{error}</div>}
     </article>
   )

@@ -64,7 +64,7 @@ type AgentTeamRequest = {
 | `team.sendUserMessage` | 向 Leader 或允许的成员发送用户消息 |
 | `team.member.setPermissionPreset` | 切换单个成员当前 Session 权限，不修改助手模板默认值 |
 | `task.create/assign/cancel/retry` | 用户侧任务管理 |
-| `team.dissolve` | 永久解散；Session delete 未补齐前返回能力阻塞 |
+| `team.dissolve` | 精确名称确认后解散团队；停止成员、解除关联并删除团队领域数据 |
 
 ## SSE 事件
 
@@ -156,8 +156,8 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 
 - 更换 Leader：只提交 `team.changeLeader` 一个原子命令。
 - 同步模板：展示差异；选择等待/取消和保留/新建 Session。
-- 移除成员：当前 Leader 禁止移除；普通成员停止运行并进入只读历史，Session 索引保留到团队永久解散。UI 不把“移出活动成员列表”描述成删除历史。
-- 永久解散：输入完整团队名称；确认框明确列出“将删除当前团队、成员实例及团队会话历史；不会删除助手模板和 Workspace 文件”。当前 Harness 缺少 Session delete 时按钮显示“环境不支持永久删除”，不能进入伪完成状态。
+- 移除成员：当前 Leader 禁止移除；普通成员停止运行并进入只读历史，Session 索引保留到团队解散。UI 不把“移出活动成员列表”描述成删除历史。
+- 解散团队：输入完整团队名称；确认框明确列出“将停止所有成员并删除团队、任务、消息和配置；不会删除助手模板和 Workspace 文件”。底层 Session 日志可能由 Harness 保留，但不再归属团队。失败时显示 `delete_blocked` 并允许重试。
 
 ## 错误与断线
 
@@ -166,7 +166,7 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 - Workspace missing：禁止启动，允许修复 Workspace 选择。
 - Provider/Model 不可解析：禁止启动对应成员。
 - Agent 启动失败：保留其他成员和失败诊断，不替换 Session ID。
-- Delete blocked：保留清理操作和成员 Session 索引，等待 Harness 能力升级后重试。
+- Delete blocked：保留团队和成员索引，修复当前清理错误后重试。
 
 ## 验收标准
 
@@ -174,4 +174,4 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 - Slot 注册不覆盖 `root`、`sidebar` 或 `conversation` 的 single seat。
 - 多列工作台通过 `shell.overlay` 和公开 Session 事件实现；`ctx.sessions.open` 仅作为标准单 Session 辅助入口。
 - API 输入、SSE 生命周期、回环/LAN 安全边界均有测试。
-- 不支持的平台和永久删除阻塞在 UI 中清楚、真实地表达。
+- 不支持的平台和 Session 日志保留边界在 UI 中清楚、真实地表达。

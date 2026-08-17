@@ -129,8 +129,7 @@ async function handleApi(
     const normalized = normalizeError(parsed.requestId, error)
     const status = normalized.error.code.endsWith('_NOT_FOUND') ? 404
       : normalized.error.code.includes('REVISION_CONFLICT') ? 409
-        : normalized.error.code === 'SESSION_DELETE_UNSUPPORTED' ? 501
-          : 400
+        : 400
     writeJson(response, status, normalized)
   }
 }
@@ -238,7 +237,7 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
     }
     case 'team.dissolve': {
       const payload = z.object({ teamId: z.string().min(1), confirmation: z.string() }).strict().parse(request.payload)
-      await service.dissolveDraft(payload.teamId, payload.confirmation)
+      await service.dissolveTeam(payload.teamId, payload.confirmation, options)
       return null
     }
   }

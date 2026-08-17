@@ -37,10 +37,12 @@ describe('AgentTeamService', () => {
     expect(new Set(Object.values(team.members).map(member => member.sessionId)).size).toBe(2)
     expect(() => service.getAssistant(assistant.id)).not.toThrow()
 
-    await expect(service.dissolveDraft(team.id, 'wrong')).rejects.toMatchObject({ code: 'INVALID_REQUEST' })
-    await service.dissolveDraft(team.id, team.name)
+    await expect(service.dissolveTeam(team.id, 'wrong')).rejects.toMatchObject({ code: 'INVALID_REQUEST' })
+    await service.dissolveTeam(team.id, team.name)
 
     expect(store.getTeam(team.id)).toBeUndefined()
+    expect(store.listMessages(team.id)).toHaveLength(0)
+    expect(store.listActivities(team.id)).toHaveLength(0)
     expect(service.getAssistant(assistant.id).name).toBe('Codex Lead')
   })
 
@@ -60,8 +62,8 @@ describe('AgentTeamService', () => {
     } as never)).rejects.toThrow()
   })
 
-  it('does not claim a started team was permanently dissolved', async () => {
-    const { service, store } = createHarness()
+  it('dissolves a started team while preserving its assistant template', async () => {
+    const { ctx, service, store } = createHarness()
     const assistant = await service.createAssistant(assistantInput())
     const draft = await service.createTeamDraft({
       name: 'Durable Team',
@@ -69,11 +71,48 @@ describe('AgentTeamService', () => {
       members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
     })
     await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
+    const team = service.getTeam(draft.id)
+    const member = team.members[team.leaderSlotId]!
+    const runtime = new TeamRuntime(ctx, config, service)
+    service.attachRuntime(runtime)
+    const agent = fakeAgent()
+    runtimeInternals(runtime).owned.set(member.sessionId, fakeOwned(agent))
 
-    await expect(service.dissolveDraft(draft.id, draft.name)).rejects.toMatchObject({
-      code: 'SESSION_DELETE_UNSUPPORTED',
+    await service.dissolveTeam(team.id, team.name)
+
+    expect(agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: false })
+    expect(agent.whenIdle).toHaveBeenCalledOnce()
+    expect(runtimeInternals(runtime).owned.size).toBe(0)
+    expect(store.getTeam(draft.id)).toBeUndefined()
+    expect(store.getAssistant(assistant.id)).toBeDefined()
+  })
+
+  it('keeps a failed started-team dissolution retryable', async () => {
+    const { ctx, service, store } = createHarness()
+    const assistant = await service.createAssistant(assistantInput())
+    const draft = await service.createTeamDraft({
+      name: 'Retryable Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
     })
-    expect(store.getTeam(draft.id)).toBeDefined()
+    await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
+    const team = service.getTeam(draft.id)
+    const member = team.members[team.leaderSlotId]!
+    const runtime = new TeamRuntime(ctx, config, service)
+    service.attachRuntime(runtime)
+    const agent = fakeAgent()
+    runtimeInternals(runtime).owned.set(member.sessionId, {
+      teamId: team.id,
+      slotId: member.id,
+      handle: {
+        agent,
+        dispose: vi.fn(async () => { throw new Error('dispose failed') }),
+      },
+    })
+
+    await expect(service.dissolveTeam(team.id, team.name)).rejects.toMatchObject({ code: 'TEAM_DELETE_FAILED' })
+
+    expect(store.getTeam(team.id)?.state).toBe('delete_blocked')
     expect(store.getAssistant(assistant.id)).toBeDefined()
   })
 

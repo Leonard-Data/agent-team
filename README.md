@@ -19,4 +19,4 @@ npm run check
 dsh plugin --profile <profile-name> add github:limuyang2/agent-team
 ```
 
-首版只支持 `dsh web`。Harness 当前公开 Session Persistence API 尚不支持永久删除 Session 日志，因此团队永久解散会明确返回能力阻塞，不会直接操作 Harness 内部存储文件。
+首版只支持 `dsh web`。团队可以解散：插件会停止成员、解除 Workspace Session 关联并删除团队领域数据，但不删除助手模板或 Workspace 文件。Harness 当前公开 Session Persistence API 不支持删除历史日志，因此旧 Session 日志会保留在 Harness 底层，但不再归属、恢复或展示于已解散团队。

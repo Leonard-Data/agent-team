@@ -20,10 +20,11 @@
 - 用户向 Leader 或策略允许的普通成员发送消息。
 - 普通消息先写 queued 记录再投递；任务与通知通过 Team Aggregate Outbox 原子保存。两条链路都使用稳定 MessageId，恢复时检查 Session inbox 事件，避免重复插入。
 - 固定 JSON API、同源检查、Body 限制、Revision、SSE 心跳和有序 teardown。
-- Web Overlay：助手创建/复制/删除、团队组建/启动/暂停/恢复、增删成员、换 Leader、成员消息、能力阻塞提示。
+- Web Overlay：助手创建/复制/删除、团队组建/启动/暂停/恢复、增删成员、换 Leader、成员消息和解散失败重试提示。
 - 团队工作台首版：最多三列独立成员 Conversation、每列独立输入/停止、真实 Session 历史与流式文本/推理投影、通用工具调用卡、成员状态、团队管理悬浮窗及自适应成员网格。添加成员和更改 Leader 使用可滚动列表直接操作，不再使用下拉选择后二次确认。
 - 全屏工作台左侧团队导航：可在不关闭工作台的情况下切换团队，并显示团队运行状态、任务完成数、进行中数量和完成度。
 - 团队级“清空任务与上下文”：停止所有成员、清空任务/文件租约/待投递信箱，将旧 Session 转入保留索引，为每个成员轮换全新 Session 并在团队原为运行状态时自动重启。成员、Leader、助手快照、权限和 Workspace 保留，Workspace 文件不回滚。
+- 团队解散：精确名称确认后停止所有成员，释放 AgentHandle，detach 现任与已移除成员 Session，删除团队任务、消息、活动和 TeamAggregate。助手模板与 Workspace 文件保留；底层 Session 日志不再恢复。
 - Assistant 正文复用 Harness 公开的 `MarkdownText`，支持 GFM 标题/列表/表格、围栏代码与高亮、TeX、安全外链及流式增量解析；用户消息保持字面文本。
 - 只读 Workspace 树：后端按团队 Workspace 重新校验路径，拒绝绝对路径、`..` 与符号链接逃逸；Browser 按目录逐层展开。
 - Conversation SSE 使用独立事件类型，Host 以约 48ms 窗口推送单成员实时快照；Client 直接替换对应列并拒绝过期全量请求覆盖，不让流式 token 触发团队 Catalog 全量刷新。
@@ -43,17 +44,9 @@
 
 这些项目都有已审核的公开扩展 seam，不需要修改 Harness 核心。
 
-## 唯一上游能力阻塞
+## 已知上游边界
 
-已启动团队的永久解散仍不能完成。`SessionPersistence` rc.6 公开接口有 create/append/prepare/load/inspect/readFrom/list/listSnapshots，但没有单 Session delete。`AgentHandle.dispose()` 只销毁 live 实例，Workspace detach/archive 也不删除持久日志。
-
-因此当前行为是：
-
-- 未启动草稿没有成员持久 Session，可精确删除 Team 领域记录；助手模板始终保留。
-- 已启动团队解散返回 `SESSION_DELETE_UNSUPPORTED`，团队和 Session 索引保持完整，不伪报成功。
-- 不使用 `locate().path`、内部文件路径或 Backend 私有接口绕过限制。
-
-只有 Harness 提供后端无关的 Session delete seam，并为 JSONL/SQLite 明确 live owner、write drain、缓存与 sidecar 语义后，才能接入完整永久解散。这个阻塞不影响其他功能继续实现，但阻止声明完整产品已经发布。
+`SessionPersistence` rc.6 公开接口没有单 Session delete。团队解散会完成插件自身的永久删除和运行时释放，但 Harness 底层的旧 Session 物理日志仍可能存在。插件不使用 `locate().path`、内部文件路径或 Backend 私有接口绕过限制，也不再恢复、展示或将这些日志归属给已解散团队。
 
 ## 当前验证
 

@@ -16,12 +16,12 @@
 - 任务状态、依赖环、Owner 和文件范围校验。
 - 消息收件人、发送者身份和幂等去重。
 
-### 删除 Saga
+### 解散流程
 
-- 当前 Session 删除不受支持时进入明确阻塞状态，保留清理索引且不返回成功。
-- 上游删除 API 接入后，覆盖完整成功路径。
-- 上游删除 API 接入后，在停止 Runtime、删除部分 Session、删除领域数据前后分别注入崩溃。
-- 重启后继续清理，不重复激活、不误删模板和 Workspace。
+- Draft 团队无需运行时即可直接删除团队领域记录。
+- 已启动团队依次停止 Runtime、释放 Handle、解除 Workspace 关联并删除团队领域数据。
+- 在停止 Runtime、解除关联、删除领域数据前后分别注入失败，验证进入 `delete_blocked` 并可重试。
+- 重启后不重复激活删除中团队，不误删模板和 Workspace。
 - 无论助手仅被当前团队使用还是同时被其他团队使用，解散都不删除 AssistantTemplate。
 
 ## 存储契约测试
@@ -43,9 +43,8 @@
 - `complete: true` Preset 排除团队提示段时，Prompt 预检使原子创建回滚且不发布半配置 Agent。
 - `followup` 投递、忙碌排队、取消、审批等待和 `whenIdle` 行为。
 - 重启后 `resume` 回到原 Session，不生成替代 Session。
-- Harness 上游能力补齐后，受支持的 Session 永久删除 API 在 JSONL/SQLite Provider 都确实移除内容。
-
-最后一项在当前审核基线无法通过。可以开发其他模块，但完整产品不得发布。
+- 解散后团队不再 list/get，成员 Handle 不再存活，现任与已移除 Session 均解除 Workspace 活动关联。
+- Harness 底层 Session 日志即使保留，也不会被插件恢复、展示或重新归属给已解散团队。
 
 ## 协作端到端场景
 
@@ -58,7 +57,7 @@
 7. 再添加一个同模板成员实例并行执行另一任务。
 8. 更换 Leader，验证原 Leader变为普通成员且 Session 不丢失。
 9. 在当前基线移除一个普通成员，验证其 Agent 停止、Session 进入只读历史、索引进入 `retiredSessions`，其他成员继续运行。
-10. 在当前基线永久解散，验证停止于 `delete_blocked` 且不返回成功；上游删除 API 接入后再验证团队数据和成员 Session 消失、模板与 Workspace 文件保留。
+10. 解散运行中团队，验证团队数据和成员运行时消失、Workspace Session 关联解除、模板与 Workspace 文件保留；底层 Session 日志可以保留但不再归属团队。
 
 ## UI 测试
 
@@ -137,7 +136,7 @@ CI 增加禁止模式扫描和架构测试：
 
 ## 发布门槛
 
-- Phase 0 所有门禁通过，特别是 Session 永久删除。
+- Phase 0 所有公开 API 与生命周期门禁通过。
 - 完整 E2E 场景通过，且无 Subagent 使用痕迹。
 - 永久解散故障注入测试通过。
 - Provider 凭据和 Workspace 安全审计通过。

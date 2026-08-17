@@ -2,7 +2,7 @@
 
 ## 目标
 
-提供不依赖 UI 的应用服务层，实现助手模板和团队生命周期。Host API、成员协作工具和未来 CLI 都只调用该服务层，避免出现多套业务规则。永久删除生命周期只有在 Harness 补齐公开 Session delete 能力后才可能闭环；当前版本必须以 `delete_blocked` 结束而不是伪造成功。
+提供不依赖 UI 的应用服务层，实现助手模板和团队生命周期。Host API、成员协作工具和未来 CLI 都只调用该服务层，避免出现多套业务规则。团队解散删除插件拥有的团队领域数据与运行时归属；Harness Session 物理日志不在插件删除能力范围内。
 
 ## 服务边界
 
@@ -25,7 +25,7 @@ interface TeamService {
   removeMember(teamId: string, slotId: string, ctx: CommandContext): Promise<void>;
   changeLeader(teamId: string, successorSlotId: string, ctx: CommandContext): Promise<Team>;
   syncMember(teamId: string, slotId: string, input: SyncMember, ctx: CommandContext): Promise<TeamMemberSlot>;
-  dissolve(teamId: string, confirmation: string, ctx: CommandContext): Promise<DeleteOperation>;
+  dissolve(teamId: string, confirmation: string, ctx: CommandContext): Promise<void>;
 }
 ```
 
@@ -51,7 +51,7 @@ interface TeamService {
 
 - 无活动成员引用时允许删除。
 - 有团队成员引用时拒绝，并返回团队与成员列表。
-- 真正完成永久解散的团队不构成引用，因为其成员记录已经删除；`deleting`、`delete_blocked` 和删除失败的团队仍然构成引用。
+- 已成功解散的团队不构成引用，因为其成员记录已经删除；`deleting`、`delete_blocked` 和删除失败的团队仍然构成引用。
 
 ## 创建并启动团队
 
@@ -87,7 +87,7 @@ interface TeamService {
 4. detach Workspace 活动关联；保留 Session 持久历史，不把“移出团队”冒充“永久删除”。
 5. 用一次 TeamAggregate 更新删除活动成员和信箱地址、释放 Lease，并把 `sessionId/formerSlotId/displayName/removedAt` 移入 `retiredSessions`；任务保留历史作者快照。
 
-移除后该 Session 不再恢复成 Agent，团队 UI 只提供只读历史入口。团队永久解散必须遍历 `members + retiredSessions` 删除所有日志；若未来提供单独的“移除并立即永久删除历史”选项，它同样依赖公开 Session delete API。确认界面必须明确“成员运行停止，但历史保留到团队解散”。
+移除后该 Session 不再恢复成 Agent，团队 UI 只提供只读历史入口。团队解散必须遍历 `members + retiredSessions`，解除所有团队和 Workspace 活动归属。Harness 没有公开 Session 物理删除接口，因此底层历史日志可能保留，但不会再被恢复为团队成员。
 
 ## 更换 Leader
 
@@ -110,16 +110,16 @@ interface TeamService {
 
 ## 解散
 
-`dissolve` 只接受团队名称精确确认，不能用普通布尔确认。服务返回可观察的 `DeleteOperation`，UI 持续显示当前清理阶段、失败原因和重试入口。目标 Harness 没有公开 Session delete 时，命令返回 `SESSION_DELETE_UNSUPPORTED` 或进入 `delete_blocked`，不得宣称完成。
+`dissolve` 只接受团队名称精确确认，不能用普通布尔确认。运行团队先进入 `deleting`，UI 禁止其他变更；服务停止成员、清空待处理输入、等待空闲、尽力 flush、释放 AgentHandle、解除现任与已移除 Session 的 Workspace 活动关联，最后删除团队消息、活动和 TeamAggregate。任一清理步骤失败时进入 `delete_blocked`，UI 提供重试入口。
 
 团队一旦进入 `deleting`：
 
 - 不能取消删除。
 - 不能重新接收任务或消息。
 - 不能恢复、改名、换 Leader 或添加成员。
-- 后台只能继续永久清理。
+- 后台只能继续解散清理。
 
-解散命令只清理这个 `teamId` 拥有的聚合、成员实例、Session、消息和活动。它不得调用 `AssistantService.delete`，也不得按引用计数自动删除助手模板。
+解散命令只清理这个 `teamId` 拥有的聚合、成员运行时归属、消息和活动。它不得调用 `AssistantService.delete`，不得删除 Workspace 文件，也不得按引用计数自动删除助手模板。Harness 底层 Session 日志可能保留，但不再归属、恢复或展示为已删除团队。
 
 ## 错误模型
 
@@ -138,8 +138,7 @@ interface TeamService {
 - `PRESET_PROMPT_INCOMPATIBLE`
 - `SESSION_CREATE_FAILED`
 - `AGENT_HANDLE_OWNERSHIP_CONFLICT`
-- `SESSION_DELETE_UNSUPPORTED`
-- `SESSION_DELETE_FAILED`
+- `TEAM_DELETE_FAILED`
 
 错误对象需要携带可展示消息、是否可重试、关联实体和结构化修复建议。
 
@@ -152,7 +151,7 @@ interface TeamService {
 
 ## 验收标准
 
-- 服务层在无 UI 条件下可以完成除当前上游阻塞的 Session 永久删除外的生命周期测试；删除 API 补齐后再通过完整生命周期测试。
+- 服务层在无 UI 条件下可以完成完整团队生命周期测试，包括运行中团队解散、运行时释放和团队领域数据删除。
 - 同模板多实例、多团队引用、模板快照和 Leader 原子切换均通过测试。
 - 所有破坏性操作都有明确确认、审计和幂等行为。
 - 运行时失败不会破坏领域不变量或覆盖原 Session 映射。

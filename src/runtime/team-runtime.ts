@@ -367,6 +367,84 @@ export class TeamRuntime {
     })
   }
 
+  dissolveTeam(teamId: string): Promise<void> {
+    return this.exclusive(teamId, async () => {
+      let team = this.service.getTeam(teamId)
+      const members = Object.values(team.members)
+      for (const member of members) {
+        const sessionId = SessionId(member.sessionId)
+        if (this.owned.get(member.sessionId) === undefined && this.ctx.agents.get(sessionId) !== undefined) {
+          throw new AgentTeamError(
+            'AGENT_HANDLE_OWNERSHIP_CONFLICT',
+            `Session '${member.sessionId}' is live without this plugin's AgentHandle`,
+          )
+        }
+      }
+
+      if (team.state !== 'deleting') {
+        team = await this.service.updateRuntimeTeam(
+          teamId,
+          current => ({ ...current, state: 'deleting' }),
+          'team.deleting',
+          `Team ${team.name} dissolution started`,
+        )
+      }
+
+      try {
+        const owned = members
+          .map(member => ({ member, owned: this.owned.get(member.sessionId) }))
+          .filter((entry): entry is { member: TeamMemberSlot; owned: OwnedAgent } => entry.owned !== undefined)
+        for (const entry of owned) {
+          entry.owned.handle.agent.cancel({ kind: 'user' }, { keepInbox: false })
+        }
+        await Promise.all(owned.map(entry => entry.owned.handle.agent.whenIdle()))
+
+        for (const entry of owned) {
+          try {
+            await this.ctx.sessions.flush(entry.owned.handle.agent.session)
+          } catch (error) {
+            this.ctx.logger.warn(`agent-team: final session flush failed during dissolution for ${entry.member.sessionId}`, error)
+          }
+          await entry.owned.handle.dispose()
+          this.owned.delete(entry.member.sessionId)
+        }
+
+        const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
+        if (workspace !== undefined) {
+          const sessionIds = new Set([
+            ...members.map(member => member.sessionId),
+            ...Object.keys(team.retiredSessions),
+          ])
+          for (const sessionId of sessionIds) {
+            await workspace.detachSession(SessionId(sessionId))
+          }
+        }
+
+        await this.service.deleteTeamRecords(teamId)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        try {
+          await this.service.updateRuntimeTeam(
+            teamId,
+            current => ({ ...current, state: 'delete_blocked' }),
+            'team.delete_blocked',
+            message,
+          )
+        } catch (updateError) {
+          this.ctx.logger.warn(`agent-team: failed to persist blocked dissolution for ${teamId}`, updateError)
+        }
+        throw error instanceof AgentTeamError
+          ? error
+          : new AgentTeamError(
+            'TEAM_DELETE_FAILED',
+            `团队“${team.name}”解散失败：${message}`,
+            { teamId, cause: message },
+            { cause: error },
+          )
+      }
+    })
+  }
+
   resumeTeam(teamId: string): Promise<TeamAggregate> {
     return this.exclusive(teamId, async () => {
       const team = this.service.getTeam(teamId)

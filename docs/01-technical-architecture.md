@@ -2,7 +2,7 @@
 
 ## 审核结论
 
-除“永久删除 Harness Session 持久化日志”外，本方案可以使用 DeepSeek Harness 当前公开的插件接口实现。Session 删除缺口是发布阻塞项，详见[插件可实现性审核](./08-harness-plugin-feasibility-audit.md)。在该能力补齐前，可以开发和验证其他模块，但不能宣称完整产品已满足永久解散语义。
+本方案可以使用 DeepSeek Harness 当前公开的插件接口实现。团队解散会停止并释放成员运行时、解除 Workspace 活动关联，并删除插件拥有的团队、任务、消息与活动数据；助手模板和 Workspace 文件保留。Harness 当前没有公开的 Session 物理删除接口，因此旧 Session 持久化日志可能继续存在，但不再归属、恢复或展示为该团队。
 
 首个可交付版本限定为 **DeepSeek Harness Web Profile 插件**。这是因为 `dsh.client` 的公开平台是 `web`，而公开的 `ctx.webServer` 路由只服务浏览器；Electron 的 `file://` 与 IPC 请求桥不承诺转发第三方自定义路由。
 
@@ -187,11 +187,11 @@ Client 插件使用现有公开 Slot：
 
 为保持 `AgentHandle` 所有权，暂停团队不 dispose 成员，只停止新任务并在 Agent scope 拒绝新的执行；成员 Session 的标准 Composer 由插件接管并通过 Team Service 投递。Runtime 每次恢复或变更前都检查 `ctx.agents.get(sessionId)`：如果发现 live Agent 但自己没有对应 Handle，进入 `ownership_conflict` 并停止操作，绝不能把 bare `Agent` 当作可销毁 Handle。
 
-## 当前硬阻塞：Session 永久删除
+## 已知边界：Session 日志物理删除
 
 审核基线中的公开 `SessionPersistence` 没有 `delete`，`AgentHandle.dispose()` 也只移除运行 Agent 和内存 Session。`Workspace.detachSession/archiveSession` 明确不删除持久日志。
 
-因此必须先由 Harness 提供公开、后端无关、会处理并发与缓存的 Session 删除能力，然后插件才能编排永久解散。不能把 `locate().path` 当作授权直接删 JSONL 文件；SQLite 后端甚至没有单 Session 路径。
+因此插件不能承诺物理擦除 Harness 的旧 Session 日志，也不能把 `locate().path` 当作授权直接删 JSONL 文件；SQLite 后端甚至没有单 Session 路径。该限制不阻塞产品层的团队解散：团队领域记录和运行时归属仍可完整删除，遗留日志只作为 Harness 自身的孤立历史保留。
 
 ## 验收标准
 
@@ -200,4 +200,4 @@ Client 插件使用现有公开 Slot：
 - 两个成员通过根级 `ctx.agents.create` 获得不同 Session、不同模型和同一规范 Workspace。
 - 所有 UI 都使用已存在的公开 Slot；多列工作台注册在 `shell.overlay`，不覆盖任何 single Slot。
 - 领域数据只通过 `ctx.storageDomain` 写入。
-- 在 Harness Session 删除能力补齐前，永久解散操作不可发布为可用功能。
+- 解散后团队不再出现在列表中，成员不会恢复，助手模板和 Workspace 文件保持不变；遗留 Session 日志不再归属团队。

@@ -12,7 +12,7 @@ export async function callAgentTeam<T>(
   expectedRevision?: number,
 ): Promise<T> {
   const controller = new AbortController()
-  const timeoutMs = method === 'team.reset' ? 60_000 : 10_000
+  const timeoutMs = method === 'team.reset' || method === 'team.dissolve' ? 60_000 : 10_000
   const timeout = setTimeout(() => { controller.abort() }, timeoutMs)
   try {
     const response = await fetch(AGENT_TEAM_API_PATH, {

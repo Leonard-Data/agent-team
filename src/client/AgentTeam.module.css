@@ -1471,6 +1471,10 @@ textarea.input {
   flex: none;
 }
 
+.dissolvePanel {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
 .messageForm {
   display: grid;
   grid-template-columns: minmax(130px, 0.5fr) minmax(180px, 1.5fr) auto;

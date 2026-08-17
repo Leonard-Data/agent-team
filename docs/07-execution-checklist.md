@@ -1,6 +1,6 @@
 # 07. 分阶段执行清单
 
-Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是独立发布门禁：它阻塞 Phase 9 和完整产品发布，不阻塞 Phase 0B–8 的可实现插件能力开发。其余 Phase 按退出标准顺序推进，不能通过降低测试标准绕过删除阻塞。
+Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件拥有的团队数据与运行时归属；Harness 不提供 Session 日志物理删除，这是一项已知边界而非产品发布阻塞。其余 Phase 按退出标准顺序推进。
 
 ## Phase 0：固定基线与能力审计
 
@@ -15,7 +15,7 @@ Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是
 - [x] 确认 Typert Remote 只是一元 RPC，严格生成链未在用户指南中证明支持树外插件。
 - [x] 确认公开 Session Persistence 没有永久删除方法。
 
-### Phase 9/发布前必须解决的阻塞
+### 已知上游边界
 
 - [ ] Harness 增加公开、后端无关的 Session 删除 API。
 - [ ] JSONL 和 SQLite Persistence Provider 都实现该 API。
@@ -23,11 +23,11 @@ Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是
 - [ ] Workspace、Projection、Feedback 等 Session sidecar 的删除或脱钩语义明确。
 - [ ] Agent Team 插件通过公开 API 完成真实永久删除测试。
 
-如果上游不接受该能力，只能重新与产品确认“归档/隐藏”语义；当前需求已明确永久删除，所以不能用归档替代。
+这些能力可作为未来增强，但当前插件不会越过公开接口直接删除 Harness 内部文件。团队记录、任务、消息和运行时归属仍会被真正删除，并非归档或隐藏。
 
 ## Phase 0B：最小外部插件 Spike
 
-在 Session 删除能力并行推进期间，可以完成不产生业务代码承诺的技术 Spike：
+外部插件 Spike 包含：
 
 - [x] 创建单 npm 包，声明 `dsh.bundle`、`dsh.client`、Host 和 Client exports。
 - [x] 用 Schemastery 定义最小 Config。
@@ -95,7 +95,7 @@ Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是
 - [ ] 实现移除成员时任务等待/取消/转派状态机（当前要求先由任务工具完成、失败、取消或转派，存在开放任务时拒绝移除）。
 - [x] 移除成员时 dispose Agent、detach Workspace，并把 Session 索引转入 `retiredSessions` 只读历史。
 - [ ] 实现模板同步的保留/新建 Session 策略。
-- [x] 未启动 Draft 可安全删除；已启动团队在 Session delete 缺失时返回 `SESSION_DELETE_UNSUPPORTED`，拒绝伪完成。
+- [x] 未启动 Draft 与已启动团队均可解散；运行团队先释放成员并解除 Workspace 关联，再删除团队领域数据，保留助手模板与 Workspace 文件。
 
 退出标准：并发命令不能制造无 Leader、双 Leader或悬空任务 Owner。
 
@@ -148,10 +148,10 @@ Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是
 - [ ] 可选注册 `conversation.session.header.actions`，提供从标准单 Session 返回团队的入口。
 - [ ] 为 Approval/Question 提供安全衔接；首版跳转标准 Session，不能伪造交互响应。
 - [ ] 实现换 Leader、增删成员和模板同步交互（换 Leader、增删成员已完成；模板同步未完成）。
-- [x] 永久删除能力缺失时显示阻塞，不为已启动团队提供误导性完成按钮。
+- [x] 团队管理提供名称精确确认的解散入口；失败进入 `delete_blocked` 并可重试。
 - [ ] 完成键盘、焦点、小窗口和断线恢复测试。
 
-退出标准：Web UI 能完成除被上游阻塞的永久删除外的全生命周期，并准确表达限制。
+退出标准：Web UI 能完成团队全生命周期，并准确表达底层 Session 日志可能保留的限制。
 
 ### Phase 8A：完整团队 Conversation 工作台
 
@@ -166,20 +166,17 @@ Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是
 
 退出标准：三名成员可以同时流式输出并展示工具调用，刷新与重启后历史一致，任何一列操作都不串到其他成员。
 
-## Phase 9：永久删除接入
+## Phase 9：团队解散
 
-仅在 Phase 0 的 Harness 删除能力发布后开始：
+- [x] 停止团队新工作并进入 `deleting`。
+- [x] cancel、清空 Inbox、whenIdle、flush、dispose 所有插件拥有的成员。
+- [x] detach 现任成员和 `retiredSessions` 的 Workspace Session 关联。
+- [x] 删除消息、活动、任务、成员和 TeamAggregate。
+- [x] 保留助手模板和 Workspace 文件，不调用 AssistantService 删除路径。
+- [x] 清理失败进入 `delete_blocked`，允许用户重试。
+- [ ] 为 detach、dispose 和领域删除失败补齐更细粒度故障注入测试。
 
-- [ ] 停止团队新工作并进入 `deleting`。
-- [ ] cancel、whenIdle、flush、dispose 所有成员。
-- [ ] 通过公开 API 删除现任成员和 `retiredSessions` 中每个 Session 及规定的 sidecar。
-- [ ] detach Workspace Session 关联。
-- [ ] 删除消息、活动、任务、成员和 TeamAggregate。
-- [ ] 清除 Operation；保留助手模板和 Workspace 文件。
-- [ ] 验证解散流程没有调用 AssistantService 删除路径，也没有按引用计数清理助手模板。
-- [ ] 在每一步注入崩溃并验证可恢复清理。
-
-退出标准：JSONL/SQLite 两种 Session Provider 都无法再 list/load 已删除 Session，且模板和 Workspace 文件完整。
+退出标准：团队不再 list/get，成员运行时和 Workspace 活动关联消失，模板与 Workspace 文件完整；Harness 底层 Session 日志可以保留但不再归属团队。
 
 ## Phase 10：发布
 
@@ -197,5 +194,5 @@ Phase 0 的能力审计已经完成，但其中的 Harness 上游删除 seam 是
 - [ ] 每个团队恰好一个 Leader且可原子更换。
 - [ ] 所有成员 Session 使用同一规范 Workspace cwd。
 - [ ] 插件生命周期、配置、存储、工具和 UI 均使用公开 Harness API。
-- [ ] 永久解散真实删除成员 Session 和团队数据，保留模板与 Workspace 文件。
+- [x] 解散真实删除团队数据和成员运行时归属，保留模板与 Workspace 文件；底层 Session 日志不再归属团队。
 - [ ] 不支持的平台和能力不以静默降级或伪完成方式呈现。

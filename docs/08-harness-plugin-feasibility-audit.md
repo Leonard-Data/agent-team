@@ -25,14 +25,14 @@
 
 ## 结论
 
-团队、助手、独立 Agent、共享 Workspace、任务信箱、Web UI 和插件持久化都能由外部组合包实现。唯一不满足当前确认需求的公开能力是 **Session 持久化日志的永久删除**。
+团队、助手、独立 Agent、共享 Workspace、任务信箱、Web UI、插件持久化和产品层团队解散都能由外部组合包实现。唯一缺少的公开能力是 **Session 持久化日志的物理删除**，但团队解散不要求越权擦除 Harness 自身日志。
 
 因此当前状态是：
 
 - 技术架构主体可行。
-- 可以开始 Phase 0B Spike 和不依赖删除的模块开发。
-- 不能发布完整“永久解散”产品。
-- 必须先补齐 Harness SessionPersistence 删除 seam，或由用户改变永久删除需求。
+- 可以完整实现团队生命周期与解散。
+- 解散会删除插件团队数据与运行时归属，保留助手模板和 Workspace 文件。
+- 旧 Session 日志可能继续存在于 Harness 底层，但不再被恢复、展示或归属为团队成员。
 
 ## 能力矩阵
 
@@ -64,7 +64,8 @@
 | Electron 自定义 API | WebServer 不覆盖 Electron IPC | 当前方案不承诺 |
 | Typert Remote | 内建严格生成链存在，树外包流程未在用户指南证明 | 可做 Spike，不作为首版依赖 |
 | Dispose 运行成员 | `AgentHandle.dispose` | 可实现，只删除 live 实例 |
-| 移除活动成员 | dispose + Workspace detach + 团队 `retiredSessions` | 可实现，历史保留到解散 |
+| 移除活动成员 | dispose + Workspace detach + 团队 `retiredSessions` | 可实现，团队索引保留到解散 |
+| 解散团队 | dispose + detach + 删除 Team Domain 数据 | 可实现；不删除助手模板与 Workspace 文件 |
 | 永久删除 Session 日志 | `SessionPersistence` 无 delete | **不可由当前公开插件 API 实现** |
 
 ## 已修正文档中的不实假设
@@ -107,7 +108,7 @@ Harness `AgentStatus` 只有 `idle | running`，dispose 后从 Registry 移除�
 
 Typert Remote 只支持一元方法，严格 Client contribution 依赖生成工件。外部组合包构建流程尚未由用户指南保证。首版改为公开 WebServer JSON + SSE，并明确 Web-only 和 LAN 信任边界。
 
-## Session 删除阻塞的证据
+## Session 日志物理删除边界的证据
 
 公开 `SessionPersistence` 包含：
 
@@ -150,7 +151,7 @@ abstract delete(id: SessionId, options?: {
 - Workspace、Projection Cache、Feedback 等 sidecar 的清理职责。
 - 幂等、Revision、取消和崩溃恢复语义。
 
-这项能力发布前，Agent Team 的 `dissolve` 只能进入 `delete_blocked`，不能返回成功。
+这项能力不是团队解散的前提。`dissolve` 通过公开 API 停止并释放成员、解除 Workspace 关联、删除团队领域记录后即可成功；只有这些实际清理步骤失败时才进入 `delete_blocked`。插件不得把成功表述为底层日志已被物理擦除。
 
 ## 审核后的实现边界
 
@@ -163,4 +164,4 @@ abstract delete(id: SessionId, options?: {
 
 ## 最终审核标准
 
-开始编码前，Phase 0B Spike 必须证明安装、Host/Client、Storage、Agent、Workspace、Slot 和卸载流程。发布完整产品前，Session 删除 seam 必须在目标 Harness 版本中成为公开且经过两种持久化 Provider 测试的能力。
+Phase 0B Spike 必须证明安装、Host/Client、Storage、Agent、Workspace、Slot 和卸载流程。发布前还要验证解散在两种 Storage Provider 上都能删除团队领域数据、释放运行时并解除 Workspace 关联，同时明确记录 Session 日志物理删除不受支持。

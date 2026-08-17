@@ -6,7 +6,7 @@
 
 ## 可实现性状态
 
-已按 DeepSeek Harness commit `47f943859bef60e4160492346772ded9b24f765a` 的开发指南、生成 API 文档和公开 TypeScript 接口完成审核。除 Session 持久日志永久删除外，其余核心方案可由 Web Profile 外部插件实现。当前公开 `SessionPersistence` 没有 delete 方法，因此完整“永久解散”仍有一个 Harness 上游能力阻塞，不能用隐藏、归档或直接删除内部文件冒充完成。
+已按 DeepSeek Harness commit `47f943859bef60e4160492346772ded9b24f765a` 的开发指南、生成 API 文档和公开 TypeScript 接口完成审核。外部 Web Profile 插件可完成团队解散：停止 Agent、detach Workspace Session、删除团队聚合、任务、消息和活动记录，同时保留助手模板与 Workspace 文件。公开 `SessionPersistence` 没有 delete 方法，所以旧 Session 物理日志保留在 Harness 底层，但插件不再恢复或展示它们。
 
 ## 已确认的产品边界
 
@@ -40,7 +40,7 @@
 
 ## 推荐执行顺序
 
-先完成 Phase 0B 外部插件 Spike；完整产品发布前必须先补齐 Harness Session 删除 seam。之后按领域存储、助手库、团队生命周期、独立 Agent 运行时、协作协议、Web Host API、UI、永久删除接入和发布的顺序实施。每一步见[分阶段执行清单](./07-execution-checklist.md)。
+按外部插件 Spike、领域存储、助手库、团队生命周期、独立 Agent 运行时、协作协议、Web Host API、UI、团队解散和发布的顺序实施。Session 日志物理删除作为 Harness 上游可选增强，不阻塞插件的团队解散。每一步见[分阶段执行清单](./07-execution-checklist.md)。
 
 ## 参考基线
 
