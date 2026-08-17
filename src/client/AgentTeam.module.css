@@ -770,16 +770,19 @@
 
 .assistantPickCopy strong,
 .assistantPickCopy span,
+.selectedMemberCopy strong,
 .selectedMemberCopy span {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.assistantPickCopy strong {
+.assistantPickCopy strong,
+.selectedMemberCopy strong {
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   line-height: 20px;
+  font-weight: 600;
 }
 
 .assistantPickCopy span,
@@ -860,20 +863,6 @@
 
 .selectedLeader {
   border-color: var(--dsw-alias-state-warn-secondary);
-}
-
-.memberNameInput {
-  width: 100%;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 500;
 }
 
 .setLeaderButton {

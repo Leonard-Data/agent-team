@@ -58,7 +58,7 @@ interface TeamService {
 1. 选择或通过 `ctx.workspaceRegistry` 创建 Workspace，使用其规范 `id/path` 并验证 `status()`。
 2. 添加成员实例；每次添加都复制模板快照并生成唯一 `slotId` 和 `sessionId`。
 3. 指定且只指定一个 Leader。
-4. 校验成员显示名在团队内可区分；模板 ID 可以重复。
+4. 成员名称直接使用助手模板名称；模板 ID 和成员名称都可以重复，实例由 `slotId` 区分。
 5. 保存 Draft，不启动 Agent。
 
 ### Start 阶段

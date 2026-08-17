@@ -75,6 +75,8 @@ type RetiredMemberSession = {
 };
 ```
 
+`displayName` 是为消息、任务和历史记录保存的助手名称快照，固定取自 `assistantSnapshot.name`，不是用户可编辑的成员别名。同一助手模板可产生多个同名成员实例，成员身份始终由 `slotId` 区分。早期版本保存的自定义名称或自动编号会在插件启动时归一为助手快照名称。
+
 早期版本持久化的 `paused` 只作为旧数据输入值保留在 Schema 编解码层；插件启动时会将其一次性迁移为 `active`，不会再向 Runtime、Host API 或 UI 暴露暂停状态。
 
 `AssistantTemplate.permissionPresetId` 是创建成员时的默认权限；`TeamMemberSlot.permissionPresetId` 是该成员当前 Session 的运行权限。聊天窗口切换权限只更新成员字段，不修改模板或不可变助手快照。早期成员记录缺少该字段时，运行时回退到 `assistantSnapshot.permissionPresetId`。
@@ -158,6 +160,7 @@ Host 插件启动时：
 - `members` 与 `retiredSessions` 的 Session ID 不能重复；解散必须解除两者的团队与 Workspace 活动归属。
 - 成员 `sessionId` 使用插件命名空间并保持不可变，使 Client Composer 的纯 selector 可识别团队 Session；团队归属真相仍来自 Domain，不从 ID 反推授权。
 - `assistantId` 可以重复，`slotId` 必须唯一。
+- 成员名称取自 `assistantSnapshot.name`，允许重名，不能用于成员寻址或授权。
 - `workspacePath` 必须等于 `workspaceRegistry.get(workspaceId).path`。
 - `deleting` 或 `delete_blocked` 团队拒绝新任务、消息和成员操作。
 - `ownership_conflict` 团队拒绝 Runtime 变更，直到外部 live Agent 被其所有者释放并由 Team Runtime 重新取得 `AgentHandle`。

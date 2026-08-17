@@ -1178,17 +1178,11 @@ function TeamCard({
   async function addMember(assistantId: string): Promise<void> {
     const assistant = assistants.find(candidate => candidate.id === assistantId)
     if (assistant === undefined) return
-    const existingNames = new Set(members.map(member => member.displayName.trim().toLocaleLowerCase()))
-    let displayName = assistant.name
-    let suffix = 2
-    while (existingNames.has(displayName.toLocaleLowerCase())) {
-      displayName = `${assistant.name} ${suffix++}`
-    }
     setBusy(true)
     try {
       await callAgentTeam('team.addMember', {
         teamId: team.id,
-        value: { assistantId: assistant.id, displayName },
+        value: { assistantId: assistant.id, displayName: assistant.name },
       }, team.revision)
       setAddingMember(false)
       setError(undefined)
@@ -1440,16 +1434,10 @@ function TeamForm({
   }
 
   function addAssistant(assistant: AssistantView): void {
-    const existingNames = new Set(members.map(member => member.displayName.trim().toLocaleLowerCase()))
-    let displayName = assistant.name
-    let suffix = 2
-    while (existingNames.has(displayName.toLocaleLowerCase())) {
-      displayName = `${assistant.name} ${suffix++}`
-    }
     const member: DraftMember = {
       key: crypto.randomUUID(),
       assistantId: assistant.id,
-      displayName,
+      displayName: assistant.name,
     }
     setMembers(current => [...current, member])
     setLeaderKey(current => current ?? member.key)
@@ -1459,10 +1447,6 @@ function TeamForm({
     const remaining = members.filter(member => member.key !== key)
     setMembers(remaining)
     if (leaderKey === key) setLeaderKey(remaining[0]?.key)
-  }
-
-  function renameMember(key: string, displayName: string): void {
-    setMembers(current => current.map(member => member.key === key ? { ...member, displayName } : member))
   }
 
   async function submit(event: FormEvent): Promise<void> {
@@ -1558,13 +1542,7 @@ function TeamForm({
                         {assistant?.name.slice(0, 1).toLocaleUpperCase() ?? '?'}
                       </div>
                       <div className={css.selectedMemberCopy}>
-                        <input
-                          required
-                          value={member.displayName}
-                          onChange={event => { renameMember(member.key, event.target.value) }}
-                          aria-label={`${assistant?.name ?? '助手'}的成员显示名`}
-                          className={css.memberNameInput}
-                        />
+                        <strong>{assistant?.name ?? member.displayName}</strong>
                         <span>{assistant?.provider} / {assistant?.model}</span>
                       </div>
                       {leader

@@ -87,10 +87,17 @@ export class AgentTeamService extends Service {
 
   async migrateLegacyTeamStates(): Promise<void> {
     for (const team of this.store.listTeams()) {
-      if (team.state !== 'paused') continue
+      const hasLegacyState = team.state === 'paused'
+      const hasMemberAliases = Object.values(team.members)
+        .some(member => member.displayName !== member.assistantSnapshot.name)
+      if (!hasLegacyState && !hasMemberAliases) continue
       await this.store.updateTeam(team.id, current => ({
         ...current,
-        state: 'active',
+        state: current.state === 'paused' ? 'active' : current.state,
+        members: Object.fromEntries(Object.entries(current.members).map(([slotId, member]) => [
+          slotId,
+          { ...member, displayName: member.assistantSnapshot.name },
+        ])),
         revision: current.revision + 1,
         updatedAt: new Date().toISOString(),
       }))
@@ -219,15 +226,6 @@ export class AgentTeamService extends Service {
     if (leaders.length !== 1) {
       throw new AgentTeamError('TEAM_INVALID_LEADER', 'A team must contain exactly one leader')
     }
-    const displayNames = new Set<string>()
-    for (const member of input.members) {
-      const key = member.displayName.trim().toLocaleLowerCase()
-      if (displayNames.has(key)) {
-        throw new AgentTeamError('INVALID_REQUEST', `Duplicate member display name '${member.displayName}'`)
-      }
-      displayNames.add(key)
-    }
-
     const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(input.workspaceId))
     if (workspace === undefined || await workspace.status() !== 'ok') {
       throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${input.workspaceId}' is unavailable`)
@@ -242,7 +240,7 @@ export class AgentTeamService extends Service {
       members[slotId] = {
         id: slotId,
         assistantId: assistant.id,
-        displayName: item.displayName.trim(),
+        displayName: assistant.name,
         role: item.role,
         assistantSnapshot: snapshotAssistant(assistant),
         sessionId: `agent-team:${randomUUID()}`,
@@ -318,11 +316,8 @@ export class AgentTeamService extends Service {
     if (team.state !== 'draft' && team.state !== 'active') {
       throw new AgentTeamError('TEAM_NOT_ACTIVE', `Cannot add a member while team is '${team.state}'`)
     }
-    const displayName = input.displayName.trim()
-    if (Object.values(team.members).some(member => member.displayName.toLocaleLowerCase() === displayName.toLocaleLowerCase())) {
-      throw new AgentTeamError('INVALID_REQUEST', `Duplicate member display name '${displayName}'`)
-    }
     const assistant = requireAssistant(this.store, input.assistantId)
+    const displayName = assistant.name
     const now = new Date().toISOString()
     const member = createMemberSlot(assistant, displayName, 'member', now, team.state === 'draft' ? 'offline' : 'online')
     const next = await this.store.updateTeam(teamId, current => ({

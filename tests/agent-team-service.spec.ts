@@ -34,6 +34,7 @@ describe('AgentTeamService', () => {
     })
 
     expect(Object.values(team.members)).toHaveLength(2)
+    expect(Object.values(team.members).map(member => member.displayName)).toEqual(['Codex Lead', 'Codex Lead'])
     expect(new Set(Object.values(team.members).map(member => member.sessionId)).size).toBe(2)
     expect(() => service.getAssistant(assistant.id)).not.toThrow()
 
@@ -70,13 +71,21 @@ describe('AgentTeamService', () => {
       workspaceId: 'workspace-1',
       members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
     })
-    const legacy = await store.updateTeam(draft.id, team => ({ ...team, state: 'paused' }))
+    const legacy = await store.updateTeam(draft.id, team => ({
+      ...team,
+      state: 'paused',
+      members: Object.fromEntries(Object.entries(team.members).map(([slotId, member]) => [
+        slotId,
+        { ...member, displayName: 'Legacy Alias' },
+      ])),
+    }))
 
     await service.migrateLegacyTeamStates()
     const migrated = service.getTeam(draft.id)
     await service.migrateLegacyTeamStates()
 
     expect(migrated.state).toBe('active')
+    expect(Object.values(migrated.members).map(member => member.displayName)).toEqual(['Codex Lead'])
     expect(migrated.revision).toBe(legacy.revision + 1)
     expect(service.getTeam(draft.id).revision).toBe(migrated.revision)
   })
@@ -147,12 +156,12 @@ describe('AgentTeamService', () => {
       assistantId: assistant.id,
       displayName: 'Second Instance',
     }, { expectedRevision: draft.revision })
-    const second = Object.values(added.members).find(member => member.displayName === 'Second Instance')!
+    const second = Object.values(added.members).find(member => member.id !== draft.leaderSlotId)!
     const promoted = await service.changeLeader(added.id, second.id, { expectedRevision: added.revision })
-    const original = Object.values(promoted.members).find(member => member.displayName === 'Original Lead')!
+    const original = promoted.members[draft.leaderSlotId]!
     const removed = await service.removeMember(promoted.id, original.id, { expectedRevision: promoted.revision })
 
-    expect(Object.values(removed.members).map(member => member.displayName)).toEqual(['Second Instance'])
+    expect(Object.values(removed.members).map(member => member.displayName)).toEqual(['Codex Lead'])
     expect(service.getAssistant(assistant.id).revision).toBe(1)
   })
 

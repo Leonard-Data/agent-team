@@ -142,7 +142,7 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 
 1. 输入团队名称；从下拉列表选择已有 Workspace，或点击“选择文件夹”调用 Harness 原生目录选择器。选中的目录通过 `ctx.workspaces.create({ path })` 注册或复用为真实 Workspace，并自动成为当前选择。
 2. 从助手库添加成员实例，可重复选择同一模板。
-3. 设置成员显示名和唯一 Leader。
+3. 成员名称直接使用助手模板名称，只需指定唯一 Leader，不提供成员别名输入。
 4. 审核模型、权限、工具和模板 Revision。
 5. 保存 Draft 或启动。
 

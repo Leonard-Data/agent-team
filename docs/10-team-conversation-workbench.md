@@ -215,7 +215,7 @@ TeamWorkbench
 
 每列包含：
 
-1. 成员头像、显示名、Leader 标识、Provider/Model、实时状态。
+1. 成员头像、助手模板名称、Leader 标识、Provider/Model、实时状态；同名成员由内部 `slotId` 区分。
 2. 虚拟化或分段加载的 Conversation 时间线。
 3. reasoning、Markdown、工具卡、错误节点。
 4. 回到底部按钮和未读计数。
