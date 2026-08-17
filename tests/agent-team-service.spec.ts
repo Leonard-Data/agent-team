@@ -12,15 +12,79 @@ import type {
 import { AgentTeamService } from '../src/service/agent-team-service.js'
 import type { AgentTeamStore } from '../src/storage/store.js'
 import { TeamRuntime } from '../src/runtime/team-runtime.js'
+import { ASSISTANT_BUILDER_PROMPT } from '../src/runtime/assistant-builder-runtime.js'
 
 const config: Config = {
   maxRequestBytes: 128 * 1024,
   sseHeartbeatMs: 20_000,
   runtimeConcurrency: 4,
   directMemberChatDefault: true,
+  assistantBuilderProvider: '',
+  assistantBuilderModel: '',
+  assistantBuilderAgentPresetId: '',
+  assistantBuilderPermissionPresetId: '',
 }
 
 describe('AgentTeamService', () => {
+  it('delegates the built-in assistant builder conversation without storing it as a template', async () => {
+    const { service, store } = createHarness()
+    const conversation = {
+      schemaVersion: 1 as const,
+      sessionId: 'agent-team:assistant-builder',
+      status: 'idle' as const,
+      throughSeq: -1,
+      nodes: [],
+      configuration: {
+        provider: 'test-provider',
+        model: 'test-model',
+        agentPresetId: 'standard',
+        permissionPresetId: 'workspace-write',
+      },
+    }
+    const builder = {
+      getConversation: vi.fn(async () => conversation),
+      configure: vi.fn(async () => ({
+        ...conversation,
+        configuration: {
+          ...conversation.configuration,
+          provider: 'another-provider',
+          model: 'another-model',
+        },
+      })),
+      sendMessage: vi.fn(async () => ({ messageId: 'message-1' })),
+      stop: vi.fn(async () => {}),
+    }
+    service.attachAssistantBuilderRuntime(builder as never)
+
+    await expect(service.getAssistantBuilderConversation()).resolves.toEqual(conversation)
+    await expect(service.configureAssistantBuilder('another-provider', 'another-model')).resolves.toMatchObject({
+      configuration: { provider: 'another-provider', model: 'another-model' },
+    })
+    await expect(service.sendAssistantBuilderMessage('Create a reviewer')).resolves.toEqual({ messageId: 'message-1' })
+    await service.stopAssistantBuilder()
+
+    expect(builder.sendMessage).toHaveBeenCalledWith('Create a reviewer')
+    expect(builder.configure).toHaveBeenCalledWith('another-provider', 'another-model')
+    expect(builder.stop).toHaveBeenCalledOnce()
+    expect(store.listAssistants()).toHaveLength(0)
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_get_catalog')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_prepare')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_commit')
+    expect(ASSISTANT_BUILDER_PROMPT).not.toContain('assistant_builder_create')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('必须等待新的用户消息')
+  })
+
+  it('validates an assistant draft without storing it', async () => {
+    const { service, store } = createHarness()
+
+    await expect(service.validateAssistantDraft({
+      ...assistantInput(),
+      name: '  Codex Lead  ',
+    })).resolves.toMatchObject({ name: 'Codex Lead' })
+
+    expect(store.listAssistants()).toHaveLength(0)
+  })
+
   it('creates a multi-member draft and dissolves only the team', async () => {
     const { service, store } = createHarness()
     const assistant = await service.createAssistant(assistantInput())

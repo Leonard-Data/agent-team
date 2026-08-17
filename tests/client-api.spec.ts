@@ -42,9 +42,14 @@ describe('Agent Team client event hub', () => {
   })
 
   it('shares one EventSource across list and conversation subscribers', async () => {
-    const { subscribeAgentTeam, subscribeAgentTeamConversation } = await import('../src/client/api.js')
+    const {
+      subscribeAgentTeam,
+      subscribeAgentTeamConversation,
+      subscribeAssistantBuilderConversation,
+    } = await import('../src/client/api.js')
     const listChange = vi.fn()
     const conversationChange = vi.fn()
+    const builderChange = vi.fn()
     const opened = vi.fn()
 
     const unsubscribeList = subscribeAgentTeam(listChange, vi.fn())
@@ -54,6 +59,7 @@ describe('Agent Team client event hub', () => {
       vi.fn(),
       opened,
     )
+    const unsubscribeBuilder = subscribeAssistantBuilderConversation(builderChange, vi.fn())
 
     expect(FakeEventSource.instances).toHaveLength(1)
     const source = FakeEventSource.instances[0]!
@@ -63,14 +69,28 @@ describe('Agent Team client event hub', () => {
       entityId: 'team-1',
       conversation: { slotId: 'slot-1', throughSeq: 3 },
     })
+    source.emit('assistant-builder-conversation', {
+      assistantBuilderConversation: {
+        schemaVersion: 1,
+        sessionId: 'agent-team:assistant-builder',
+        status: 'running',
+        throughSeq: 4,
+        nodes: [],
+      },
+    })
 
     expect(opened).toHaveBeenCalledOnce()
     expect(listChange).toHaveBeenCalledOnce()
     expect(conversationChange).toHaveBeenCalledWith(expect.objectContaining({ slotId: 'slot-1' }))
+    expect(builderChange).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'agent-team:assistant-builder',
+    }))
 
     unsubscribeList()
     expect(source.closed).toBe(false)
     unsubscribeConversation()
+    expect(source.closed).toBe(false)
+    unsubscribeBuilder()
     expect(source.closed).toBe(true)
   })
 })

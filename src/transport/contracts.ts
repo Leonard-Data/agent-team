@@ -9,6 +9,10 @@ export type AgentTeamMethod =
   | 'assistant.update'
   | 'assistant.clone'
   | 'assistant.delete'
+  | 'assistant.builder.get'
+  | 'assistant.builder.configure'
+  | 'assistant.builder.send'
+  | 'assistant.builder.stop'
   | 'team.list'
   | 'team.get'
   | 'team.createDraft'
@@ -69,6 +73,20 @@ export interface TeamWorkbenchView {
   teamId: string
   revision: number
   conversations: MemberConversationView[]
+}
+
+export interface AssistantBuilderConversationView {
+  schemaVersion: 1
+  sessionId: string
+  status: 'starting' | 'idle' | 'running' | 'error'
+  throughSeq: number
+  nodes: ConversationNode[]
+  configuration: {
+    provider: string
+    model: string
+    agentPresetId: string
+    permissionPresetId: string
+  }
 }
 
 export interface WorkspaceEntryView {

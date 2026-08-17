@@ -5,11 +5,17 @@ import {
   IconSendOutline16, IconStopFill16, MarkdownText, MessageText, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
-import { callAgentTeam, subscribeAgentTeam, subscribeAgentTeamConversation } from './api.js'
-import { closeAgentTeam, openTeam, openTeamCreator, openTeams, useAgentTeamUi } from './store.js'
+import {
+  callAgentTeam,
+  subscribeAgentTeam,
+  subscribeAgentTeamConversation,
+  subscribeAssistantBuilderConversation,
+} from './api.js'
+import { closeAgentTeam, openTeam, openTeamCreator, useAgentTeamUi } from './store.js'
 import css from './AgentTeam.module.css'
 import type {
   ConversationNode,
+  AssistantBuilderConversationView,
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
@@ -133,10 +139,10 @@ export function TeamSidebarEntry({ wide }: { wide: boolean }): JSX.Element {
     <section className={`${css.sidebarTeams} ${wide ? '' : css.sidebarTeamsRail}`} aria-label="团队">
       <div className={css.sidebarTeamHeader}>
         <Tooltip label="团队" delayMs={500} disabled={wide}>
-          <button type="button" className={css.sidebarTeamMain} onClick={openTeams} aria-label="查看全部团队">
+          <div className={css.sidebarTeamMain}>
             <IconAgentPresetOutline16 size={wide ? 16 : 18} />
             {wide && <span className={css.sidebarTeamLabel}>团队</span>}
-          </button>
+          </div>
         </Tooltip>
         {wide && (
           <Tooltip label="组建团队" delayMs={500}>
@@ -246,10 +252,10 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
     <section className={css.fullscreenWorkbench} aria-label="Agent 团队工作台">
       <aside className={css.teamNavigator} aria-label="团队列表">
         <div className={css.teamNavigatorHeader}>
-          <button type="button" className={css.teamNavigatorTitle} onClick={openTeams}>
+          <div className={css.teamNavigatorTitle}>
             <IconAgentPresetOutline16 size={18} />
             <span>团队</span>
-          </button>
+          </div>
           <Tooltip label="组建团队" delayMs={400}>
             <button type="button" className={css.teamNavigatorAdd} onClick={openTeamCreator} aria-label="组建团队">
               <IconPlusOutline16 size={16} />
@@ -343,6 +349,7 @@ function AssistantPanel({
   onChanged: () => Promise<void>
 }): JSX.Element {
   const [creating, setCreating] = useState(false)
+  const [builderOpen, setBuilderOpen] = useState(false)
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
@@ -350,11 +357,34 @@ function AssistantPanel({
           <h2 className={css.sectionHeading}>助手模板 <span className={css.count}>{assistants.length}</span></h2>
           <p className={css.sectionDescription}>助手是可复用模板，解散团队不会删除助手。</p>
         </div>
-        <Button variant="primary" onClick={() => { setCreating(true) }}>新建助手</Button>
+        <div className={css.actions}>
+          <Button variant="outline" onClick={() => { setBuilderOpen(true) }}>与团队小助手对话</Button>
+          <Button variant="primary" onClick={() => { setCreating(true) }}>手动新建</Button>
+        </div>
       </div>
+      <article className={css.assistantBuilderCard}>
+        <div className={css.assistantBuilderAvatar} aria-hidden="true">AI</div>
+        <div className={css.assistantBuilderCopy}>
+          <span className={css.assistantBuilderEyebrow}>内置 · 默认</span>
+          <strong>团队 Agent 小助手</strong>
+          <p>描述你需要的角色，它会询问必要参数、整理长期提示词，并在确认后创建助手。</p>
+        </div>
+        <Button variant="primary" onClick={() => { setBuilderOpen(true) }}>开始对话</Button>
+      </article>
       {assistants.length === 0
         ? <Empty text="还没有助手模板" hint="创建助手后，就可以把它作为 Leader 或普通成员加入不同团队。" />
         : <div className={css.cardGrid}>{assistants.map(assistant => <AssistantCard key={assistant.id} assistant={assistant} onChanged={onChanged} />)}</div>}
+      <Modal
+        open={builderOpen}
+        onClose={() => { setBuilderOpen(false) }}
+        title="团队 Agent 小助手"
+        closeLabel="关闭"
+        description="通过对话设计助手；完整配置会在你确认后保存到助手模板库。"
+        className={css.assistantBuilderDialog ?? ''}
+        contentClassName={css.assistantBuilderDialogContent ?? ''}
+      >
+        {builderOpen && <AssistantBuilderConversation catalog={catalog} />}
+      </Modal>
       <Modal
         open={creating}
         onClose={() => { setCreating(false) }}
@@ -370,6 +400,205 @@ function AssistantPanel({
           onCreated={async () => { setCreating(false); await onChanged() }}
         />
       </Modal>
+    </section>
+  )
+}
+
+function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | undefined }): JSX.Element {
+  const [conversation, setConversation] = useState<AssistantBuilderConversationView>()
+  const [content, setContent] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [applyingModel, setApplyingModel] = useState(false)
+  const [selectedProvider, setSelectedProvider] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [modelSelectionDirty, setModelSelectionDirty] = useState(false)
+  const [error, setError] = useState<string>()
+  const timeline = useRef<HTMLDivElement>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.get')
+      setConversation(next)
+      setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+    return subscribeAssistantBuilderConversation(next => {
+      if (next !== undefined) setConversation(next)
+      else void load()
+      setError(undefined)
+    }, () => {
+      setError('实时连接已断开，正在等待重连')
+    }, () => {
+      setError(undefined)
+      void load()
+    })
+  }, [load])
+
+  useEffect(() => {
+    if (conversation === undefined || modelSelectionDirty) return
+    setSelectedProvider(conversation.configuration.provider)
+    setSelectedModel(conversation.configuration.model)
+  }, [conversation, modelSelectionDirty])
+
+  useEffect(() => {
+    const element = timeline.current
+    if (element === null) return
+    element.scrollTop = element.scrollHeight
+  }, [conversation?.throughSeq, conversation?.nodes.length])
+
+  async function send(): Promise<void> {
+    const message = content.trim()
+    if (message.length === 0 || sending || conversation?.status === 'running') return
+    setSending(true)
+    try {
+      await callAgentTeam('assistant.builder.send', { content: message })
+      setContent('')
+      setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function stop(): Promise<void> {
+    try {
+      await callAgentTeam('assistant.builder.stop')
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  async function applyModel(): Promise<void> {
+    if (!selectedProvider || !selectedModel || applyingModel || conversation?.status === 'running') return
+    setApplyingModel(true)
+    try {
+      const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.configure', {
+        provider: selectedProvider,
+        model: selectedModel,
+      })
+      setConversation(next)
+      setModelSelectionDirty(false)
+      setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setApplyingModel(false)
+    }
+  }
+
+  const running = conversation?.status === 'running'
+  const providers = catalog?.providers ?? []
+  const models = catalog?.models[selectedProvider] ?? []
+  const modelChanged = conversation !== undefined && (
+    selectedProvider !== conversation.configuration.provider
+    || selectedModel !== conversation.configuration.model
+  )
+  return (
+    <section className={css.assistantBuilderConversation}>
+      <div className={css.assistantBuilderRuntime}>
+        <span className={css.assistantBuilderRuntimeState}>
+          <span className={`${css.statusDot} ${running ? css.statusRunning : css.statusIdle}`} aria-hidden="true" />
+          <span>{loading ? '正在启动…' : running ? '正在思考' : '可以对话'}</span>
+        </span>
+        <div className={css.assistantBuilderModelControls}>
+          <select
+            value={selectedProvider}
+            onChange={event => {
+              const provider = event.target.value
+              setSelectedProvider(provider)
+              setSelectedModel(catalog?.models[provider]?.[0]?.id ?? '')
+              setModelSelectionDirty(true)
+            }}
+            className={css.assistantBuilderModelSelect}
+            aria-label="小助手 Provider"
+            disabled={loading || running || applyingModel}
+          >
+            {providers.map(provider => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+          </select>
+          <select
+            value={selectedModel}
+            onChange={event => {
+              setSelectedModel(event.target.value)
+              setModelSelectionDirty(true)
+            }}
+            className={css.assistantBuilderModelSelect}
+            aria-label="小助手模型"
+            disabled={loading || running || applyingModel}
+          >
+            {models.map(model => (
+              <option key={model.id} value={model.id}>{model.name === model.id ? model.id : `${model.name}（${model.id}）`}</option>
+            ))}
+          </select>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!modelChanged || !selectedProvider || !selectedModel || loading || running || applyingModel}
+            onClick={() => { void applyModel() }}
+          >
+            {applyingModel ? '切换中…' : '应用模型'}
+          </Button>
+        </div>
+      </div>
+      <div ref={timeline} className={`${css.timeline} ${css.assistantBuilderTimeline}`}>
+        {!loading && conversation?.nodes.length === 0 && (
+          <article className={`${css.messageNode} ${css.assistantMessage}`}>
+            <div className={css.messageText}>
+              <MarkdownText text="你好，我是团队 Agent 小助手。告诉我你想创建什么样的助手，以及它主要负责什么；缺少的配置我会逐项询问你。" />
+            </div>
+          </article>
+        )}
+        {conversation?.nodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
+      </div>
+      <form
+        className={`${css.composer} ${css.assistantBuilderComposer}`}
+        onSubmit={event => { event.preventDefault(); void send() }}
+      >
+        <textarea
+          value={content}
+          onChange={event => { setContent(event.target.value) }}
+          onKeyDown={event => {
+            if (event.key !== 'Enter' || event.shiftKey) return
+            event.preventDefault()
+            void send()
+          }}
+          placeholder={running ? '小助手正在回复…' : '例如：我需要一个负责 React 前端开发和代码审查的助手'}
+          disabled={loading || running}
+          rows={3}
+        />
+        <div className={css.composerFooter}>
+          <span className={css.muted}>Enter 发送 · Shift+Enter 换行</span>
+          <div className={css.composerActions}>
+            {running && (
+              <Tooltip label="停止生成" side="top" delayMs={400}>
+                <button type="button" className={css.composerIconButton} onClick={() => { void stop() }} aria-label="停止生成">
+                  <IconStopFill16 size={16} />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip label={sending ? '发送中…' : '发送消息'} side="top" delayMs={400}>
+              <button
+                type="submit"
+                className={css.composerIconButton}
+                disabled={loading || running || sending || content.trim().length === 0}
+                aria-label={sending ? '发送中' : '发送消息'}
+              >
+                <IconSendOutline16 size={16} />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+        {error && <span className={css.composerError}>{error}</span>}
+      </form>
     </section>
   )
 }

@@ -3,6 +3,7 @@ import {
   AGENT_TEAM_EVENTS_PATH,
   type AgentTeamMethod,
   type AgentTeamResponse,
+  type AssistantBuilderConversationView,
   type MemberConversationView,
 } from '../transport/contracts.js'
 
@@ -53,8 +54,15 @@ interface ConversationSubscription {
   onOpen?: () => void
 }
 
+interface AssistantBuilderSubscription {
+  onChange: (conversation?: AssistantBuilderConversationView) => void
+  onError: () => void
+  onOpen?: () => void
+}
+
 const changeSubscriptions = new Set<ChangeSubscription>()
 const conversationSubscriptions = new Set<ConversationSubscription>()
+const assistantBuilderSubscriptions = new Set<AssistantBuilderSubscription>()
 let sharedEventSource: EventSource | undefined
 
 function eventSource(): EventSource {
@@ -76,19 +84,37 @@ function eventSource(): EventSource {
       for (const subscription of conversationSubscriptions) subscription.onChange()
     }
   }) as EventListener)
+  source.addEventListener('assistant-builder-conversation', ((event: MessageEvent<string>) => {
+    try {
+      const change = JSON.parse(event.data) as {
+        assistantBuilderConversation?: AssistantBuilderConversationView
+      }
+      for (const subscription of assistantBuilderSubscriptions) {
+        subscription.onChange(change.assistantBuilderConversation)
+      }
+    } catch {
+      for (const subscription of assistantBuilderSubscriptions) subscription.onChange()
+    }
+  }) as EventListener)
   source.onerror = () => {
     for (const subscription of changeSubscriptions) subscription.onError()
     for (const subscription of conversationSubscriptions) subscription.onError()
+    for (const subscription of assistantBuilderSubscriptions) subscription.onError()
   }
   source.onopen = () => {
     for (const subscription of conversationSubscriptions) subscription.onOpen?.()
+    for (const subscription of assistantBuilderSubscriptions) subscription.onOpen?.()
   }
   sharedEventSource = source
   return source
 }
 
 function releaseEventSourceIfUnused(): void {
-  if (changeSubscriptions.size > 0 || conversationSubscriptions.size > 0) return
+  if (
+    changeSubscriptions.size > 0
+    || conversationSubscriptions.size > 0
+    || assistantBuilderSubscriptions.size > 0
+  ) return
   sharedEventSource?.close()
   sharedEventSource = undefined
 }
@@ -120,6 +146,25 @@ export function subscribeAgentTeamConversation(
   if (source.readyState === EventSource.OPEN) queueMicrotask(() => { onOpen?.() })
   return () => {
     conversationSubscriptions.delete(subscription)
+    releaseEventSourceIfUnused()
+  }
+}
+
+export function subscribeAssistantBuilderConversation(
+  onChange: (conversation?: AssistantBuilderConversationView) => void,
+  onError: () => void,
+  onOpen?: () => void,
+): () => void {
+  const subscription: AssistantBuilderSubscription = {
+    onChange,
+    onError,
+    ...(onOpen === undefined ? {} : { onOpen }),
+  }
+  assistantBuilderSubscriptions.add(subscription)
+  const source = eventSource()
+  if (source.readyState === EventSource.OPEN) queueMicrotask(() => { onOpen?.() })
+  return () => {
+    assistantBuilderSubscriptions.delete(subscription)
     releaseEventSourceIfUnused()
   }
 }

@@ -1,4 +1,3 @@
-.sidebarTeamMain:focus-visible,
 .sidebarTeamAdd:focus-visible,
 .sidebarTeamItem:focus-visible,
 .iconButton:focus-visible,
@@ -39,7 +38,6 @@
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 14px;
-  cursor: pointer;
 }
 
 .sidebarTeamsRail .sidebarTeamMain {
@@ -51,7 +49,6 @@
   border-radius: 50%;
 }
 
-.sidebarTeamMain:hover,
 .sidebarTeamAdd:hover,
 .sidebarTeamItem:hover {
   background: var(--dsw-alias-interactive-bg-hover);
@@ -209,7 +206,6 @@
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
-  cursor: pointer;
 }
 
 .teamNavigatorTitle {
@@ -229,9 +225,9 @@
   padding: 0;
   border-radius: 8px;
   color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
 }
 
-.teamNavigatorTitle:hover,
 .teamNavigatorAdd:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -494,6 +490,59 @@
   border-color: var(--dsw-alias-border-l3);
 }
 
+.assistantBuilderCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--dsw-alias-state-business-tertiary, var(--dsw-alias-border-l2));
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-alias-shadow-l1);
+}
+
+.assistantBuilderAvatar {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-brand-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.assistantBuilderCopy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assistantBuilderCopy strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.assistantBuilderCopy p {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.assistantBuilderEyebrow {
+  color: var(--dsw-alias-brand-primary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
 .managementCard {
   gap: 18px;
   padding: 6px;
@@ -619,6 +668,97 @@
 .assistantDialog {
   width: min(680px, calc(100vw - 48px));
   max-height: min(760px, calc(100vh - 48px));
+}
+
+.assistantBuilderDialog {
+  width: min(760px, calc(100vw - 48px));
+  height: min(780px, calc(100vh - 48px));
+  gap: 0;
+  padding-bottom: 0;
+}
+
+.assistantBuilderDialogContent {
+  flex: 1;
+  min-height: 0;
+}
+
+.assistantBuilderDialogContent > div:last-child {
+  height: 100%;
+  min-height: 0;
+  margin-top: 16px;
+  padding: 0;
+}
+
+.assistantBuilderConversation {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.assistantBuilderRuntime {
+  flex: none;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.assistantBuilderRuntimeState,
+.assistantBuilderModelControls {
+  display: flex;
+  align-items: center;
+}
+
+.assistantBuilderRuntimeState {
+  flex: none;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.assistantBuilderModelControls {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.assistantBuilderModelSelect {
+  min-width: 0;
+  max-width: 190px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+}
+
+.assistantBuilderModelSelect:focus-visible {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.assistantBuilderModelSelect:disabled {
+  opacity: 0.6;
+}
+
+.assistantBuilderTimeline {
+  padding: 20px 20px 16px;
+}
+
+.assistantBuilderComposer {
+  margin: 0 16px 16px;
 }
 
 .teamCreateDialog {
@@ -2210,6 +2350,40 @@ textarea.input {
     width: calc(100vw - 20px);
     height: calc(100vh - 20px);
     border-radius: 16px;
+  }
+
+  .assistantBuilderDialog {
+    width: calc(100vw - 20px);
+    height: calc(100vh - 20px);
+    border-radius: 16px;
+  }
+
+  .assistantBuilderCard {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .assistantBuilderCopy {
+    flex-basis: calc(100% - 56px);
+  }
+
+  .assistantBuilderCard > button {
+    margin-left: 56px;
+  }
+
+  .assistantBuilderRuntime {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assistantBuilderModelControls {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .assistantBuilderModelSelect {
+    flex: 1;
+    max-width: none;
   }
 
   .managementDialog {

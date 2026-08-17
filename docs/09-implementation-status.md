@@ -12,6 +12,7 @@
 
 - 单包 Host/Client 插件清单、Cordis patch、Schemastery Config 和 Web-only Client 注入。
 - Assistant CRUD 服务、复制、引用保护、Provider/Model/Preset/Permission Catalog 与不可变成员快照。
+- 内置“团队 Agent 小助手”：固定独立 Session、可选 Provider/模型、默认提示词策略、缺参追问、真实目录查询，以及服务端强制的“准备草稿 → 新用户消息精确回复‘确认创建’ → 提交创建”两阶段工具流程；同轮提交、非用户确认和其他确认表达均被拒绝，新草稿会替代旧草稿。切换模型保留历史，小助手本身不占用助手库记录，也不进入团队成员生命周期。
 - 团队草稿、唯一 Leader、同模板多实例、动态增删成员、原子换 Leader、启动和启动失败重试。
 - 独立 `AgentHandle` Registry、并发限流启动、Prompt 兼容性预检、Workspace attach、状态同步和冷恢复。
 - 组建团队时可直接选择已有 Workspace，或使用 Harness 原生目录选择器添加文件夹；插件不读取浏览器伪路径，也不修改 Harness 源码。

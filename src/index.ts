@@ -13,6 +13,7 @@ import type {} from '@deepseek-ai/dsh-workspace'
 import type { Context } from '@deepseek-ai/cordis'
 import { Config, type Config as AgentTeamConfig } from './config.js'
 import { AgentTeamService } from './service/agent-team-service.js'
+import { AssistantBuilderRuntime } from './runtime/assistant-builder-runtime.js'
 import { TeamRuntime } from './runtime/team-runtime.js'
 import { agentTeamDomainSpec } from './storage/domain.js'
 import { DomainAgentTeamStore } from './storage/store.js'
@@ -38,22 +39,27 @@ export { Config }
 export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void> {
   const domain = await ctx.storageDomain.open(agentTeamDomainSpec)
   let runtime: TeamRuntime | undefined
+  let assistantBuilderRuntime: AssistantBuilderRuntime | undefined
   let transport: ReturnType<typeof registerWebTransport> | undefined
   try {
     const store = new DomainAgentTeamStore(domain)
     const service = new AgentTeamService(ctx, config, store)
     await service.migrateLegacyTeamStates()
     runtime = new TeamRuntime(ctx, config, service)
+    assistantBuilderRuntime = new AssistantBuilderRuntime(ctx, config, service)
     service.attachRuntime(runtime)
+    service.attachAssistantBuilderRuntime(assistantBuilderRuntime)
     transport = registerWebTransport(ctx, config, service)
     ctx.effect(() => async () => {
       transport?.dispose()
+      await assistantBuilderRuntime?.dispose()
       await runtime?.dispose()
       await domain.close()
     }, 'agent-team: ordered shutdown')
     await runtime.recoverTeams()
   } catch (error) {
     transport?.dispose()
+    await assistantBuilderRuntime?.dispose()
     await runtime?.dispose()
     await domain.close()
     throw error

@@ -4,7 +4,9 @@ DeepSeek Harness Web Profile 插件，用于创建助手模板、手工组建由
 
 当前实现以 DeepSeek Harness `0.1.0-rc.6` 为兼容基线。详细技术设计和分阶段清单见 [`docs/README.md`](./docs/README.md)。
 
-已实现助手模板、手工组建团队、独立 Agent 启动、共享 Workspace、基础任务板、成员信箱、Skill/工具白名单、Web UI 和冷恢复。当前完成范围与尚未完成项见 [`docs/09-implementation-status.md`](./docs/09-implementation-status.md)。
+已实现内置“团队 Agent 小助手”对话创建助手模板、手工组建团队、独立 Agent 启动、共享 Workspace、基础任务板、成员信箱、Skill/工具白名单、Web UI 和冷恢复。当前完成范围与尚未完成项见 [`docs/09-implementation-status.md`](./docs/09-implementation-status.md)。
+
+内置小助手使用固定独立 Session，通过当前 Profile 的首个可用模型启动，并优先采用 `read-only` 权限预设；对话窗口可随时选择 Provider/模型，切换时保留 Session 历史。也可用 `assistantBuilderProvider`、`assistantBuilderModel`、`assistantBuilderAgentPresetId` 和 `assistantBuilderPermissionPresetId` 固定默认运行配置。它只允许执行目录读取、草稿校验和确认提交三个专用工具。创建采用服务端强制两阶段流程：先暂存已校验草稿，再等待用户用新消息精确回复“确认创建”后提交；重启或重新准备草稿会使旧草稿失效。
 
 ## 开发
 

@@ -27,8 +27,14 @@ import {
   type UpdateAssistantInput,
 } from '../domain/types.js'
 import type { AgentTeamStore } from '../storage/store.js'
+import type { AssistantBuilderRuntime } from '../runtime/assistant-builder-runtime.js'
 import type { TeamRuntime } from '../runtime/team-runtime.js'
-import type { MemberConversationView, TeamWorkbenchView, WorkspaceEntryView } from '../transport/contracts.js'
+import type {
+  AssistantBuilderConversationView,
+  MemberConversationView,
+  TeamWorkbenchView,
+  WorkspaceEntryView,
+} from '../transport/contracts.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -42,11 +48,12 @@ export interface MutationOptions {
 
 export interface AgentTeamChange {
   cursor: number
-  entityType: 'assistant' | 'team' | 'operation' | 'conversation'
+  entityType: 'assistant' | 'assistant-builder' | 'team' | 'operation' | 'conversation'
   entityId: string
   revision: number
   kind: string
   conversation?: MemberConversationView
+  assistantBuilderConversation?: AssistantBuilderConversationView
 }
 
 export interface CatalogSnapshot {
@@ -66,6 +73,7 @@ export class AgentTeamService extends Service {
   private readonly listeners = new Set<(change: AgentTeamChange) => void>()
   private cursor = 0
   private runtime?: TeamRuntime
+  private assistantBuilderRuntime?: AssistantBuilderRuntime
 
   constructor(
     ctx: Context,
@@ -83,6 +91,11 @@ export class AgentTeamService extends Service {
   attachRuntime(runtime: TeamRuntime): void {
     if (this.runtime !== undefined) throw new Error('Agent Team runtime is already attached')
     this.runtime = runtime
+  }
+
+  attachAssistantBuilderRuntime(runtime: AssistantBuilderRuntime): void {
+    if (this.assistantBuilderRuntime !== undefined) throw new Error('Assistant Builder runtime is already attached')
+    this.assistantBuilderRuntime = runtime
   }
 
   async migrateLegacyTeamStates(): Promise<void> {
@@ -145,8 +158,7 @@ export class AgentTeamService extends Service {
   }
 
   async createAssistant(raw: CreateAssistantInput): Promise<AssistantTemplate> {
-    const input = normalizeAssistantInput(createAssistantInputSchema.parse(raw))
-    await this.validateAssistantReferences(input)
+    const input = await this.validateAssistantDraft(raw)
     const now = new Date().toISOString()
     const assistant: AssistantTemplate = {
       schemaVersion: 1,
@@ -160,6 +172,12 @@ export class AgentTeamService extends Service {
     await this.activity('assistant.created', assistant.id, assistant.revision, `Assistant ${assistant.name} created`)
     this.publish('assistant', assistant.id, assistant.revision, 'assistant.created')
     return assistant
+  }
+
+  async validateAssistantDraft(raw: CreateAssistantInput): Promise<CreateAssistantInput> {
+    const input = normalizeAssistantInput(createAssistantInputSchema.parse(raw))
+    await this.validateAssistantReferences(input)
+    return input
   }
 
   async updateAssistant(
@@ -209,6 +227,25 @@ export class AgentTeamService extends Service {
     await this.store.deleteAssistant(id)
     await this.activity('assistant.deleted', id, assistant.revision + 1, `Assistant ${assistant.name} deleted`)
     this.publish('assistant', id, assistant.revision + 1, 'assistant.deleted')
+  }
+
+  getAssistantBuilderConversation(): Promise<AssistantBuilderConversationView> {
+    return this.requireAssistantBuilderRuntime().getConversation()
+  }
+
+  configureAssistantBuilder(
+    provider: string,
+    model: string,
+  ): Promise<AssistantBuilderConversationView> {
+    return this.requireAssistantBuilderRuntime().configure(provider, model)
+  }
+
+  sendAssistantBuilderMessage(content: string): Promise<{ messageId: string }> {
+    return this.requireAssistantBuilderRuntime().sendMessage(content)
+  }
+
+  stopAssistantBuilder(): Promise<void> {
+    return this.requireAssistantBuilderRuntime().stop()
   }
 
   getTeam(id: string): TeamAggregate {
@@ -442,6 +479,18 @@ export class AgentTeamService extends Service {
     this.publish('conversation', teamId, revision, 'member.conversation', conversation)
   }
 
+  publishAssistantBuilderConversation(conversation: AssistantBuilderConversationView): void {
+    const change: AgentTeamChange = {
+      cursor: ++this.cursor,
+      entityType: 'assistant-builder',
+      entityId: conversation.sessionId,
+      revision: Math.max(0, conversation.throughSeq + 1),
+      kind: 'assistant.builder.conversation',
+      assistantBuilderConversation: conversation,
+    }
+    for (const listener of this.listeners) listener(change)
+  }
+
   async listWorkspace(teamId: string, rawPath = ''): Promise<WorkspaceEntryView[]> {
     const team = requireTeam(this.store, teamId)
     const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
@@ -618,6 +667,12 @@ export class AgentTeamService extends Service {
   private requireRuntime(): TeamRuntime {
     if (this.runtime === undefined) throw new Error('Agent Team runtime is not attached')
     return this.runtime
+  }
+
+
+  private requireAssistantBuilderRuntime(): AssistantBuilderRuntime {
+    if (this.assistantBuilderRuntime === undefined) throw new Error('Assistant Builder runtime is not attached')
+    return this.assistantBuilderRuntime
   }
 }
 
