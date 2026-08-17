@@ -1161,9 +1161,39 @@ textarea.input {
   font-weight: 600;
 }
 
-.teamSectionHeader > span {
+.teamSectionActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.teamSectionActions > span {
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
+}
+
+.addMemberButton {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.addMemberButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.addMemberButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .memberGrid {
@@ -1246,9 +1276,25 @@ textarea.input {
   line-height: 15px;
 }
 
-.memberTileLeader .memberRole {
+.memberRoleLeader {
   background: var(--dsw-alias-state-warn-tertiary, var(--dsw-alias-bg-module-platform));
   color: var(--dsw-alias-state-warn-label);
+}
+
+.memberRoleAction {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.memberRoleAction:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.memberRoleAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .memberRemoveButton {
@@ -1266,6 +1312,82 @@ textarea.input {
 .memberRemoveButton:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger);
   color: var(--dsw-alias-state-error-primary);
+}
+
+.addMemberPanel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.addMemberOption {
+  min-width: 0;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.addMemberOption:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.addMemberOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.addMemberAvatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.addMemberCopy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.addMemberCopy strong,
+.addMemberCopy span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.addMemberCopy strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.addMemberCopy span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .memberRow {
@@ -1293,156 +1415,6 @@ textarea.input {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.managementTools {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.managementTool {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-2);
-}
-
-.managementToolLabel {
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-}
-
-.managementListHeader {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.managementListHeader > span:last-child {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.managementChoiceList {
-  min-height: 0;
-  max-height: 220px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-}
-
-.managementListEmpty {
-  display: grid;
-  min-height: 52px;
-  place-items: center;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 10px;
-}
-
-.managementChoiceRow {
-  min-width: 0;
-  min-height: 54px;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 8px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-}
-
-.managementChoiceRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.managementChoiceRowActive {
-  border-color: var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.managementChoiceAvatar {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.managementChoiceCopy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.managementChoiceCopy strong,
-.managementChoiceCopy span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.managementChoiceCopy strong {
-  color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-}
-
-.managementChoiceCopy span {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 10px;
-  line-height: 15px;
-}
-
-.managementRowAction,
-.currentLeaderLabel {
-  width: 88px;
-  height: 30px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 9px;
-  border-radius: 15px;
-  font-size: 11px;
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-.managementRowAction {
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.managementRowAction:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.currentLeaderLabel {
-  border: 1px solid transparent;
-  background: var(--dsw-alias-state-warn-tertiary, var(--dsw-alias-bg-module-platform));
-  color: var(--dsw-alias-state-warn-label);
 }
 
 .contextResetPanel {
@@ -2214,7 +2186,6 @@ textarea.input {
     max-height: calc(100vh - 20px);
   }
 
-  .managementTools,
   .memberGrid {
     grid-template-columns: 1fr;
   }

@@ -1081,6 +1081,7 @@ function TeamCard({
   const [content, setContent] = useState('')
   const [targetSlotId, setTargetSlotId] = useState(team.leaderSlotId)
   const [busy, setBusy] = useState(false)
+  const [addingMember, setAddingMember] = useState(false)
   const [error, setError] = useState<string>()
   const members = Object.values(team.members)
   const tasks = Object.values(team.tasks)
@@ -1157,6 +1158,8 @@ function TeamCard({
         teamId: team.id,
         value: { assistantId: assistant.id, displayName },
       }, team.revision)
+      setAddingMember(false)
+      setError(undefined)
       await onChanged()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -1186,6 +1189,7 @@ function TeamCard({
         teamId: team.id,
         successorSlotId,
       }, team.revision)
+      setError(undefined)
       await onChanged()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -1207,7 +1211,18 @@ function TeamCard({
       <section className={css.teamMemberSection} aria-label="团队成员">
         <div className={css.teamSectionHeader}>
           <strong>团队成员</strong>
-          <span>{members.length} 人</span>
+          <span className={css.teamSectionActions}>
+            <span>{members.length} 人</span>
+            <button
+              type="button"
+              className={css.addMemberButton}
+              disabled={busy || assistants.length === 0}
+              onClick={() => { setAddingMember(value => !value) }}
+            >
+              <IconPlusOutline16 size={14} />
+              {addingMember ? '收起' : '添加成员'}
+            </button>
+          </span>
         </div>
         <div className={css.memberGrid}>
           {members.map(member => (
@@ -1221,7 +1236,16 @@ function TeamCard({
                 </span>
               </span>
               <span className={css.memberTileActions}>
-                <span className={css.memberRole}>{member.role === 'leader' ? 'Leader' : '成员'}</span>
+                {member.role === 'leader'
+                  ? <span className={`${css.memberRole} ${css.memberRoleLeader}`}>Leader</span>
+                  : <button
+                    type="button"
+                    className={`${css.memberRole} ${css.memberRoleAction}`}
+                    disabled={busy}
+                    onClick={() => { void changeLeader(member.id) }}
+                  >
+                    设为 Leader
+                  </button>}
                 {member.id !== team.leaderSlotId && (
                   <button type="button" className={css.memberRemoveButton} disabled={busy} onClick={() => { void removeMember(member.id, member.displayName) }}>移出</button>
                 )}
@@ -1229,6 +1253,26 @@ function TeamCard({
             </div>
           ))}
         </div>
+        {addingMember && (
+          <div className={css.addMemberPanel} aria-label="选择要添加的助手">
+            {assistants.map(assistant => (
+              <button
+                key={assistant.id}
+                type="button"
+                className={css.addMemberOption}
+                disabled={busy}
+                onClick={() => { void addMember(assistant.id) }}
+              >
+                <span className={css.addMemberAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
+                <span className={css.addMemberCopy}>
+                  <strong>{assistant.name}</strong>
+                  <span>{assistant.provider} / {assistant.model}</span>
+                </span>
+                <IconPlusOutline16 size={14} />
+              </button>
+            ))}
+          </div>
+        )}
       </section>
       {tasks.length > 0 && (
         <div className={css.taskList}>
@@ -1244,55 +1288,6 @@ function TeamCard({
       <div className={css.teamRuntimeActions}>
         {team.state === 'draft' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.start') }}>{busy ? '启动中…' : '启动团队'}</button>}
         {team.state === 'error' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.start') }}>{busy ? '重试中…' : '重试启动'}</button>}
-      </div>
-      <div className={css.managementTools}>
-        <div className={css.managementTool}>
-          <div className={css.managementListHeader}>
-            <span className={css.managementToolLabel}>更改 Leader</span>
-            <span>{members.length} 名成员</span>
-          </div>
-          <div className={css.managementChoiceList} aria-label="选择新的 Leader">
-            {members.map(member => {
-              const isLeader = member.id === team.leaderSlotId
-              return (
-                <div key={member.id} className={`${css.managementChoiceRow} ${isLeader ? css.managementChoiceRowActive : ''}`}>
-                  <span className={css.managementChoiceAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
-                  <span className={css.managementChoiceCopy}>
-                    <strong title={member.displayName}>{member.displayName}</strong>
-                    <span>{statusLabel(member.lastRuntimeState)}</span>
-                  </span>
-                  {isLeader
-                    ? <span className={css.currentLeaderLabel}>当前 Leader</span>
-                    : <button type="button" className={css.managementRowAction} disabled={busy} onClick={() => { void changeLeader(member.id) }}>
-                      设为 Leader
-                    </button>}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <div className={css.managementTool}>
-          <div className={css.managementListHeader}>
-            <span className={css.managementToolLabel}>添加成员</span>
-            <span>{assistants.length} 个助手</span>
-          </div>
-          <div className={css.managementChoiceList} aria-label="可添加的助手">
-            {assistants.length === 0
-              ? <span className={css.managementListEmpty}>助手库为空</span>
-              : assistants.map(assistant => (
-                <div key={assistant.id} className={css.managementChoiceRow}>
-                  <span className={css.managementChoiceAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
-                  <span className={css.managementChoiceCopy}>
-                    <strong title={assistant.name}>{assistant.name}</strong>
-                    <span title={`${assistant.provider} / ${assistant.model}`}>{assistant.provider} / {assistant.model}</span>
-                  </span>
-                  <button type="button" className={css.managementRowAction} disabled={busy} onClick={() => { void addMember(assistant.id) }}>
-                    添加
-                  </button>
-                </div>
-              ))}
-          </div>
-        </div>
       </div>
       {team.state === 'active' && !compact && (
         <form onSubmit={(event) => { void send(event) }} className={css.messageForm}>
