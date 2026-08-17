@@ -1178,8 +1178,12 @@ function TeamCard({
   async function addMember(assistantId: string): Promise<void> {
     const assistant = assistants.find(candidate => candidate.id === assistantId)
     if (assistant === undefined) return
-    const displayName = window.prompt('新成员在团队中的显示名称：', `${assistant.name} Member`)
-    if (displayName === null) return
+    const existingNames = new Set(members.map(member => member.displayName.trim().toLocaleLowerCase()))
+    let displayName = assistant.name
+    let suffix = 2
+    while (existingNames.has(displayName.toLocaleLowerCase())) {
+      displayName = `${assistant.name} ${suffix++}`
+    }
     setBusy(true)
     try {
       await callAgentTeam('team.addMember', {
