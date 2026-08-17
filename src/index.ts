@@ -16,6 +16,10 @@ import { AgentTeamService } from './service/agent-team-service.js'
 import { AssistantBuilderRuntime } from './runtime/assistant-builder-runtime.js'
 import { TeamRuntime } from './runtime/team-runtime.js'
 import { agentTeamDomainSpec } from './storage/domain.js'
+import {
+  assistantBuilderPreferencesDomainSpec,
+  DomainAssistantBuilderModelPreferenceStore,
+} from './storage/assistant-builder-preferences.js'
 import { DomainAgentTeamStore } from './storage/store.js'
 import { registerWebTransport } from './transport/web.js'
 
@@ -38,15 +42,29 @@ export { Config }
 
 export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void> {
   const domain = await ctx.storageDomain.open(agentTeamDomainSpec)
+  const assistantBuilderPreferencesDomain = await ctx.storageDomain
+    .open(assistantBuilderPreferencesDomainSpec)
+    .catch(async error => {
+      await domain.close()
+      throw error
+    })
   let runtime: TeamRuntime | undefined
   let assistantBuilderRuntime: AssistantBuilderRuntime | undefined
   let transport: ReturnType<typeof registerWebTransport> | undefined
   try {
     const store = new DomainAgentTeamStore(domain)
+    const assistantBuilderModelPreferences = new DomainAssistantBuilderModelPreferenceStore(
+      assistantBuilderPreferencesDomain,
+    )
     const service = new AgentTeamService(ctx, config, store)
     await service.migrateLegacyData()
     runtime = new TeamRuntime(ctx, config, service)
-    assistantBuilderRuntime = new AssistantBuilderRuntime(ctx, config, service)
+    assistantBuilderRuntime = new AssistantBuilderRuntime(
+      ctx,
+      config,
+      service,
+      assistantBuilderModelPreferences,
+    )
     service.attachRuntime(runtime)
     service.attachAssistantBuilderRuntime(assistantBuilderRuntime)
     transport = registerWebTransport(ctx, config, service)
@@ -54,6 +72,7 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
       transport?.dispose()
       await assistantBuilderRuntime?.dispose()
       await runtime?.dispose()
+      await assistantBuilderPreferencesDomain.close()
       await domain.close()
     }, 'agent-team: ordered shutdown')
     await runtime.recoverTeams()
@@ -61,6 +80,7 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
     transport?.dispose()
     await assistantBuilderRuntime?.dispose()
     await runtime?.dispose()
+    await assistantBuilderPreferencesDomain.close()
     await domain.close()
     throw error
   }

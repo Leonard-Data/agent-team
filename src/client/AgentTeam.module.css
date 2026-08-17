@@ -490,6 +490,26 @@
   border-color: var(--dsw-alias-border-l3);
 }
 
+.assistantCardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: -8px -8px 2px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.assistantCardContent:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.assistantCardContent:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
 .assistantBuilderCard {
   display: flex;
   align-items: center;

@@ -139,9 +139,10 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 
 ### 助手库
 
-- 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复当前/最近会话，只在用户点击“新对话”时创建新 Session。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。创建使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，同一会话可连续创建多个助手。
+- 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复当前/最近会话，只在用户点击“新对话”时创建新 Session。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。创建使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，选择持久化到独立偏好 Domain；历史会话恢复自己的模型，新会话继承最近一次选择。同一会话可连续创建多个助手。
 - Provider/Model 由 Host Catalog API 返回。
 - Provider 和 Model 必填；模型只能从 Host 返回的真实候选项中选择。
+- 设置页的助手卡片主体和“编辑”按钮都会打开编辑弹窗；编辑复用新建表单，并携带当前 Revision 调用 `assistant.update`，避免覆盖并发修改。模板更新只影响之后启动的成员，既有团队成员继续使用加入团队时的助手快照。
 - 选择 Agent Preset、Permission Preset，以及该 Preset 下这个助手可以使用的 Skills 和 MCP Servers；两者都可以不选。普通工具直接使用 Agent Preset 的能力集合，创建界面不提供二次限制。MCP 连接与凭据由 Harness Profile/Preset 管理，界面只保存 Server 选择。
 - 编辑后提示活动成员仍使用旧快照。
 

@@ -27,6 +27,7 @@ interface AssistantView {
   id: string
   name: string
   description?: string
+  instructions: string
   provider: string
   model: string
   agentPresetId: string
@@ -124,6 +125,7 @@ const TASK_STATE_LABELS: Record<string, string> = {
 }
 
 const ASSISTANT_FORM_ID = 'agent-team-assistant-form'
+const ASSISTANT_EDIT_FORM_ID = 'agent-team-assistant-edit-form'
 
 const PERMISSION_LABELS: Record<string, string> = {
   'read-only': '只读',
@@ -373,6 +375,7 @@ function AssistantPanel({
   onChanged: () => Promise<void>
 }): JSX.Element {
   const [creating, setCreating] = useState(false)
+  const [editingAssistant, setEditingAssistant] = useState<AssistantView>()
   const [builderOpen, setBuilderOpen] = useState(false)
   const [assistantSaving, setAssistantSaving] = useState(false)
   return (
@@ -397,7 +400,18 @@ function AssistantPanel({
       </article>
       {assistants.length === 0
         ? <Empty text="还没有助手模板" hint="创建助手后，就可以把它作为 Leader 或普通成员加入不同团队。" />
-        : <div className={css.cardGrid}>{assistants.map(assistant => <AssistantCard key={assistant.id} assistant={assistant} onChanged={onChanged} />)}</div>}
+        : (
+            <div className={css.cardGrid}>
+              {assistants.map(assistant => (
+                <AssistantCard
+                  key={assistant.id}
+                  assistant={assistant}
+                  onEdit={() => { setEditingAssistant(assistant) }}
+                  onChanged={onChanged}
+                />
+              ))}
+            </div>
+          )}
       <Modal
         open={builderOpen}
         onClose={() => { setBuilderOpen(false) }}
@@ -433,10 +447,47 @@ function AssistantPanel({
       >
         <AssistantForm
           catalog={catalog}
+          formId={ASSISTANT_FORM_ID}
           saving={assistantSaving}
           setSaving={setAssistantSaving}
-          onCreated={async () => { setCreating(false); await onChanged() }}
+          onSaved={async () => { setCreating(false); await onChanged() }}
         />
+      </Modal>
+      <Modal
+        open={editingAssistant !== undefined}
+        onClose={() => { setEditingAssistant(undefined) }}
+        title="编辑助手"
+        closeLabel="关闭"
+        description="更新助手模板只影响之后启动的团队成员，不修改已有成员快照。"
+        className={css.assistantDialog ?? ''}
+        contentClassName={css.modalScrollContent ?? ''}
+        footer={editingAssistant === undefined
+          ? undefined
+          : (
+              <>
+                <Button variant="outline" onClick={() => { setEditingAssistant(undefined) }} disabled={assistantSaving}>取消</Button>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  form={ASSISTANT_EDIT_FORM_ID}
+                  disabled={assistantSaving}
+                >
+                  {assistantSaving ? '保存中…' : '保存修改'}
+                </Button>
+              </>
+            )}
+      >
+        {editingAssistant !== undefined && (
+          <AssistantForm
+            key={`${editingAssistant.id}:${editingAssistant.revision}`}
+            catalog={catalog}
+            formId={ASSISTANT_EDIT_FORM_ID}
+            assistant={editingAssistant}
+            saving={assistantSaving}
+            setSaving={setAssistantSaving}
+            onSaved={async () => { setEditingAssistant(undefined); await onChanged() }}
+          />
+        )}
       </Modal>
     </section>
   )
@@ -734,7 +785,15 @@ function formatConversationTime(value: string): string {
   }).format(new Date(value))
 }
 
-function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onChanged: () => Promise<void> }): JSX.Element {
+function AssistantCard({
+  assistant,
+  onEdit,
+  onChanged,
+}: {
+  assistant: AssistantView
+  onEdit: () => void
+  onChanged: () => Promise<void>
+}): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -765,19 +824,33 @@ function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onC
 
   return (
     <article className={css.card}>
-      <strong>{assistant.name}</strong>
-      <span className={css.muted}>{assistant.provider} / {assistant.model}</span>
-      <span className={css.muted}>
-        Preset: {assistant.agentPresetId} · 权限: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId}
-      </span>
-      <span className={css.muted}>
-        Skills: {assistant.skillAllowlist.length > 0 ? assistant.skillAllowlist.join('、') : '未选择'}
-      </span>
-      <span className={css.muted}>
-        MCP: {assistant.mcpServers.length > 0 ? assistant.mcpServers.join('、') : '未选择'}
-      </span>
-      {assistant.description && <p className={css.description}>{assistant.description}</p>}
+      <div
+        className={css.assistantCardContent}
+        role="button"
+        tabIndex={busy ? -1 : 0}
+        aria-label={`编辑助手 ${assistant.name}`}
+        onClick={() => { if (!busy) onEdit() }}
+        onKeyDown={event => {
+          if (busy || (event.key !== 'Enter' && event.key !== ' ')) return
+          event.preventDefault()
+          onEdit()
+        }}
+      >
+        <strong>{assistant.name}</strong>
+        <span className={css.muted}>{assistant.provider} / {assistant.model}</span>
+        <span className={css.muted}>
+          Preset: {assistant.agentPresetId} · 权限: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId}
+        </span>
+        <span className={css.muted}>
+          Skills: {assistant.skillAllowlist.length > 0 ? assistant.skillAllowlist.join('、') : '未选择'}
+        </span>
+        <span className={css.muted}>
+          MCP: {assistant.mcpServers.length > 0 ? assistant.mcpServers.join('、') : '未选择'}
+        </span>
+        {assistant.description && <p className={css.description}>{assistant.description}</p>}
+      </div>
       <div className={css.actions}>
+        <button type="button" className={css.secondaryButton} disabled={busy} onClick={onEdit}>编辑</button>
         <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void clone() }}>复制</button>
         <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void remove() }}>删除</button>
       </div>
@@ -788,32 +861,36 @@ function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onC
 
 function AssistantForm({
   catalog,
+  formId,
+  assistant,
   saving,
   setSaving,
-  onCreated,
+  onSaved,
 }: {
   catalog: CatalogView | undefined
+  formId: string
+  assistant?: AssistantView
   saving: boolean
   setSaving: (saving: boolean) => void
-  onCreated: () => Promise<void>
+  onSaved: () => Promise<void>
 }): JSX.Element {
   const providers = catalog?.providers ?? []
   const presets = catalog?.agentPresets.filter(preset => preset.broken === undefined) ?? []
   const permissions = catalog?.permissionPresets ?? []
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [instructions, setInstructions] = useState('')
-  const [provider, setProvider] = useState(providers[0]?.id ?? '')
+  const [name, setName] = useState(assistant?.name ?? '')
+  const [description, setDescription] = useState(assistant?.description ?? '')
+  const [instructions, setInstructions] = useState(assistant?.instructions ?? '')
+  const [provider, setProvider] = useState(assistant?.provider ?? providers[0]?.id ?? '')
   const models = catalog?.models[provider] ?? []
-  const [modelChoice, setModelChoice] = useState('')
-  const [agentPresetId, setAgentPresetId] = useState(presets[0]?.id ?? '')
-  const [permissionPresetId, setPermissionPresetId] = useState(permissions[0]?.value ?? '')
+  const [modelChoice, setModelChoice] = useState(assistant?.model ?? '')
+  const [agentPresetId, setAgentPresetId] = useState(assistant?.agentPresetId ?? presets[0]?.id ?? '')
+  const [permissionPresetId, setPermissionPresetId] = useState(assistant?.permissionPresetId ?? permissions[0]?.value ?? '')
   const [availableSkills, setAvailableSkills] = useState<SkillCatalogView['skills']>([])
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([])
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(assistant?.skillAllowlist ?? [])
   const [skillsLoading, setSkillsLoading] = useState(false)
   const [skillsError, setSkillsError] = useState<string>()
   const [availableMcpServers, setAvailableMcpServers] = useState<McpCatalogView['servers']>([])
-  const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([])
+  const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>(assistant?.mcpServers ?? [])
   const [mcpLoading, setMcpLoading] = useState(false)
   const [mcpError, setMcpError] = useState<string>()
   const [error, setError] = useState<string>()
@@ -891,9 +968,11 @@ function AssistantForm({
     if (saving) return
     setSaving(true)
     try {
-      await callAgentTeam('assistant.create', {
+      const value = {
         name,
-        ...(description.trim() ? { description } : {}),
+        ...(assistant === undefined && !description.trim()
+          ? {}
+          : { description: description.trim() }),
         instructions,
         provider,
         model,
@@ -902,8 +981,13 @@ function AssistantForm({
         toolAllowlist: [],
         skillAllowlist: selectedSkills,
         mcpServers: selectedMcpServers,
-      })
-      await onCreated()
+      }
+      if (assistant === undefined) {
+        await callAgentTeam('assistant.create', value)
+      } else {
+        await callAgentTeam('assistant.update', { id: assistant.id, value }, assistant.revision)
+      }
+      await onSaved()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -912,7 +996,7 @@ function AssistantForm({
   }
 
   return (
-    <form id={ASSISTANT_FORM_ID} onSubmit={(event) => { void submit(event) }} className={`${css.form} ${css.assistantForm}`}>
+    <form id={formId} onSubmit={(event) => { void submit(event) }} className={`${css.form} ${css.assistantForm}`}>
       <div className={css.formGrid}>
         <Field label="名称"><input required value={name} onChange={event => { setName(event.target.value) }} className={css.input} /></Field>
         <Field label="说明"><input value={description} onChange={event => { setDescription(event.target.value) }} className={css.input} /></Field>

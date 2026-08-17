@@ -4,6 +4,8 @@
 
 团队领域数据使用 Harness 的 `ctx.storageDomain`，不自行管理数据库文件。Session 对话继续使用 `ctx.sessionPersistence`。两类存储不能做原子事务，因此跨边界流程必须是可恢复状态机。
 
+团队 Agent 小助手的模型偏好使用独立的 `agent_team_assistant_builder` Domain 全局记录保存，不改变已有 `agent_team` Domain 的描述符。记录同时保存每个会话的 Provider/Model 和最近一次手动选择；历史会话恢复自己的模型，新会话继承最近一次选择。若已保存模型从 Harness 目录下架，Runtime 会记录告警并回退到插件配置或当前目录默认模型。
+
 ## 助手模板
 
 ```ts

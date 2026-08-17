@@ -10,6 +10,10 @@ import { AgentTeamError } from '../domain/errors.js'
 import type { CreateAssistantInput } from '../domain/types.js'
 import type { AgentTeamService } from '../service/agent-team-service.js'
 import type {
+  AssistantBuilderModelPreferenceStore,
+  AssistantBuilderModelReference,
+} from '../storage/assistant-builder-preferences.js'
+import type {
   AssistantBuilderConversationListView,
   AssistantBuilderConversationSummary,
   AssistantBuilderConversationView,
@@ -68,6 +72,7 @@ export class AssistantBuilderRuntime {
     private readonly ctx: Context,
     private readonly config: Config,
     private readonly service: AgentTeamService,
+    private readonly modelPreferences: AssistantBuilderModelPreferenceStore,
   ) {
     this.disposeStatusListener = ctx.on('agent/status', ({ agent }) => {
       if (String(agent.id) !== this.activeSessionId || this.closing) return
@@ -262,6 +267,8 @@ export class AssistantBuilderRuntime {
       && this.configuration.model === model
     ) return
 
+    await this.modelPreferences.setSelectedModel(sessionId, provider, model)
+
     if (current !== undefined) {
       await this.ctx.sessions.flush(current.agent.session)
       await current.dispose()
@@ -285,6 +292,17 @@ export class AssistantBuilderRuntime {
     const configuration = this.configurations.get(rawSessionId) ?? await this.resolveConfiguration(rawSessionId)
     this.configurations.set(rawSessionId, configuration)
     this.configuration = configuration
+    const rememberedModel = this.modelPreferences.getConversationModel(rawSessionId)
+    if (
+      rememberedModel?.provider !== configuration.provider
+      || rememberedModel.model !== configuration.model
+    ) {
+      await this.modelPreferences.setConversationModel(
+        rawSessionId,
+        configuration.provider,
+        configuration.model,
+      )
+    }
     const setup = async (agentCtx: Context): Promise<void> => {
       await this.ctx.agentPresets.mount(agentCtx, configuration.agentPresetId)
       agentCtx.tools.presentAs('native')
@@ -339,8 +357,19 @@ export class AssistantBuilderRuntime {
 
   private async resolveConfiguration(sessionId: string): Promise<AssistantBuilderConfiguration> {
     const selected = this.configurations.get(sessionId)
-    const requestedProvider = selected?.provider ?? this.config.assistantBuilderProvider.trim()
-    const requestedModel = selected?.model ?? this.config.assistantBuilderModel.trim()
+    const persisted = selected === undefined
+      ? this.modelPreferences.getConversationModel(sessionId)
+        ?? this.modelPreferences.getLastSelectedModel()
+      : undefined
+    const persistedModel = persisted === undefined
+      ? undefined
+      : await this.resolvePersistedModel(persisted)
+    const requestedProvider = selected?.provider
+      ?? persistedModel?.provider
+      ?? this.config.assistantBuilderProvider.trim()
+    const requestedModel = selected?.model
+      ?? persistedModel?.model
+      ?? this.config.assistantBuilderModel.trim()
     if (requestedModel.length > 0 && requestedProvider.length === 0) {
       throw new AgentTeamError('INVALID_REQUEST', 'assistantBuilderModel requires assistantBuilderProvider')
     }
@@ -392,6 +421,21 @@ export class AssistantBuilderRuntime {
       )
     }
     return { provider, model, agentPresetId, permissionPresetId }
+  }
+
+  private async resolvePersistedModel(
+    preference: AssistantBuilderModelReference,
+  ): Promise<AssistantBuilderModelReference | undefined> {
+    try {
+      await this.ctx.llm.resolveModelInfo(preference.provider, preference.model)
+      return preference
+    } catch (error) {
+      this.ctx.logger.warn(
+        `agent-team: saved Assistant Builder model '${preference.provider}/${preference.model}' is unavailable; falling back`,
+        error,
+      )
+      return undefined
+    }
   }
 
   private async requireExistingSessionId(rawSessionId: string): Promise<string> {

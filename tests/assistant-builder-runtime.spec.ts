@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Config } from '../src/config.js'
+import type { AssistantBuilderModelReference } from '../src/storage/assistant-builder-preferences.js'
 import {
   AssistantBuilderRuntime,
   hasFreshAssistantDraftUserResponse,
@@ -31,7 +32,12 @@ describe('AssistantBuilderRuntime', () => {
         inspect: vi.fn(async () => ({ meta: { createdAt }, events })),
       },
     }
-    const runtime = new AssistantBuilderRuntime(ctx as never, config, {} as never)
+    const runtime = new AssistantBuilderRuntime(
+      ctx as never,
+      config,
+      {} as never,
+      fakeModelPreferences(),
+    )
 
     await expect(runtime.listConversations()).resolves.toEqual({
       items: [{
@@ -96,7 +102,26 @@ describe('AssistantBuilderRuntime', () => {
     const service = {
       publishAssistantBuilderConversation: vi.fn(),
     }
-    const runtime = new AssistantBuilderRuntime(ctx as never, config, service as never)
+    let lastSelectedModel: AssistantBuilderModelReference | undefined
+    const conversationModels = new Map<string, AssistantBuilderModelReference>()
+    const modelPreferences = {
+      getConversationModel: vi.fn((sessionId: string) => conversationModels.get(sessionId)),
+      getLastSelectedModel: vi.fn(() => lastSelectedModel),
+      setConversationModel: vi.fn(async (sessionId: string, provider: string, model: string) => {
+        conversationModels.set(sessionId, { provider, model })
+      }),
+      setSelectedModel: vi.fn(async (sessionId: string, provider: string, model: string) => {
+        const selected = { provider, model }
+        conversationModels.set(sessionId, selected)
+        lastSelectedModel = selected
+      }),
+    }
+    const runtime = new AssistantBuilderRuntime(
+      ctx as never,
+      config,
+      service as never,
+      modelPreferences,
+    )
 
     const initial = await runtime.getConversation('agent-team:assistant-builder')
     const switched = await runtime.configure('agent-team:assistant-builder', 'zai-coding-cn', 'glm-5.3')
@@ -115,10 +140,35 @@ describe('AssistantBuilderRuntime', () => {
       provider: 'zai-coding-cn',
       model: 'glm-5.3',
     })
+    expect(modelPreferences.setSelectedModel).toHaveBeenCalledWith(
+      'agent-team:assistant-builder',
+      'zai-coding-cn',
+      'glm-5.3',
+    )
     expect(cwdVariable).toHaveBeenCalledWith('cwd', expect.any(Function))
     expect(restrict).toHaveBeenCalledWith({ deny: ['ask_user_question', 'bash'] })
 
     await runtime.dispose()
+
+    const restored = fakeHandle()
+    handles.push(restored)
+    const restartedRuntime = new AssistantBuilderRuntime(
+      ctx as never,
+      config,
+      service as never,
+      modelPreferences,
+    )
+    const restarted = await restartedRuntime.getConversation('agent-team:assistant-builder')
+
+    expect(restarted.configuration).toMatchObject({
+      provider: 'zai-coding-cn',
+      model: 'glm-5.3',
+    })
+    expect(resume).toHaveBeenLastCalledWith(expect.objectContaining({
+      agentOptions: { provider: 'zai-coding-cn', model: 'glm-5.3' },
+    }))
+
+    await restartedRuntime.dispose()
   })
 
   it('requires a fresh, real user response after preparation', () => {
@@ -147,6 +197,15 @@ function userEvent(seq: number, text: string, source: unknown = { kind: 'user' }
       source,
     },
   } as SessionEvent
+}
+
+function fakeModelPreferences() {
+  return {
+    getConversationModel: vi.fn(() => undefined),
+    getLastSelectedModel: vi.fn(() => undefined),
+    setConversationModel: vi.fn(async () => {}),
+    setSelectedModel: vi.fn(async () => {}),
+  }
 }
 
 function fakeHandle() {

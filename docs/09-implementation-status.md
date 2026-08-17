@@ -12,11 +12,12 @@
 
 - 单包 Host/Client 插件清单、Cordis patch、Schemastery Config 和 Web-only Client 注入。
 - Assistant CRUD 服务、复制、引用保护、Provider/Model/Preset/Permission Catalog 与不可变成员快照。
-- 内置“团队 Agent 小助手”：左侧多 Session 历史栏、显式新对话、打开恢复最近会话、可选 Provider/模型、默认提示词策略、缺参追问、真实目录查询，以及“准备草稿 → 新用户消息自然语言确认 → 提交创建”的两阶段工具流程；语义确认由小助手依照提示词判断，服务端强制校验消息时序和真实用户来源。草稿按 Session 隔离，同轮提交和非用户确认会被拒绝，同一 Session 的新草稿会替代旧草稿。切换模型保留历史，小助手本身不占用助手库记录，也不进入团队成员生命周期。
+- 内置“团队 Agent 小助手”：左侧多 Session 历史栏、显式新对话、打开恢复最近会话、可选 Provider/模型、持久化模型偏好、默认提示词策略、缺参追问、真实目录查询，以及“准备草稿 → 新用户消息自然语言确认 → 提交创建”的两阶段工具流程；历史会话恢复自己的模型，新会话继承最近一次选择。语义确认由小助手依照提示词判断，服务端强制校验消息时序和真实用户来源。草稿按 Session 隔离，同轮提交和非用户确认会被拒绝，同一 Session 的新草稿会替代旧草稿。切换模型保留历史，小助手本身不占用助手库记录，也不进入团队成员生命周期。
 - 团队草稿、唯一 Leader、同模板多实例、动态增删成员、原子换 Leader、启动和启动失败重试。
 - 独立 `AgentHandle` Registry、并发限流启动、Prompt 兼容性预检、Workspace attach、状态同步和冷恢复。
 - 组建团队时可直接选择已有 Workspace，或使用 Harness 原生目录选择器添加文件夹；插件不读取浏览器伪路径，也不修改 Harness 源码。
 - 普通工具直接继承 Agent Preset，不做助手模板级限制；Skills 在创建助手时按 Agent Preset 目录勾选。成员运行时只向模型和用户直接调用暴露所选 Skills，并由 Harness 的 `skill(name)` 在任务需要时加载正文。
+- 设置页支持点击助手卡片或“编辑”按钮修改完整模板配置；更新带 Revision 并发校验，不追溯修改已加入团队的成员快照。
 - MCP 使用 Harness 官方 `@deepseek-ai/dsh-mcp-client` 在 Profile/Preset 建立连接。新建助手可按 Preset 选择 Server，模板不保存凭据；成员启动时只暴露已选 Server 的 `mcp__<server>__<tool>` 工具。
 - `team_get_task_board`、`team_create_task`、`team_update_task`、`team_send_message`；任务指派自动唤醒负责人，成员状态/结果更新自动通知 Leader。
 - 用户向 Leader 或策略允许的普通成员发送消息。

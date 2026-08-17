@@ -153,4 +153,27 @@ describe('Agent Team client requests', () => {
       },
     })
   })
+
+  it('sends the current revision when updating an assistant', async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { id: 'assistant-1' } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('assistant.update', {
+      id: 'assistant-1',
+      value: { name: 'Updated Assistant' },
+    }, 3)
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'assistant.update',
+      expectedRevision: 3,
+      payload: {
+        id: 'assistant-1',
+        value: { name: 'Updated Assistant' },
+      },
+    })
+  })
 })
