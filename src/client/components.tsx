@@ -298,9 +298,18 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
       <div className={css.fullscreenWorkbenchMain}>
         <header className={css.shellHeader}>
           <div className={css.headerCopy}>
-            <h1 className={css.title}>{selectedTeam?.name ?? 'Agent 团队'}</h1>
+            <div className={css.shellTitleRow}>
+              <h1 className={css.title}>{selectedTeam?.name ?? 'Agent 团队'}</h1>
+              {selectedTeam !== undefined && (
+                <span className={`${css.badge} ${teamStateBadgeClass(selectedTeam.state)}`}>
+                  {teamStateLabel(selectedTeam.state)}
+                </span>
+              )}
+            </div>
             <p className={css.subtitle}>
-              {selectedTeam === undefined ? '多个平级 Agent，共享一个 Workspace' : selectedTeam.workspacePath}
+              {selectedTeam === undefined
+                ? '多个平级 Agent，共享一个 Workspace'
+                : `${Object.keys(selectedTeam.members).length} 名成员 · ${selectedTeam.workspacePath}`}
             </p>
           </div>
           <button type="button" className={css.iconButton} onClick={closeAgentTeam} aria-label="关闭工作台">
@@ -702,9 +711,11 @@ function TeamWorkbench({
             </button>
           )
         })}
-        <Button variant="ghost" size="sm" className={css.manageButton} onClick={() => { setManagementOpen(value => !value) }}>
-          {managementOpen ? '收起管理' : '团队管理'}
-        </Button>
+        <span className={css.manageButtonWrap}>
+          <Button variant="ghost" size="sm" className={css.manageButton} onClick={() => { setManagementOpen(value => !value) }}>
+            {managementOpen ? '收起管理' : '团队管理'}
+          </Button>
+        </span>
       </div>
       {error && <div role="alert" className={css.workbenchError}>{error}</div>}
       <div className={css.workbenchBody}>
@@ -727,7 +738,7 @@ function TeamWorkbench({
         open={managementOpen}
         onClose={() => { setManagementOpen(false) }}
         title="团队管理"
-        description="调整团队成员、Leader 和运行状态。"
+        description="管理成员、Leader、上下文和团队生命周期。"
         closeLabel="关闭"
         className={css.managementDialog ?? ''}
         contentClassName={css.managementDialogContent ?? ''}
