@@ -13,6 +13,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
+import { mcpServerFromToolName } from '../domain/mcp.js'
 import type {
   TeamAggregate,
   TeamMemberSlot,
@@ -608,6 +609,31 @@ export class TeamRuntime {
         this.registerTeamTools(agentCtx, team, member)
         const agent = agentCtx.agent
         if (agent === undefined) throw new Error('Harness did not bind the unpublished agent context')
+        const selectedMcpServers = new Set(member.assistantSnapshot.mcpServers)
+        const mcpTools = agentCtx.tools.schemas(agent).flatMap(tool => {
+          const serverName = mcpServerFromToolName(tool.name)
+          return serverName === undefined ? [] : [{ name: tool.name, serverName }]
+        })
+        const availableMcpServers = new Set(mcpTools.map(tool => tool.serverName))
+        const missingMcpServers = [...selectedMcpServers]
+          .filter(serverName => !availableMcpServers.has(serverName))
+        if (missingMcpServers.length > 0) {
+          throw new AgentTeamError(
+            'MCP_REFERENCE_INVALID',
+            `Member '${member.displayName}' cannot access selected MCP Server(s): ${missingMcpServers.join(', ')}`,
+            { memberId: member.id, missing: missingMcpServers },
+          )
+        }
+        const deniedMcpTools = mcpTools
+          .filter(tool => !selectedMcpServers.has(tool.serverName))
+          .map(tool => tool.name)
+        if (deniedMcpTools.length > 0) agentCtx.tools.restrict({ deny: deniedMcpTools })
+        agentCtx.tools.guard(execution => {
+          const serverName = mcpServerFromToolName(execution.name)
+          return serverName === undefined || selectedMcpServers.has(serverName)
+            ? undefined
+            : 'This MCP Server is not selected for the assistant.'
+        })
         const selectedSkills = new Set(member.assistantSnapshot.skillAllowlist)
         const skills = await this.ctx.skills.list({
           cwd: team.workspacePath,

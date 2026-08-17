@@ -20,6 +20,7 @@ type AssistantTemplate = {
   permissionPresetId: string;
   toolAllowlist: string[];
   skillAllowlist: string[];
+  mcpServers: string[];
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -27,6 +28,8 @@ type AssistantTemplate = {
 ```
 
 `skillAllowlist` 是为兼容首版持久化结构保留的内部字段名；产品语义是“这个助手已选择、可以使用的 Skills”，不是面向用户的白名单。空数组表示不使用任何 Skill。Skill 正文不进入模板，成员执行任务时由 Harness 根据名称按需加载当前 Workspace 中的胜出定义。
+
+`mcpServers` 保存用户从所选 Agent Preset 真实工具目录中选择的 MCP Server 名称；空数组表示不使用 MCP。连接方式、启动命令、URL 和凭据只存在于 Harness Profile/Preset 的官方 MCP Client 配置中，不进入助手模板。旧记录缺少该字段时按空数组读取。
 
 `toolAllowlist` 同样只作为首版记录的兼容字段保留。新建和更新时强制写为空数组，启动迁移会清除历史值，成员运行时不会读取它；工具能力完全由 Agent Preset 和权限预设决定。
 

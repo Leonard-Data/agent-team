@@ -6,6 +6,7 @@ import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { isModelInvocable, isSkillName } from '@deepseek-ai/dsh-skill'
 import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
+import { isMcpServerName, mcpServerFromToolName } from '../domain/mcp.js'
 import {
   createAssistantInputSchema,
   addTeamMemberInputSchema,
@@ -75,6 +76,14 @@ export interface SkillCatalogSnapshot {
     name: string
     description: string
     source: string
+  }>
+}
+
+export interface McpCatalogSnapshot {
+  agentPresetId: string
+  servers: Array<{
+    name: string
+    tools: Array<{ name: string; description: string }>
   }>
 }
 
@@ -206,6 +215,36 @@ export class AgentTeamService extends Service {
       throw new AgentTeamError(
         'PRESET_REFERENCE_INVALID',
         `Cannot read Skills for agent preset '${agentPresetId}'`,
+        undefined,
+        { cause: error },
+      )
+    }
+  }
+
+  async mcpCatalog(agentPresetId: string): Promise<McpCatalogSnapshot> {
+    try {
+      await this.ctx.agentPresets.resolve(agentPresetId)
+      const scope = await this.ctx.agentPresets.standingKeyFor(agentPresetId)
+      const servers = new Map<string, Array<{ name: string; description: string }>>()
+      for (const tool of this.ctx.tools.schemas(scope)) {
+        const serverName = mcpServerFromToolName(tool.name)
+        if (serverName === undefined) continue
+        const entries = servers.get(serverName) ?? []
+        entries.push({ name: tool.name, description: tool.description })
+        servers.set(serverName, entries)
+      }
+      return {
+        agentPresetId,
+        servers: [...servers.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([name, tools]) => ({
+          name,
+          tools: tools.sort((left, right) => left.name.localeCompare(right.name)),
+        })),
+      }
+    } catch (error) {
+      if (error instanceof AgentTeamError) throw error
+      throw new AgentTeamError(
+        'PRESET_REFERENCE_INVALID',
+        `Cannot read MCP Servers for agent preset '${agentPresetId}'`,
         undefined,
         { cause: error },
       )
@@ -664,6 +703,10 @@ export class AgentTeamService extends Service {
     if (invalidSkill !== undefined) {
       throw new AgentTeamError('SKILL_REFERENCE_INVALID', `Invalid Skill name '${invalidSkill}'`)
     }
+    const invalidMcpServer = input.mcpServers.find(name => !isMcpServerName(name))
+    if (invalidMcpServer !== undefined) {
+      throw new AgentTeamError('MCP_REFERENCE_INVALID', `Invalid MCP Server name '${invalidMcpServer}'`)
+    }
     try {
       await this.ctx.llm.resolveModelInfo(input.provider, input.model)
     } catch (error) {
@@ -689,6 +732,18 @@ export class AgentTeamService extends Service {
         'PERMISSION_PRESET_INVALID',
         `Unknown permission preset '${input.permissionPresetId}'`,
       )
+    }
+    if (input.mcpServers.length > 0) {
+      const catalog = await this.mcpCatalog(input.agentPresetId)
+      const available = new Set(catalog.servers.map(server => server.name))
+      const missing = input.mcpServers.filter(name => !available.has(name))
+      if (missing.length > 0) {
+        throw new AgentTeamError(
+          'MCP_REFERENCE_INVALID',
+          `Agent Preset '${input.agentPresetId}' cannot access MCP Server(s): ${missing.join(', ')}`,
+          { missing },
+        )
+      }
     }
   }
 
@@ -782,6 +837,7 @@ function assistantInputOf(assistant: AssistantTemplate): CreateAssistantInput {
     permissionPresetId: assistant.permissionPresetId,
     toolAllowlist: [...assistant.toolAllowlist],
     skillAllowlist: [...assistant.skillAllowlist],
+    mcpServers: [...assistant.mcpServers],
   }
 }
 
@@ -795,6 +851,7 @@ function normalizeAssistantInput(input: CreateAssistantInput): CreateAssistantIn
     permissionPresetId: input.permissionPresetId.trim(),
     toolAllowlist: [],
     skillAllowlist: unique(input.skillAllowlist),
+    mcpServers: unique(input.mcpServers),
   }
 }
 

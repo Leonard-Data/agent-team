@@ -666,8 +666,8 @@
 }
 
 .assistantDialog {
-  width: min(680px, calc(100vw - 48px));
-  max-height: min(760px, calc(100vh - 48px));
+  width: min(880px, calc(100vw - 48px));
+  max-height: min(840px, calc(100vh - 32px));
 }
 
 .assistantBuilderDialog {
@@ -1093,6 +1093,15 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.assistantForm .input {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.assistantForm select.input option {
+  font-size: 13px;
 }
 
 .formGrid {
@@ -2407,6 +2416,12 @@ textarea.input {
   .teamCreateDialog {
     width: calc(100vw - 20px);
     height: calc(100vh - 20px);
+    border-radius: 16px;
+  }
+
+  .assistantDialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
     border-radius: 16px;
   }
 

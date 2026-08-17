@@ -84,6 +84,7 @@ Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件�
 - [x] 校验 Provider/Model 必填、Preset 存在；工具名在 Agent setup 的官方 restriction 边界校验。
 - [x] 实现不可变成员快照。
 - [x] 创建时按 Preset 展示并保存所选 Skills；运行时以 Agent-scope 同名遮蔽收束目录和直接调用，并用 `tools.guard()` 兜底。
+- [x] 创建时按 Preset 将官方 MCP Client 工具分组为 Server 选项；运行时用 `tools.restrict()` 和 `tools.guard()` 只开放所选 Server。
 
 退出标准：服务层可完整管理模板，不保存 Provider 凭据。
 

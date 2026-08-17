@@ -14,6 +14,7 @@ export const assistantSnapshotSchema = z.object({
   permissionPresetId: nonEmpty,
   toolAllowlist: z.array(nonEmpty),
   skillAllowlist: z.array(nonEmpty),
+  mcpServers: z.array(nonEmpty).default([]),
 }).strict()
 
 export const assistantTemplateSchema = z.object({
@@ -29,6 +30,7 @@ export const assistantTemplateSchema = z.object({
   permissionPresetId: nonEmpty,
   toolAllowlist: z.array(nonEmpty),
   skillAllowlist: z.array(nonEmpty),
+  mcpServers: z.array(nonEmpty).default([]),
   revision: z.int().positive(),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -185,6 +187,7 @@ export const createAssistantInputSchema = assistantTemplateSchema.pick({
   permissionPresetId: true,
   toolAllowlist: true,
   skillAllowlist: true,
+  mcpServers: true,
 })
 
 export const updateAssistantInputSchema = createAssistantInputSchema.partial().strict()

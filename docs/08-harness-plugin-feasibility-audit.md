@@ -51,6 +51,7 @@
 | Prompt 兼容性预检 | `assembleContextFor` + `systemPrompt.assemble` | 可实现；拒绝排除团队段的 complete Prompt |
 | Agent 工具 | 直接继承 Agent Preset，并追加团队协作工具 | 可实现；助手模板不二次限制 |
 | 助手可用 Skills | Preset standing scope Catalog + Agent 最近层同名遮蔽 + `ctx.tools.guard()` 兜底 | 可实现；Harness 在调用 `skill(name)` 时按需加载正文 |
+| 助手可用 MCP | 官方 `@deepseek-ai/dsh-mcp-client` + `mcp__<server>__<tool>` 命名空间 + Agent scope restriction/guard | 可实现；当前仅挂载 MCP Tools，连接和凭据留在 Harness Profile/Preset |
 | 权限预设 | `ctx.permissionPresets.set(session, name)` | 可实现 |
 | 共享 Workspace | `workspaceRegistry` + `CreateAgentOptions.meta.cwd` | 可实现 |
 | 多列完整成员对话 | `session/event` + `sessionPersistence.inspect/readFrom` + `shell.overlay` 自定义 renderer | 可实现；官方 Conversation 内部组件不直接复用 |

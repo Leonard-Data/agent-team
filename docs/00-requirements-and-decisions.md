@@ -16,7 +16,7 @@
 
 | 名称 | 定义 |
 | --- | --- |
-| 助手模板（Assistant Template） | 可复用配置，包含名称、提示词、Provider、模型、预设、技能、工具和权限；本身不运行。 |
+| 助手模板（Assistant Template） | 可复用配置，包含名称、提示词、Provider、模型、预设、Skills、MCP Servers 和权限；本身不运行。 |
 | 成员实例（Member Slot） | 某个助手模板加入某个团队后产生的运行实例，有自己的 `slotId`、Session 和运行状态。 |
 | 团队（Team） | 共享 Workspace、成员实例、任务板和信箱的协作边界。 |
 | Leader | 团队内唯一的协调角色，仍然是与其他成员平级的独立 Agent，不拥有其生命周期。 |
@@ -31,7 +31,7 @@
 
 - 创建、查看、编辑、复制和删除助手模板。
 - Provider 与模型从 Harness 当前配置中选择，并且是可启动助手模板的必填项；凭据只由 Harness 管理。
-- 可配置系统提示词、预设、可用 Skills 和权限策略；工具集合直接由 Agent Preset 提供，不在助手模板中二次限制。助手只暴露创建时明确选择的 Skills。
+- 可配置系统提示词、预设、可用 Skills、MCP Servers 和权限策略。普通工具直接由 Agent Preset 提供，不做模板级二次限制；助手只暴露创建时明确选择的 Skills 和 MCP Servers。
 - 删除模板前，如果它仍被活动团队引用，必须阻止删除并展示引用团队。
 
 ### 组建与维护团队

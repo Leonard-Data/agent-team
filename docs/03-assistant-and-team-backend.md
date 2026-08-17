@@ -33,9 +33,9 @@ interface TeamService {
 
 ### 创建
 
-1. 校验名称、补充指令、必填 Provider/模型、Agent Preset、Permission Preset 和工具策略。
+1. 校验名称、补充指令、必填 Provider/模型、Agent Preset、Permission Preset、Skills 和 MCP Servers。
 2. 使用 `ctx.llm.listProviders/listModels/resolveModelInfo` 验证路由；目录未列出的模型不自动判错，以适配器最终解析为准。
-3. 创建界面先用 `agentPresets.standingKeyFor()` 和 `skills.list()` 获取所选 Preset 的可用 Skills，模板保存用户明确选择的名称。成员启动、Preset mount 完成后从实际 Workspace 的 Agent scope Catalog 再次校验；未选择的 Skill 在成员最近层被不可调用的同名定义遮蔽，`tools.guard()` 再对 `skill` 参数做兜底。Harness 只在任务匹配并调用 `skill(name)` 时加载所选 Skill 正文。
+3. 创建界面先用 `agentPresets.standingKeyFor()` 读取所选 Preset 的 Skills 和 `mcp__<server>__<tool>` 工具目录，模板只保存用户明确选择的名称。成员启动、Preset mount 完成后在 Agent scope 再次校验；未选 MCP Server 的工具用 `tools.restrict()` 隐藏并用 `tools.guard()` 阻止执行。未选 Skill 在成员最近层被不可调用的同名定义遮蔽，Harness 只在任务匹配并调用 `skill(name)` 时加载所选 Skill 正文。
 4. 静态目录无法证明 Preset 没有完整 Prompt 覆盖；保存模板时标注“启动时执行 Prompt 兼容性预检”。
 5. 保存模板修订 1，发布 `assistant.created`。
 

@@ -16,7 +16,8 @@
 - 团队草稿、唯一 Leader、同模板多实例、动态增删成员、原子换 Leader、启动和启动失败重试。
 - 独立 `AgentHandle` Registry、并发限流启动、Prompt 兼容性预检、Workspace attach、状态同步和冷恢复。
 - 组建团队时可直接选择已有 Workspace，或使用 Harness 原生目录选择器添加文件夹；插件不读取浏览器伪路径，也不修改 Harness 源码。
-- 工具直接继承 Agent Preset，不做助手模板级限制；Skills 在创建助手时按 Agent Preset 目录勾选。成员运行时只向模型和用户直接调用暴露所选 Skills，并由 Harness 的 `skill(name)` 在任务需要时加载正文。
+- 普通工具直接继承 Agent Preset，不做助手模板级限制；Skills 在创建助手时按 Agent Preset 目录勾选。成员运行时只向模型和用户直接调用暴露所选 Skills，并由 Harness 的 `skill(name)` 在任务需要时加载正文。
+- MCP 使用 Harness 官方 `@deepseek-ai/dsh-mcp-client` 在 Profile/Preset 建立连接。新建助手可按 Preset 选择 Server，模板不保存凭据；成员启动时只暴露已选 Server 的 `mcp__<server>__<tool>` 工具。
 - `team_get_task_board`、`team_create_task`、`team_update_task`、`team_send_message`；任务指派自动唤醒负责人，成员状态/结果更新自动通知 Leader。
 - 用户向 Leader 或策略允许的普通成员发送消息。
 - 普通消息先写 queued 记录再投递；任务与通知通过 Team Aggregate Outbox 原子保存。两条链路都使用稳定 MessageId，恢复时检查 Session inbox 事件，避免重复插入。

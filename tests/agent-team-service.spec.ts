@@ -72,7 +72,8 @@ describe('AgentTeamService', () => {
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_commit')
     expect(ASSISTANT_BUILDER_PROMPT).not.toContain('assistant_builder_create')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('必须等待新的用户消息')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('不要询问或限制工具')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('不要询问或限制普通工具')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('MCP Servers')
   })
 
   it('lists only model-invocable Skills for the chosen Agent Preset', async () => {
@@ -85,6 +86,27 @@ describe('AgentTeamService', () => {
         description: 'Review code changes.',
         source: 'user-agents',
       }],
+    })
+  })
+
+  it('groups MCP tools by Server for the chosen Agent Preset', async () => {
+    const { service } = createHarness()
+
+    await expect(service.mcpCatalog('default')).resolves.toEqual({
+      agentPresetId: 'default',
+      servers: [
+        {
+          name: 'figma',
+          tools: [{ name: 'mcp__figma__inspect', description: 'Inspect a Figma node.' }],
+        },
+        {
+          name: 'github',
+          tools: [
+            { name: 'mcp__github__create_issue', description: 'Create an issue.' },
+            { name: 'mcp__github__list_issues', description: 'List issues.' },
+          ],
+        },
+      ],
     })
   })
 
@@ -142,6 +164,35 @@ describe('AgentTeamService', () => {
       ...assistantInput(),
       skillAllowlist: ['Not A Skill'],
     })).rejects.toMatchObject({ code: 'SKILL_REFERENCE_INVALID' })
+  })
+
+  it('rejects MCP Servers that are malformed or unavailable to the Agent Preset', async () => {
+    const { service } = createHarness()
+
+    await expect(service.createAssistant({
+      ...assistantInput(),
+      mcpServers: ['bad server'],
+    })).rejects.toMatchObject({ code: 'MCP_REFERENCE_INVALID' })
+    await expect(service.createAssistant({
+      ...assistantInput(),
+      mcpServers: ['missing'],
+    })).rejects.toMatchObject({ code: 'MCP_REFERENCE_INVALID' })
+  })
+
+  it('persists selected MCP Servers into new team member snapshots', async () => {
+    const { service } = createHarness()
+    const assistant = await service.createAssistant({
+      ...assistantInput(),
+      mcpServers: ['github', 'github'],
+    })
+    const team = await service.createTeamDraft({
+      name: 'MCP Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+    })
+
+    expect(assistant.mcpServers).toEqual(['github'])
+    expect(Object.values(team.members)[0]?.assistantSnapshot.mcpServers).toEqual(['github'])
   })
 
   it('rejects the removed maxTokens field', async () => {
@@ -492,6 +543,12 @@ function createHarness(): {
   } as never)
   ctx.provide('tools', {
     get: (name: string) => name === 'skill' ? { name: 'skill' } : undefined,
+    schemas: () => [
+      { name: 'skill', description: 'Load one Skill.' },
+      { name: 'mcp__github__list_issues', description: 'List issues.' },
+      { name: 'mcp__figma__inspect', description: 'Inspect a Figma node.' },
+      { name: 'mcp__github__create_issue', description: 'Create an issue.' },
+    ],
   } as never)
   ctx.provide('skills', {
     list: async () => [
@@ -601,6 +658,7 @@ function assistantInput() {
     permissionPresetId: 'standard',
     toolAllowlist: [],
     skillAllowlist: [],
+    mcpServers: [],
   }
 }
 

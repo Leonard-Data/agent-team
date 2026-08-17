@@ -4,6 +4,7 @@ export const AGENT_TEAM_EVENTS_PATH = '/agent-team/events'
 export type AgentTeamMethod =
   | 'catalog.get'
   | 'skill.catalog'
+  | 'mcp.catalog'
   | 'assistant.list'
   | 'assistant.get'
   | 'assistant.create'

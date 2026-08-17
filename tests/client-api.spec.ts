@@ -115,4 +115,20 @@ describe('Agent Team client requests', () => {
       payload: { agentPresetId: 'standard' },
     })
   })
+
+  it('requests the MCP catalog for one Agent Preset', async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { servers: [] } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('mcp.catalog', { agentPresetId: 'standard' })
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'mcp.catalog',
+      payload: { agentPresetId: 'standard' },
+    })
+  })
 })

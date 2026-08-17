@@ -82,7 +82,7 @@ Host 入口声明并使用以下公开服务：
 | `agents` | `ctx.agents.create/resume` 和运行实例查找 |
 | `llm` | `listProviders/listModels/resolveModelInfo` |
 | `agentPresets` | 在 Agent `setup` 中挂载基础 Preset |
-| `tools` | Agent scope 工具限制与团队工具注册 |
+| `tools` | Agent scope MCP 工具收窄与团队工具注册 |
 | `skills` | 启动时校验 Agent-scope Skill Catalog |
 | `permissionPresets` | 为新成员 Session 选择 Harness 权限预设 |
 | `storageDomain` | 保存助手、团队聚合、信箱和活动记录 |
@@ -141,7 +141,8 @@ await workspace.attachSession(handle.agent.id)
 - `provider` 和 `model` 在可启动模板中必须同时存在；Agent 请求边界最终要求二者齐全。
 - 模板提示词作为唯一命名的补充段落注册，避免与 Preset 自带的 `deployment:persona` 冲突。
 - Preset 可能贡献 `complete: true` 的完整 Prompt，从而排除其他段；`setup` 使用公开 `assembleContextFor()` 和 `systemPrompt.assemble()` 预检两个团队段确实生效。不兼容时在发布前抛错，由原子创建窗口回滚。
-- 工具集合直接继承 Agent Preset；插件不提供模板级工具限制。随后在 Agent scope 注册团队协作工具。
+- 普通工具集合直接继承 Agent Preset；插件不提供模板级普通工具限制。随后在 Agent scope 注册团队协作工具。
+- Harness 官方 MCP Client 在 Profile/Preset 层维持连接并注册 `mcp__<server>__<tool>`。创建助手时按 Server 分组展示；成员启动时从 Agent scope 校验已选 Server，用 `ctx.tools.restrict()` 隐藏未选工具，并用 `ctx.tools.guard()` 阻止绕过或动态新增的未选 MCP 调用。
 - 创建助手时通过 Preset standing scope 展示可用 Skills。成员启动时从实际 Workspace 的 Agent scope Skill Catalog 校验所选名称，并在成员最近层用不可调用的同名 Skill 遮蔽未选择项，同时用 `ctx.tools.guard()` 做执行兜底。这样模型目录、`skill` 工具和用户直接 Skill 调用都只保留已选择项；具体正文仍由 Harness 在任务匹配时按需加载。
 - 不填写 `origin`、`parentSession`、`seedLength` 或 `delegationDepth`，因此成员没有 Subagent 血统。
 
