@@ -131,4 +131,26 @@ describe('Agent Team client requests', () => {
       payload: { agentPresetId: 'standard' },
     })
   })
+
+  it('addresses Assistant Builder requests to one conversation Session', async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { messageId: 'message-1' } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('assistant.builder.send', {
+      sessionId: 'agent-team:assistant-builder:conversation-1',
+      content: 'Create a reviewer',
+    })
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'assistant.builder.send',
+      payload: {
+        sessionId: 'agent-team:assistant-builder:conversation-1',
+        content: 'Create a reviewer',
+      },
+    })
+  })
 })

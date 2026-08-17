@@ -42,6 +42,8 @@ describe('AgentTeamService', () => {
       },
     }
     const builder = {
+      listConversations: vi.fn(async () => ({ items: [], total: 0 })),
+      createConversation: vi.fn(async () => conversation),
       getConversation: vi.fn(async () => conversation),
       configure: vi.fn(async () => ({
         ...conversation,
@@ -56,24 +58,29 @@ describe('AgentTeamService', () => {
     }
     service.attachAssistantBuilderRuntime(builder as never)
 
-    await expect(service.getAssistantBuilderConversation()).resolves.toEqual(conversation)
-    await expect(service.configureAssistantBuilder('another-provider', 'another-model')).resolves.toMatchObject({
+    await expect(service.listAssistantBuilderConversations()).resolves.toEqual({ items: [], total: 0 })
+    await expect(service.createAssistantBuilderConversation()).resolves.toEqual(conversation)
+    await expect(service.getAssistantBuilderConversation(conversation.sessionId)).resolves.toEqual(conversation)
+    await expect(service.configureAssistantBuilder(conversation.sessionId, 'another-provider', 'another-model')).resolves.toMatchObject({
       configuration: { provider: 'another-provider', model: 'another-model' },
     })
-    await expect(service.sendAssistantBuilderMessage('Create a reviewer')).resolves.toEqual({ messageId: 'message-1' })
-    await service.stopAssistantBuilder()
+    await expect(service.sendAssistantBuilderMessage(conversation.sessionId, 'Create a reviewer')).resolves.toEqual({ messageId: 'message-1' })
+    await service.stopAssistantBuilder(conversation.sessionId)
 
-    expect(builder.sendMessage).toHaveBeenCalledWith('Create a reviewer')
-    expect(builder.configure).toHaveBeenCalledWith('another-provider', 'another-model')
-    expect(builder.stop).toHaveBeenCalledOnce()
+    expect(builder.sendMessage).toHaveBeenCalledWith(conversation.sessionId, 'Create a reviewer')
+    expect(builder.configure).toHaveBeenCalledWith(conversation.sessionId, 'another-provider', 'another-model')
+    expect(builder.stop).toHaveBeenCalledWith(conversation.sessionId)
     expect(store.listAssistants()).toHaveLength(0)
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_get_catalog')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_prepare')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_commit')
     expect(ASSISTANT_BUILDER_PROMPT).not.toContain('assistant_builder_create')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('必须等待新的用户消息')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('不要要求固定口令')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('明确表达同意')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('不要询问或限制普通工具')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('MCP Servers')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('不调用 ask_user_question')
   })
 
   it('lists only model-invocable Skills for the chosen Agent Preset', async () => {

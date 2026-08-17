@@ -11,6 +11,8 @@ export type AgentTeamMethod =
   | 'assistant.update'
   | 'assistant.clone'
   | 'assistant.delete'
+  | 'assistant.builder.list'
+  | 'assistant.builder.create'
   | 'assistant.builder.get'
   | 'assistant.builder.configure'
   | 'assistant.builder.send'
@@ -89,6 +91,19 @@ export interface AssistantBuilderConversationView {
     agentPresetId: string
     permissionPresetId: string
   }
+}
+
+export interface AssistantBuilderConversationSummary {
+  sessionId: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  state: 'new' | 'in_progress' | 'completed'
+}
+
+export interface AssistantBuilderConversationListView {
+  items: AssistantBuilderConversationSummary[]
+  total: number
 }
 
 export interface WorkspaceEntryView {

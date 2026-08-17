@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { assembleContextFor, type AgentHandle } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -8,10 +9,15 @@ import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
 import type { CreateAssistantInput } from '../domain/types.js'
 import type { AgentTeamService } from '../service/agent-team-service.js'
-import type { AssistantBuilderConversationView } from '../transport/contracts.js'
+import type {
+  AssistantBuilderConversationListView,
+  AssistantBuilderConversationSummary,
+  AssistantBuilderConversationView,
+} from '../transport/contracts.js'
 import { projectConversation } from './conversation-projector.js'
 
 export const ASSISTANT_BUILDER_SESSION_ID = 'agent-team:assistant-builder'
+const ASSISTANT_BUILDER_SESSION_PREFIX = `${ASSISTANT_BUILDER_SESSION_ID}:`
 
 export const ASSISTANT_BUILDER_PROMPT = `
 你是“团队 Agent 小助手”，负责通过对话帮助用户创建可复用的 Agent 助手模板。
@@ -20,12 +26,12 @@ export const ASSISTANT_BUILDER_PROMPT = `
 1. 先理解用户希望这个助手承担的职责、工作边界、输出方式和协作习惯。
 2. 创建前必须收集名称、Provider、模型、Agent Preset、权限预设和长期提示词。说明按需要收集；可用 Skills 和 MCP Servers 由用户从真实目录中选择，都可以不选。
 3. 必须先调用 assistant_builder_get_catalog 获取当前真实可选项；Provider、模型、Preset 和权限只能使用目录中存在的标识，不能编造。确定 Agent Preset 后，再携带 agentPresetId 调用一次目录工具，取得该 Preset 可用的 Skills 和 MCP Servers。
-4. 参数不完整或意图含糊时，一次只追问最关键的少量问题，并给出基于目录的简短选项和建议。
+4. 参数不完整或意图含糊时，一次只追问最关键的少量问题，并给出基于目录的简短选项和建议。追问必须直接输出中文文本，不调用 ask_user_question 或其他交互式问答工具。
 5. 长期提示词应描述稳定职责、约束、工作流程和验收要求，不要写入用户眼前的一次性任务。
 6. 只保存用户明确选择的 Skills 和 MCP Servers；未选择就表示不使用，不能猜测名称。不要询问或限制普通工具，工具能力由 Agent Preset 提供。
 7. 配置完整后调用 assistant_builder_prepare 校验并暂存草稿；此步骤不会创建助手，新草稿会替代旧草稿。
-8. 用简洁清单复述最终配置，并要求用户精确回复“确认创建”。必须等待新的用户消息，不得在同一轮代替用户确认。
-9. 只有用户按要求明确回复后才能调用 assistant_builder_commit。不得把其他表达理解为确认。
+8. 用简洁清单复述最终配置，并询问用户是否确认创建。用户可以用自然语言表达同意，例如“确认”“可以”“就这样创建”“没问题，创建吧”，不要要求固定口令。必须等待新的用户消息，不得在同一轮代替用户确认。
+9. 只有用户对当前最终配置明确表达同意后才能调用 assistant_builder_commit。若用户的回复含糊、否定创建、提出问题或要求修改配置，不得提交；应先回答或修改草稿，再次展示最终配置并征求确认。
 10. 创建成功后明确告知助手名称，并提示它现在可以加入团队。
 11. 你只能帮助设计和创建助手模板，不创建团队、不修改或删除已有助手，也不执行 Workspace 任务。
 
@@ -48,10 +54,11 @@ export class AssistantBuilderRuntime {
   private handle: AgentHandle | undefined
   private starting: Promise<AgentHandle> | undefined
   private reconfiguring: Promise<void> | undefined
+  private switching: Promise<void> | undefined
+  private activeSessionId: string | undefined
   private configuration: AssistantBuilderConfiguration | undefined
-  private selectedProvider: string | undefined
-  private selectedModel: string | undefined
-  private pendingDraft: PendingAssistantDraft | undefined
+  private readonly configurations = new Map<string, AssistantBuilderConfiguration>()
+  private readonly pendingDrafts = new Map<string, PendingAssistantDraft>()
   private publishTimer: ReturnType<typeof setTimeout> | undefined
   private readonly disposeStatusListener: () => void
   private readonly disposeConversationListener: () => void
@@ -63,11 +70,11 @@ export class AssistantBuilderRuntime {
     private readonly service: AgentTeamService,
   ) {
     this.disposeStatusListener = ctx.on('agent/status', ({ agent }) => {
-      if (String(agent.id) !== ASSISTANT_BUILDER_SESSION_ID || this.closing) return
+      if (String(agent.id) !== this.activeSessionId || this.closing) return
       this.publishCurrent()
     })
     this.disposeConversationListener = ctx.on('session/event', session => {
-      if (String(session.id) !== ASSISTANT_BUILDER_SESSION_ID || this.closing || this.publishTimer !== undefined) return
+      if (String(session.id) !== this.activeSessionId || this.closing || this.publishTimer !== undefined) return
       this.publishTimer = setTimeout(() => {
         this.publishTimer = undefined
         this.publishCurrent()
@@ -75,15 +82,49 @@ export class AssistantBuilderRuntime {
     })
   }
 
-  async getConversation(): Promise<AssistantBuilderConversationView> {
-    const handle = await this.ensureOnline()
-    return this.project(handle.agent.session.events, handle.agent.status)
+  async listConversations(): Promise<AssistantBuilderConversationListView> {
+    const headers = (await this.ctx.sessionPersistence.list())
+      .filter(header => isAssistantBuilderSessionId(String(header.id)))
+    const active = this.handle?.agent.session
+    const ids = new Map(headers.map(header => [String(header.id), header]))
+    if (active !== undefined && isAssistantBuilderSessionId(String(active.id))) {
+      ids.set(String(active.id), active.header)
+    }
+    const items = await Promise.all([...ids.entries()].map(async ([sessionId, header]) => {
+      const events = active !== undefined && String(active.id) === sessionId
+        ? active.events
+        : (await this.ctx.sessionPersistence.inspect(SessionId(sessionId))).events
+      return summarizeConversation(sessionId, header.createdAt, events)
+    }))
+    items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.createdAt.localeCompare(left.createdAt))
+    return { items, total: items.length }
   }
 
-  async sendMessage(rawContent: string): Promise<{ messageId: string }> {
+  async createConversation(): Promise<AssistantBuilderConversationView> {
+    const sessionId = `${ASSISTANT_BUILDER_SESSION_PREFIX}${randomUUID()}`
+    const handle = await this.ensureOnline(sessionId, true)
+    return this.project(sessionId, handle.agent.session.events, handle.agent.status)
+  }
+
+  async getConversation(rawSessionId?: string): Promise<AssistantBuilderConversationView> {
+    let sessionId: string
+    if (rawSessionId !== undefined) {
+      sessionId = await this.requireExistingSessionId(rawSessionId)
+    } else if (this.activeSessionId !== undefined) {
+      sessionId = this.activeSessionId
+    } else {
+      const latest = (await this.listConversations()).items[0]
+      if (latest === undefined) return this.createConversation()
+      sessionId = latest.sessionId
+    }
+    const handle = await this.ensureOnline(sessionId)
+    return this.project(sessionId, handle.agent.session.events, handle.agent.status)
+  }
+
+  async sendMessage(sessionId: string, rawContent: string): Promise<{ messageId: string }> {
     const content = rawContent.trim()
     if (content.length === 0) throw new AgentTeamError('INVALID_REQUEST', 'Message content is required')
-    const handle = await this.ensureOnline()
+    const handle = await this.ensureOnline(await this.requireExistingSessionId(sessionId))
     const message = createUserMessage({
       content: [{ type: 'text', text: content }],
       source: { kind: 'user' },
@@ -92,7 +133,7 @@ export class AssistantBuilderRuntime {
     return { messageId: String(message.id) }
   }
 
-  async configure(rawProvider: string, rawModel: string): Promise<AssistantBuilderConversationView> {
+  async configure(sessionId: string, rawProvider: string, rawModel: string): Promise<AssistantBuilderConversationView> {
     if (this.closing) throw new Error('Assistant Builder runtime is closing')
     if (this.reconfiguring !== undefined) await this.reconfiguring
     const provider = rawProvider.trim()
@@ -100,19 +141,19 @@ export class AssistantBuilderRuntime {
     if (provider.length === 0 || model.length === 0) {
       throw new AgentTeamError('INVALID_REQUEST', 'Assistant Builder provider and model are required')
     }
-    const reconfiguring = this.reconfigure(provider, model)
+    const targetSessionId = await this.requireExistingSessionId(sessionId)
+    const reconfiguring = this.reconfigure(targetSessionId, provider, model)
     this.reconfiguring = reconfiguring
     try {
       await reconfiguring
     } finally {
       if (this.reconfiguring === reconfiguring) this.reconfiguring = undefined
     }
-    return this.getConversation()
+    return this.getConversation(targetSessionId)
   }
 
-  async stop(): Promise<void> {
-    const handle = this.handle
-    if (handle === undefined) return
+  async stop(sessionId: string): Promise<void> {
+    const handle = await this.ensureOnline(await this.requireExistingSessionId(sessionId))
     handle.agent.cancel({ kind: 'user' }, { keepInbox: false })
     await handle.agent.whenIdle()
     this.publishCurrent()
@@ -126,6 +167,7 @@ export class AssistantBuilderRuntime {
     if (this.publishTimer !== undefined) clearTimeout(this.publishTimer)
     this.publishTimer = undefined
     await this.reconfiguring?.catch(() => undefined)
+    await this.switching?.catch(() => undefined)
     await this.starting?.catch(() => undefined)
     const handle = this.handle
     if (handle === undefined) return
@@ -140,12 +182,13 @@ export class AssistantBuilderRuntime {
     this.handle = undefined
   }
 
-  private async ensureOnline(): Promise<AgentHandle> {
+  private async ensureOnline(sessionId: string, allowCreate = false): Promise<AgentHandle> {
     if (this.closing) throw new Error('Assistant Builder runtime is closing')
     if (this.reconfiguring !== undefined) await this.reconfiguring
-    if (this.handle !== undefined) return this.handle
+    await this.activate(sessionId)
+    if (this.handle !== undefined && this.activeSessionId === sessionId) return this.handle
     if (this.starting !== undefined) return this.starting
-    const starting = this.start()
+    const starting = this.start(sessionId, allowCreate)
     this.starting = starting
     try {
       const handle = await starting
@@ -166,7 +209,35 @@ export class AssistantBuilderRuntime {
     }
   }
 
-  private async reconfigure(provider: string, model: string): Promise<void> {
+  private async activate(sessionId: string): Promise<void> {
+    if (this.activeSessionId === sessionId) return
+    if (this.switching !== undefined) await this.switching
+    if (this.activeSessionId === sessionId) return
+    const switching = this.switchSession(sessionId)
+    this.switching = switching
+    try {
+      await switching
+    } finally {
+      if (this.switching === switching) this.switching = undefined
+    }
+  }
+
+  private async switchSession(sessionId: string): Promise<void> {
+    await this.starting?.catch(() => undefined)
+    const current = this.handle
+    if (current?.agent.status === 'running') {
+      throw new AgentTeamError('INVALID_REQUEST', '请先停止当前小助手回复，再切换会话')
+    }
+    if (current !== undefined) {
+      await this.ctx.sessions.flush(current.agent.session)
+      await current.dispose()
+    }
+    this.handle = undefined
+    this.configuration = this.configurations.get(sessionId)
+    this.activeSessionId = sessionId
+  }
+
+  private async reconfigure(sessionId: string, provider: string, model: string): Promise<void> {
     try {
       await this.ctx.llm.resolveModelInfo(provider, model)
     } catch (error) {
@@ -177,6 +248,7 @@ export class AssistantBuilderRuntime {
         { cause: error },
       )
     }
+    await this.activate(sessionId)
     await this.starting?.catch(() => undefined)
     const current = this.handle
     if (current !== undefined && current.agent.status === 'running') {
@@ -195,26 +267,32 @@ export class AssistantBuilderRuntime {
       await current.dispose()
       if (this.handle === current) this.handle = undefined
     }
-    this.selectedProvider = provider
-    this.selectedModel = model
-    this.configuration = undefined
+    const currentConfiguration = this.configuration ?? await this.resolveConfiguration(sessionId)
+    const nextConfiguration = { ...currentConfiguration, provider, model }
+    this.configurations.set(sessionId, nextConfiguration)
+    this.configuration = nextConfiguration
   }
 
-  private async start(): Promise<AgentHandle> {
-    const sessionId = SessionId(ASSISTANT_BUILDER_SESSION_ID)
+  private async start(rawSessionId: string, allowCreate: boolean): Promise<AgentHandle> {
+    const sessionId = SessionId(rawSessionId)
+    const cwd = process.cwd()
     if (this.ctx.agents.get(sessionId) !== undefined) {
       throw new AgentTeamError(
         'AGENT_HANDLE_OWNERSHIP_CONFLICT',
-        `Session '${ASSISTANT_BUILDER_SESSION_ID}' is live without this plugin's AgentHandle`,
+        `Session '${rawSessionId}' is live without this plugin's AgentHandle`,
       )
     }
-    const configuration = await this.resolveConfiguration()
+    const configuration = this.configurations.get(rawSessionId) ?? await this.resolveConfiguration(rawSessionId)
+    this.configurations.set(rawSessionId, configuration)
     this.configuration = configuration
     const setup = async (agentCtx: Context): Promise<void> => {
       await this.ctx.agentPresets.mount(agentCtx, configuration.agentPresetId)
       agentCtx.tools.presentAs('native')
       const agent = agentCtx.agent
       if (agent === undefined) throw new Error('Harness did not bind the unpublished Assistant Builder Agent')
+      if (agent.session.header.cwd === undefined) {
+        agentCtx.systemPrompt.variable('cwd', () => cwd)
+      }
       const allowedTools = new Set([
         'assistant_builder_get_catalog',
         'assistant_builder_prepare',
@@ -223,7 +301,11 @@ export class AssistantBuilderRuntime {
       agentCtx.tools.guard(execution => allowedTools.has(execution.name)
         ? undefined
         : 'The built-in Assistant Builder may only read its catalog, prepare a draft, and commit an explicitly confirmed draft.')
-      this.registerTools(agentCtx)
+      this.registerTools(agentCtx, rawSessionId)
+      const deniedTools = agentCtx.tools.schemas(agent)
+        .map(tool => tool.name)
+        .filter(name => !allowedTools.has(name))
+      if (deniedTools.length > 0) agentCtx.tools.restrict({ deny: deniedTools })
       const promptSection = 'agent-team:assistant-builder'
       agentCtx.systemPrompt.section({
         name: promptSection,
@@ -241,20 +323,24 @@ export class AssistantBuilderRuntime {
     }
     const agentOptions = { provider: configuration.provider, model: configuration.model }
     const persisted = (await this.ctx.sessionPersistence.list())
-      .some(header => String(header.id) === ASSISTANT_BUILDER_SESSION_ID)
+      .some(header => String(header.id) === rawSessionId)
+    if (!persisted && !allowCreate) {
+      throw new AgentTeamError('INVALID_REQUEST', `Unknown Assistant Builder conversation '${rawSessionId}'`)
+    }
     return persisted
       ? this.ctx.agents.resume({ resumeSessionId: sessionId, agentOptions, setup })
       : this.ctx.agents.create({
         sessionId,
-        meta: { agentPreset: configuration.agentPresetId },
+        meta: { cwd, agentPreset: configuration.agentPresetId },
         agentOptions,
         setup,
       })
   }
 
-  private async resolveConfiguration(): Promise<AssistantBuilderConfiguration> {
-    const requestedProvider = this.selectedProvider ?? this.config.assistantBuilderProvider.trim()
-    const requestedModel = this.selectedModel ?? this.config.assistantBuilderModel.trim()
+  private async resolveConfiguration(sessionId: string): Promise<AssistantBuilderConfiguration> {
+    const selected = this.configurations.get(sessionId)
+    const requestedProvider = selected?.provider ?? this.config.assistantBuilderProvider.trim()
+    const requestedModel = selected?.model ?? this.config.assistantBuilderModel.trim()
     if (requestedModel.length > 0 && requestedProvider.length === 0) {
       throw new AgentTeamError('INVALID_REQUEST', 'assistantBuilderModel requires assistantBuilderProvider')
     }
@@ -308,7 +394,21 @@ export class AssistantBuilderRuntime {
     return { provider, model, agentPresetId, permissionPresetId }
   }
 
-  private registerTools(agentCtx: Context): void {
+  private async requireExistingSessionId(rawSessionId: string): Promise<string> {
+    const sessionId = rawSessionId.trim()
+    if (!isAssistantBuilderSessionId(sessionId)) {
+      throw new AgentTeamError('INVALID_REQUEST', `Invalid Assistant Builder conversation '${sessionId}'`)
+    }
+    if (sessionId === this.activeSessionId) return sessionId
+    const exists = (await this.ctx.sessionPersistence.list())
+      .some(header => String(header.id) === sessionId)
+    if (!exists) {
+      throw new AgentTeamError('INVALID_REQUEST', `Unknown Assistant Builder conversation '${sessionId}'`)
+    }
+    return sessionId
+  }
+
+  private registerTools(agentCtx: Context, sessionId: string): void {
     agentCtx.tools.register(defineTool({
       name: 'assistant_builder_get_catalog',
       description: 'Read exact creation options. Pass agentPresetId after choosing a preset to also return its available Skills and MCP Servers.',
@@ -320,7 +420,7 @@ export class AssistantBuilderRuntime {
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
       },
       execute: async (args, exec) => {
-        this.assertToolIdentity(exec.agent?.id)
+        this.assertToolIdentity(exec.agent?.id, sessionId)
         const catalog = await this.service.catalog()
         const skillCatalog = args.agentPresetId === undefined
           ? undefined
@@ -375,11 +475,11 @@ export class AssistantBuilderRuntime {
         schema: { type: 'object', additionalProperties: true },
         render: (_args, value) => [{
           type: 'text',
-          text: `草稿“${value.name}”已校验。必须等待用户在新的消息中精确回复：确认创建`,
+          text: `草稿“${value.name}”已校验。请展示最终配置，并等待用户在新的消息中明确同意创建；用户可使用自然语言表达，无需固定口令。`,
         }],
       },
       execute: async (args, exec) => {
-        this.assertToolIdentity(exec.agent?.id)
+        this.assertToolIdentity(exec.agent?.id, sessionId)
         if (exec.agent === undefined) {
           throw new AgentTeamError('INVALID_REQUEST', 'Assistant Builder Agent is unavailable')
         }
@@ -395,19 +495,19 @@ export class AssistantBuilderRuntime {
           skillAllowlist: args.skills ?? [],
           mcpServers: args.mcpServers ?? [],
         })
-        this.pendingDraft = {
+        this.pendingDrafts.set(sessionId, {
           input,
           preparedThroughSeq: exec.agent.session.events.at(-1)?.seq ?? -1,
-        }
+        })
         return {
           name: input.name,
-          confirmationText: '确认创建',
+          requiresExplicitUserConfirmation: true,
         }
       },
     }))
     agentCtx.tools.register(defineTool({
       name: 'assistant_builder_commit',
-      description: 'Create the currently prepared assistant only after a later, real user message exactly says 确认创建.',
+      description: 'Create the currently prepared assistant only after a later, real user message clearly approves the final configuration. Natural-language approval is allowed; ambiguity, rejection, questions, or requested changes are not approval.',
       parameters: {},
       output: {
         schema: {
@@ -422,47 +522,48 @@ export class AssistantBuilderRuntime {
         render: (_args, value) => [{ type: 'text', text: `助手“${value.name}”已创建。` }],
       },
       execute: async (_args, exec) => {
-        this.assertToolIdentity(exec.agent?.id)
+        this.assertToolIdentity(exec.agent?.id, sessionId)
         if (exec.agent === undefined) {
           throw new AgentTeamError('INVALID_REQUEST', 'Assistant Builder Agent is unavailable')
         }
-        const pending = this.pendingDraft
+        const pending = this.pendingDrafts.get(sessionId)
         if (pending === undefined) {
           throw new AgentTeamError(
             'INVALID_REQUEST',
             '没有等待确认的助手草稿，请先重新校验草稿',
           )
         }
-        if (!hasExplicitAssistantDraftConfirmation(
+        if (!hasFreshAssistantDraftUserResponse(
           exec.agent.session.events,
           pending.preparedThroughSeq,
         )) {
           throw new AgentTeamError(
             'INVALID_REQUEST',
-            '必须等待用户在新的消息中精确回复“确认创建”',
+            '必须等待用户在新的消息中明确同意当前助手配置',
           )
         }
         const assistant = await this.service.createAssistant(pending.input)
-        if (this.pendingDraft === pending) this.pendingDraft = undefined
+        if (this.pendingDrafts.get(sessionId) === pending) this.pendingDrafts.delete(sessionId)
         return { id: assistant.id, name: assistant.name, revision: assistant.revision }
       },
     }))
   }
 
-  private assertToolIdentity(id: unknown): void {
-    if (String(id) !== ASSISTANT_BUILDER_SESSION_ID) {
+  private assertToolIdentity(id: unknown, sessionId: string): void {
+    if (String(id) !== sessionId || !isAssistantBuilderSessionId(sessionId)) {
       throw new AgentTeamError('INVALID_REQUEST', 'Assistant Builder tool called outside its owned Agent')
     }
   }
 
   private project(
+    sessionId: string,
     events: readonly SessionEvent[],
     status: 'idle' | 'running',
   ): AssistantBuilderConversationView {
     if (this.configuration === undefined) throw new Error('Assistant Builder configuration is unavailable')
     return {
       schemaVersion: 1,
-      sessionId: ASSISTANT_BUILDER_SESSION_ID,
+      sessionId,
       status,
       ...projectConversation(events),
       configuration: this.configuration,
@@ -471,14 +572,15 @@ export class AssistantBuilderRuntime {
 
   private publishCurrent(): void {
     const handle = this.handle
-    if (handle === undefined || this.configuration === undefined || this.closing) return
+    const sessionId = this.activeSessionId
+    if (handle === undefined || sessionId === undefined || this.configuration === undefined || this.closing) return
     this.service.publishAssistantBuilderConversation(
-      this.project(handle.agent.session.events, handle.agent.status),
+      this.project(sessionId, handle.agent.session.events, handle.agent.status),
     )
   }
 }
 
-export function hasExplicitAssistantDraftConfirmation(
+export function hasFreshAssistantDraftUserResponse(
   events: readonly SessionEvent[],
   preparedThroughSeq: number,
 ): boolean {
@@ -487,8 +589,48 @@ export function hasExplicitAssistantDraftConfirmation(
     && event.type === 'user/message'
     && event.data.source.kind === 'user'
   ))
-  if (latestUserMessage?.type !== 'user/message') return false
-  return textOf(latestUserMessage.data.content).trim() === '确认创建'
+  return latestUserMessage?.type === 'user/message'
+}
+
+function isAssistantBuilderSessionId(sessionId: string): boolean {
+  return sessionId === ASSISTANT_BUILDER_SESSION_ID
+    || sessionId.startsWith(ASSISTANT_BUILDER_SESSION_PREFIX)
+}
+
+function summarizeConversation(
+  sessionId: string,
+  createdAt: number,
+  events: readonly SessionEvent[],
+): AssistantBuilderConversationSummary {
+  const projection = projectConversation(events, Number.MAX_SAFE_INTEGER)
+  const firstUser = projection.nodes.find(node => node.kind === 'user')
+  const lastUserSeq = projection.nodes.reduce((latest, node) => (
+    node.kind === 'user' ? Math.max(latest, node.seq) : latest
+  ), -1)
+  const lastCommitSeq = projection.nodes.reduce((latest, node) => (
+    node.kind === 'tool'
+    && node.name === 'assistant_builder_commit'
+    && node.status === 'success'
+      ? Math.max(latest, node.seq)
+      : latest
+  ), -1)
+  const lastEventAt = events.at(-1)?.time ?? createdAt
+  return {
+    sessionId,
+    title: firstUser?.kind === 'user' ? conversationTitle(firstUser.text) : '新对话',
+    createdAt: new Date(createdAt).toISOString(),
+    updatedAt: new Date(lastEventAt).toISOString(),
+    state: lastUserSeq < 0
+      ? 'new'
+      : lastCommitSeq >= lastUserSeq
+        ? 'completed'
+        : 'in_progress',
+  }
+}
+
+function conversationTitle(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim()
+  return compact.length <= 28 ? compact : `${compact.slice(0, 28)}…`
 }
 
 function textOf(blocks: readonly ContentBlock[]): string {

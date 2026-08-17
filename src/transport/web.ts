@@ -23,6 +23,8 @@ const requestSchema = z.object({
     'assistant.update',
     'assistant.clone',
     'assistant.delete',
+    'assistant.builder.list',
+    'assistant.builder.create',
     'assistant.builder.get',
     'assistant.builder.configure',
     'assistant.builder.send',
@@ -190,19 +192,32 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
       return service.cloneAssistant(payload.id, payload.name)
     }
     case 'assistant.delete': await service.deleteAssistant(idPayload.parse(request.payload).id); return null
-    case 'assistant.builder.get': return service.getAssistantBuilderConversation()
+    case 'assistant.builder.list': return service.listAssistantBuilderConversations()
+    case 'assistant.builder.create': return service.createAssistantBuilderConversation()
+    case 'assistant.builder.get': {
+      const payload = z.object({ sessionId: z.string().trim().min(1).max(200).optional() }).strict().parse(request.payload)
+      return service.getAssistantBuilderConversation(payload.sessionId)
+    }
     case 'assistant.builder.configure': {
       const payload = z.object({
+        sessionId: z.string().trim().min(1).max(200),
         provider: z.string().trim().min(1).max(200),
         model: z.string().trim().min(1).max(500),
       }).strict().parse(request.payload)
-      return service.configureAssistantBuilder(payload.provider, payload.model)
+      return service.configureAssistantBuilder(payload.sessionId, payload.provider, payload.model)
     }
     case 'assistant.builder.send': {
-      const payload = z.object({ content: z.string().trim().min(1).max(32_000) }).strict().parse(request.payload)
-      return service.sendAssistantBuilderMessage(payload.content)
+      const payload = z.object({
+        sessionId: z.string().trim().min(1).max(200),
+        content: z.string().trim().min(1).max(32_000),
+      }).strict().parse(request.payload)
+      return service.sendAssistantBuilderMessage(payload.sessionId, payload.content)
     }
-    case 'assistant.builder.stop': await service.stopAssistantBuilder(); return { accepted: true }
+    case 'assistant.builder.stop': {
+      const payload = z.object({ sessionId: z.string().trim().min(1).max(200) }).strict().parse(request.payload)
+      await service.stopAssistantBuilder(payload.sessionId)
+      return { accepted: true }
+    }
     case 'team.list': return service.listTeams()
     case 'team.get': return service.getTeam(idPayload.parse(request.payload).id)
     case 'team.createDraft': return service.createTeamDraft(request.payload as never)

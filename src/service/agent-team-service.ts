@@ -32,6 +32,7 @@ import type { AssistantBuilderRuntime } from '../runtime/assistant-builder-runti
 import type { TeamRuntime } from '../runtime/team-runtime.js'
 import type {
   AssistantBuilderConversationView,
+  AssistantBuilderConversationListView,
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
@@ -332,23 +333,32 @@ export class AgentTeamService extends Service {
     this.publish('assistant', id, assistant.revision + 1, 'assistant.deleted')
   }
 
-  getAssistantBuilderConversation(): Promise<AssistantBuilderConversationView> {
-    return this.requireAssistantBuilderRuntime().getConversation()
+  listAssistantBuilderConversations(): Promise<AssistantBuilderConversationListView> {
+    return this.requireAssistantBuilderRuntime().listConversations()
+  }
+
+  createAssistantBuilderConversation(): Promise<AssistantBuilderConversationView> {
+    return this.requireAssistantBuilderRuntime().createConversation()
+  }
+
+  getAssistantBuilderConversation(sessionId?: string): Promise<AssistantBuilderConversationView> {
+    return this.requireAssistantBuilderRuntime().getConversation(sessionId)
   }
 
   configureAssistantBuilder(
+    sessionId: string,
     provider: string,
     model: string,
   ): Promise<AssistantBuilderConversationView> {
-    return this.requireAssistantBuilderRuntime().configure(provider, model)
+    return this.requireAssistantBuilderRuntime().configure(sessionId, provider, model)
   }
 
-  sendAssistantBuilderMessage(content: string): Promise<{ messageId: string }> {
-    return this.requireAssistantBuilderRuntime().sendMessage(content)
+  sendAssistantBuilderMessage(sessionId: string, content: string): Promise<{ messageId: string }> {
+    return this.requireAssistantBuilderRuntime().sendMessage(sessionId, content)
   }
 
-  stopAssistantBuilder(): Promise<void> {
-    return this.requireAssistantBuilderRuntime().stop()
+  stopAssistantBuilder(sessionId: string): Promise<void> {
+    return this.requireAssistantBuilderRuntime().stop(sessionId)
   }
 
   getTeam(id: string): TeamAggregate {

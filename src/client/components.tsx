@@ -15,6 +15,8 @@ import { closeAgentTeam, openTeam, openTeamCreator, useAgentTeamUi } from './sto
 import css from './AgentTeam.module.css'
 import type {
   ConversationNode,
+  AssistantBuilderConversationListView,
+  AssistantBuilderConversationSummary,
   AssistantBuilderConversationView,
   MemberConversationView,
   TeamWorkbenchView,
@@ -381,7 +383,6 @@ function AssistantPanel({
           <p className={css.sectionDescription}>助手是可复用模板，解散团队不会删除助手。</p>
         </div>
         <div className={css.actions}>
-          <Button variant="outline" onClick={() => { setBuilderOpen(true) }}>与团队小助手对话</Button>
           <Button variant="primary" onClick={() => { setCreating(true) }}>手动新建</Button>
         </div>
       </div>
@@ -443,6 +444,7 @@ function AssistantPanel({
 
 function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | undefined }): JSX.Element {
   const [conversation, setConversation] = useState<AssistantBuilderConversationView>()
+  const [history, setHistory] = useState<AssistantBuilderConversationSummary[]>([])
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -453,22 +455,38 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
   const [error, setError] = useState<string>()
   const timeline = useRef<HTMLDivElement>(null)
 
-  const load = useCallback(async () => {
+  const loadHistory = useCallback(async () => {
+    const next = await callAgentTeam<AssistantBuilderConversationListView>('assistant.builder.list')
+    setHistory(next.items)
+  }, [])
+
+  const load = useCallback(async (sessionId?: string) => {
     try {
-      const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.get')
+      const next = await callAgentTeam<AssistantBuilderConversationView>(
+        'assistant.builder.get',
+        sessionId === undefined ? {} : { sessionId },
+      )
       setConversation(next)
+      setModelSelectionDirty(false)
+      await loadHistory()
       setError(undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadHistory])
 
   useEffect(() => {
     void load()
     return subscribeAssistantBuilderConversation(next => {
-      if (next !== undefined) setConversation(next)
+      if (next !== undefined) {
+        setConversation(current => {
+          if (current?.sessionId !== next.sessionId) return current
+          if (current.status === 'running' && next.status === 'idle') void loadHistory()
+          return next
+        })
+      }
       else void load()
       setError(undefined)
     }, () => {
@@ -477,7 +495,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
       setError(undefined)
       void load()
     })
-  }, [load])
+  }, [load, loadHistory])
 
   useEffect(() => {
     if (conversation === undefined || modelSelectionDirty) return
@@ -493,11 +511,15 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
 
   async function send(): Promise<void> {
     const message = content.trim()
-    if (message.length === 0 || sending || conversation?.status === 'running') return
+    if (message.length === 0 || sending || conversation === undefined || conversation.status === 'running') return
     setSending(true)
     try {
-      await callAgentTeam('assistant.builder.send', { content: message })
+      await callAgentTeam('assistant.builder.send', {
+        sessionId: conversation.sessionId,
+        content: message,
+      })
       setContent('')
+      await loadHistory()
       setError(undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -507,19 +529,21 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
   }
 
   async function stop(): Promise<void> {
+    if (conversation === undefined) return
     try {
-      await callAgentTeam('assistant.builder.stop')
-      await load()
+      await callAgentTeam('assistant.builder.stop', { sessionId: conversation.sessionId })
+      await load(conversation.sessionId)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
   }
 
   async function applyModel(): Promise<void> {
-    if (!selectedProvider || !selectedModel || applyingModel || conversation?.status === 'running') return
+    if (!selectedProvider || !selectedModel || applyingModel || conversation === undefined || conversation.status === 'running') return
     setApplyingModel(true)
     try {
       const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.configure', {
+        sessionId: conversation.sessionId,
         provider: selectedProvider,
         model: selectedModel,
       })
@@ -533,6 +557,30 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
     }
   }
 
+  async function createConversation(): Promise<void> {
+    if (running || loading) return
+    setLoading(true)
+    try {
+      const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.create')
+      setConversation(next)
+      setContent('')
+      setModelSelectionDirty(false)
+      await loadHistory()
+      setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function selectConversation(sessionId: string): Promise<void> {
+    if (running || loading || sessionId === conversation?.sessionId) return
+    setLoading(true)
+    setContent('')
+    await load(sessionId)
+  }
+
   const running = conversation?.status === 'running'
   const providers = catalog?.providers ?? []
   const models = catalog?.models[selectedProvider] ?? []
@@ -542,7 +590,37 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
   )
   return (
     <section className={css.assistantBuilderConversation}>
-      <div className={css.assistantBuilderRuntime}>
+      <aside className={css.assistantBuilderHistory}>
+        <button
+          type="button"
+          className={css.assistantBuilderNewConversation}
+          disabled={loading || running}
+          onClick={() => { void createConversation() }}
+        >
+          <IconPlusOutline16 size={14} />
+          <span>新对话</span>
+        </button>
+        <div className={css.assistantBuilderHistoryList}>
+          {history.map(item => (
+            <button
+              type="button"
+              key={item.sessionId}
+              className={`${css.assistantBuilderHistoryItem} ${item.sessionId === conversation?.sessionId ? css.assistantBuilderHistoryItemActive : ''}`}
+              disabled={loading || running}
+              onClick={() => { void selectConversation(item.sessionId) }}
+            >
+              <strong>{item.title}</strong>
+              <span>
+                <time dateTime={item.updatedAt}>{formatConversationTime(item.updatedAt)}</time>
+                <em>{assistantBuilderStateLabel(item.state)}</em>
+              </span>
+            </button>
+          ))}
+          {!loading && history.length === 0 && <span className={css.assistantBuilderHistoryEmpty}>暂无历史对话</span>}
+        </div>
+      </aside>
+      <div className={css.assistantBuilderMain}>
+        <div className={css.assistantBuilderRuntime}>
         <span className={css.assistantBuilderRuntimeState}>
           <span className={`${css.statusDot} ${running ? css.statusRunning : css.statusIdle}`} aria-hidden="true" />
           <span>{loading ? '正在启动…' : running ? '正在思考' : '可以对话'}</span>
@@ -585,8 +663,8 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             {applyingModel ? '切换中…' : '应用模型'}
           </Button>
         </div>
-      </div>
-      <div ref={timeline} className={`${css.timeline} ${css.assistantBuilderTimeline}`}>
+        </div>
+        <div ref={timeline} className={`${css.timeline} ${css.assistantBuilderTimeline}`}>
         {!loading && conversation?.nodes.length === 0 && (
           <article className={`${css.messageNode} ${css.assistantMessage}`}>
             <div className={css.messageText}>
@@ -595,8 +673,8 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           </article>
         )}
         {conversation?.nodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
-      </div>
-      <form
+        </div>
+        <form
         className={`${css.composer} ${css.assistantBuilderComposer}`}
         onSubmit={event => { event.preventDefault(); void send() }}
       >
@@ -635,9 +713,25 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           </div>
         </div>
         {error && <span className={css.composerError}>{error}</span>}
-      </form>
+        </form>
+      </div>
     </section>
   )
+}
+
+function assistantBuilderStateLabel(state: AssistantBuilderConversationSummary['state']): string {
+  if (state === 'completed') return '已创建'
+  if (state === 'in_progress') return '配置中'
+  return '新对话'
+}
+
+function formatConversationTime(value: string): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
 }
 
 function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onChanged: () => Promise<void> }): JSX.Element {

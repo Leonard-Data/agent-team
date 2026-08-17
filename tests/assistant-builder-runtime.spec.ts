@@ -3,7 +3,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Config } from '../src/config.js'
 import {
   AssistantBuilderRuntime,
-  hasExplicitAssistantDraftConfirmation,
+  hasFreshAssistantDraftUserResponse,
 } from '../src/runtime/assistant-builder-runtime.js'
 
 const config: Config = {
@@ -18,12 +18,47 @@ const config: Config = {
 }
 
 describe('AssistantBuilderRuntime', () => {
+  it('lists persisted conversations with a title and progress state', async () => {
+    const createdAt = 1_700_000_000_000
+    const events = [userEvent(0, '我需要一个负责 React 前端开发和代码审查的助手')]
+    const ctx = {
+      on: vi.fn(() => vi.fn()),
+      sessionPersistence: {
+        list: vi.fn(async () => [{
+          id: 'agent-team:assistant-builder:history-1',
+          createdAt,
+        }]),
+        inspect: vi.fn(async () => ({ meta: { createdAt }, events })),
+      },
+    }
+    const runtime = new AssistantBuilderRuntime(ctx as never, config, {} as never)
+
+    await expect(runtime.listConversations()).resolves.toEqual({
+      items: [{
+        sessionId: 'agent-team:assistant-builder:history-1',
+        title: '我需要一个负责 React 前端开发和代码审查的助手',
+        createdAt: new Date(createdAt).toISOString(),
+        updatedAt: new Date(events[0]!.time).toISOString(),
+        state: 'in_progress',
+      }],
+      total: 1,
+    })
+
+    await runtime.dispose()
+  })
+
   it('switches model by flushing and resuming the same Session', async () => {
     const first = fakeHandle()
     const second = fakeHandle()
-    const resume = vi.fn()
-      .mockResolvedValueOnce(first)
-      .mockResolvedValueOnce(second)
+    const handles = [first, second]
+    const cwdVariable = vi.fn()
+    const restrict = vi.fn()
+    const resume = vi.fn(async (options: { setup?: (ctx: unknown) => Promise<void> }) => {
+      const handle = handles.shift()
+      if (handle === undefined) throw new Error('Missing fake Agent handle')
+      await options.setup?.(fakeAgentContext(handle.agent, cwdVariable, restrict))
+      return handle
+    })
     const flush = vi.fn(async () => {})
     const ctx = {
       on: vi.fn(() => vi.fn()),
@@ -63,8 +98,8 @@ describe('AssistantBuilderRuntime', () => {
     }
     const runtime = new AssistantBuilderRuntime(ctx as never, config, service as never)
 
-    const initial = await runtime.getConversation()
-    const switched = await runtime.configure('zai-coding-cn', 'glm-5.3')
+    const initial = await runtime.getConversation('agent-team:assistant-builder')
+    const switched = await runtime.configure('agent-team:assistant-builder', 'zai-coding-cn', 'glm-5.3')
 
     expect(initial.configuration).toMatchObject({
       provider: 'deepseek-official',
@@ -80,29 +115,24 @@ describe('AssistantBuilderRuntime', () => {
       provider: 'zai-coding-cn',
       model: 'glm-5.3',
     })
+    expect(cwdVariable).toHaveBeenCalledWith('cwd', expect.any(Function))
+    expect(restrict).toHaveBeenCalledWith({ deny: ['ask_user_question', 'bash'] })
 
     await runtime.dispose()
   })
 
-  it('accepts only the latest exact user confirmation after preparation', () => {
+  it('requires a fresh, real user response after preparation', () => {
     const beforePreparation = userEvent(4, '确认创建')
     const pluginRelay = userEvent(6, '确认创建', {
       kind: 'plugin',
       plugin: 'dsh-agent-team',
       form: 'relay',
     })
-    const exactConfirmation = userEvent(7, '确认创建')
+    const naturalConfirmation = userEvent(7, '没问题，就这样创建吧')
 
-    expect(hasExplicitAssistantDraftConfirmation([beforePreparation], 5)).toBe(false)
-    expect(hasExplicitAssistantDraftConfirmation([pluginRelay], 5)).toBe(false)
-    expect(hasExplicitAssistantDraftConfirmation([exactConfirmation], 5)).toBe(true)
-    expect(hasExplicitAssistantDraftConfirmation([
-      exactConfirmation,
-      userEvent(8, '先不要创建'),
-    ], 5)).toBe(false)
-    expect(hasExplicitAssistantDraftConfirmation([
-      userEvent(7, '确认创建。'),
-    ], 5)).toBe(false)
+    expect(hasFreshAssistantDraftUserResponse([beforePreparation], 5)).toBe(false)
+    expect(hasFreshAssistantDraftUserResponse([pluginRelay], 5)).toBe(false)
+    expect(hasFreshAssistantDraftUserResponse([naturalConfirmation], 5)).toBe(true)
   })
 })
 
@@ -123,12 +153,42 @@ function fakeHandle() {
   const agent = {
     id: 'agent-team:assistant-builder',
     status: 'idle' as const,
-    session: { events: [] },
+    session: { events: [], header: {} },
     cancel: vi.fn(),
     whenIdle: vi.fn(async () => {}),
   }
   return {
     agent,
     dispose: vi.fn(async () => {}),
+  }
+}
+
+function fakeAgentContext(
+  agent: unknown,
+  variable: ReturnType<typeof vi.fn>,
+  restrict: ReturnType<typeof vi.fn>,
+): unknown {
+  return {
+    agent,
+    tools: {
+      presentAs: vi.fn(),
+      guard: vi.fn(),
+      register: vi.fn(),
+      schemas: vi.fn(() => [
+        { name: 'assistant_builder_get_catalog' },
+        { name: 'assistant_builder_prepare' },
+        { name: 'assistant_builder_commit' },
+        { name: 'ask_user_question' },
+        { name: 'bash' },
+      ]),
+      restrict,
+    },
+    systemPrompt: {
+      variable,
+      section: vi.fn(),
+      assemble: vi.fn(async () => ({
+        sections: [{ name: 'agent-team:assistant-builder', text: 'Assistant Builder' }],
+      })),
+    },
   }
 }
