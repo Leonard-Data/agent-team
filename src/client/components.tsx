@@ -121,6 +121,8 @@ const TASK_STATE_LABELS: Record<string, string> = {
   cancelled: '已取消',
 }
 
+const ASSISTANT_FORM_ID = 'agent-team-assistant-form'
+
 const PERMISSION_LABELS: Record<string, string> = {
   'read-only': '只读',
   'workspace-write': '工作区可写',
@@ -370,6 +372,7 @@ function AssistantPanel({
 }): JSX.Element {
   const [creating, setCreating] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)
+  const [assistantSaving, setAssistantSaving] = useState(false)
   return (
     <section className={css.section}>
       <div className={css.sectionHeader}>
@@ -413,10 +416,24 @@ function AssistantPanel({
         description="配置可复用的模型、权限与长期规则。具体任务在团队启动后发送。"
         className={css.assistantDialog ?? ''}
         contentClassName={css.modalScrollContent ?? ''}
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => { setCreating(false) }} disabled={assistantSaving}>取消</Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form={ASSISTANT_FORM_ID}
+              disabled={assistantSaving}
+            >
+              {assistantSaving ? '保存中…' : '保存助手'}
+            </Button>
+          </>
+        )}
       >
         <AssistantForm
           catalog={catalog}
-          onCancel={() => { setCreating(false) }}
+          saving={assistantSaving}
+          setSaving={setAssistantSaving}
           onCreated={async () => { setCreating(false); await onChanged() }}
         />
       </Modal>
@@ -677,11 +694,13 @@ function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onC
 
 function AssistantForm({
   catalog,
-  onCancel,
+  saving,
+  setSaving,
   onCreated,
 }: {
   catalog: CatalogView | undefined
-  onCancel: () => void
+  saving: boolean
+  setSaving: (saving: boolean) => void
   onCreated: () => Promise<void>
 }): JSX.Element {
   const providers = catalog?.providers ?? []
@@ -703,7 +722,6 @@ function AssistantForm({
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([])
   const [mcpLoading, setMcpLoading] = useState(false)
   const [mcpError, setMcpError] = useState<string>()
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
 
   useEffect(() => {
@@ -776,6 +794,7 @@ function AssistantForm({
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
+    if (saving) return
     setSaving(true)
     try {
       await callAgentTeam('assistant.create', {
@@ -799,7 +818,7 @@ function AssistantForm({
   }
 
   return (
-    <form onSubmit={(event) => { void submit(event) }} className={`${css.form} ${css.assistantForm}`}>
+    <form id={ASSISTANT_FORM_ID} onSubmit={(event) => { void submit(event) }} className={`${css.form} ${css.assistantForm}`}>
       <div className={css.formGrid}>
         <Field label="名称"><input required value={name} onChange={event => { setName(event.target.value) }} className={css.input} /></Field>
         <Field label="说明"><input value={description} onChange={event => { setDescription(event.target.value) }} className={css.input} /></Field>
@@ -905,10 +924,6 @@ function AssistantForm({
         </Field>
       </div>
       {error && <div role="alert" className={css.inlineError}>{error}</div>}
-      <div className={css.formActions}>
-        <Button variant="outline" onClick={onCancel} disabled={saving}>取消</Button>
-        <Button variant="primary" type="submit" disabled={saving}>{saving ? '保存中…' : '保存助手'}</Button>
-      </div>
     </form>
   )
 }

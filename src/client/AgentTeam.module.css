@@ -1171,13 +1171,6 @@ textarea.input {
   color: var(--dsw-alias-label-caption);
 }
 
-.formActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 2px;
-}
-
 .checkboxRow {
   display: flex;
   align-items: center;
