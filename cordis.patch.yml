@@ -1,0 +1,4 @@
+- insert:
+    - id: agent-team
+      name: dsh-agent-team
+

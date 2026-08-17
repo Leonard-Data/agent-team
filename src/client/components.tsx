@@ -1,0 +1,1575 @@
+import type { FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Button, IconAgentPresetOutline16, IconCloseOutline16, IconFolderOpenOutline16, IconPlusOutline16,
+  IconSendOutline16, IconStopFill16, MarkdownText, MessageText, Modal, Tooltip,
+} from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { callAgentTeam, subscribeAgentTeam, subscribeAgentTeamConversation } from './api.js'
+import { closeAgentTeam, openTeam, openTeamCreator, openTeams, useAgentTeamUi } from './store.js'
+import css from './AgentTeam.module.css'
+import type {
+  ConversationNode,
+  MemberConversationView,
+  TeamWorkbenchView,
+  WorkspaceEntryView,
+} from '../transport/contracts.js'
+
+interface AssistantView {
+  id: string
+  name: string
+  description?: string
+  provider: string
+  model: string
+  agentPresetId: string
+  permissionPresetId: string
+  revision: number
+}
+
+interface TeamView {
+  id: string
+  name: string
+  state: string
+  workspacePath: string
+  leaderSlotId: string
+  members: Record<string, {
+    id: string
+    displayName: string
+    role: 'leader' | 'member'
+    sessionId: string
+    lastRuntimeState: string
+    permissionPresetId?: string
+    assistantSnapshot: { provider: string; model: string; permissionPresetId: string }
+  }>
+  directMemberChat: boolean
+  tasks: Record<string, {
+    id: string
+    title: string
+    description: string
+    status: string
+    ownerSlotId?: string
+    fileScopes: string[]
+    result?: string
+    error?: string
+  }>
+  revision: number
+}
+
+interface CatalogView {
+  providers: Array<{ id: string; name: string }>
+  models: Record<string, Array<{ id: string; name: string; description?: string }>>
+  agentPresets: Array<{ id: string; name: string; description?: string; broken?: string }>
+  permissionPresets: Array<{ value: string; name: string; description?: string }>
+  workspaces: Array<{ id: string; path: string; title: string; status: 'ok' | 'missing-dir' }>
+}
+
+export interface WorkspaceChoice {
+  id: string
+  path: string
+  title: string
+}
+
+interface Page<T> {
+  items: T[]
+  total: number
+}
+
+const CUSTOM_MODEL_VALUE = '__agent_team_custom_model__'
+
+const TEAM_STATE_LABELS: Record<string, string> = {
+  draft: '待启动',
+  starting: '启动中',
+  active: '运行中',
+  paused: '已暂停',
+  error: '启动失败',
+  ownership_conflict: '会话冲突',
+  deleting: '解散中',
+  delete_blocked: '无法解散',
+}
+
+const TASK_STATE_LABELS: Record<string, string> = {
+  pending: '待处理',
+  assigned: '已分配',
+  in_progress: '进行中',
+  completed: '已完成',
+  failed: '失败',
+  cancelled: '已取消',
+}
+
+const PERMISSION_LABELS: Record<string, string> = {
+  'read-only': '只读',
+  'workspace-write': '工作区可写',
+  'danger-full-access': '完全访问',
+}
+
+function teamStateLabel(state: string): string {
+  return TEAM_STATE_LABELS[state] ?? state
+}
+
+function teamStateBadgeClass(state: string): string {
+  if (state === 'active') return css.badgeSuccess ?? ''
+  if (state === 'error' || state === 'ownership_conflict' || state === 'delete_blocked') return css.badgeError ?? ''
+  return css.badgeNeutral ?? ''
+}
+
+export function TeamSidebarEntry({ wide }: { wide: boolean }): JSX.Element {
+  const [teams, setTeams] = useState<TeamView[]>([])
+
+  const load = useCallback(async () => {
+    try {
+      const page = await callAgentTeam<Page<TeamView>>('team.list')
+      setTeams(page.items)
+    } catch {
+      // The full team surface owns error presentation; a sidebar refresh failure
+      // keeps the last good projection instead of replacing navigation with noise.
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+    return subscribeAgentTeam(() => { void load() }, () => {})
+  }, [load])
+
+  return (
+    <section className={`${css.sidebarTeams} ${wide ? '' : css.sidebarTeamsRail}`} aria-label="团队">
+      <div className={css.sidebarTeamHeader}>
+        <Tooltip label="团队" delayMs={500} disabled={wide}>
+          <button type="button" className={css.sidebarTeamMain} onClick={openTeams} aria-label="查看全部团队">
+            <IconAgentPresetOutline16 size={wide ? 16 : 18} />
+            {wide && <span className={css.sidebarTeamLabel}>团队</span>}
+          </button>
+        </Tooltip>
+        {wide && (
+          <Tooltip label="组建团队" delayMs={500}>
+            <button type="button" className={css.sidebarTeamAdd} onClick={openTeamCreator} aria-label="组建团队">
+              <IconPlusOutline16 size={16} />
+            </button>
+          </Tooltip>
+        )}
+      </div>
+      {wide && teams.length > 0 && (
+        <div className={css.sidebarTeamList}>
+          {teams.map(team => (
+            <button
+              key={team.id}
+              type="button"
+              className={css.sidebarTeamItem}
+              onClick={() => { openTeam(team.id) }}
+              title={`${team.name} · ${team.workspacePath}`}
+            >
+              <span className={css.sidebarTeamBranch} aria-hidden="true" />
+              <span className={css.sidebarTeamName}>{team.name}</span>
+              <span className={css.sidebarTeamState}>{teamStateLabel(team.state)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function useAgentTeamData(includeTeams: boolean, active = true): {
+  catalog: CatalogView | undefined
+  assistants: AssistantView[]
+  teams: TeamView[]
+  loading: boolean
+  error: string | undefined
+  load: () => Promise<void>
+} {
+  const [catalog, setCatalog] = useState<CatalogView>()
+  const [assistants, setAssistants] = useState<AssistantView[]>([])
+  const [teams, setTeams] = useState<TeamView[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>()
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(undefined)
+    try {
+      void callAgentTeam<CatalogView>('catalog.get')
+        .then(value => { setCatalog(value) })
+        .catch(cause => {
+          const message = cause instanceof Error ? cause.message : String(cause)
+          setError(current => current === undefined ? message : `${current}；${message}`)
+        })
+      const coreRequests = [
+        callAgentTeam<Page<AssistantView>>('assistant.list').then(value => { setAssistants(value.items) }),
+        includeTeams
+          ? callAgentTeam<Page<TeamView>>('team.list').then(value => { setTeams(value.items) })
+          : Promise.resolve().then(() => { setTeams([]) }),
+      ]
+      const results = await Promise.allSettled(coreRequests)
+      const failures = results
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map(result => result.reason instanceof Error ? result.reason.message : String(result.reason))
+      if (failures.length > 0) setError(failures.join('；'))
+    } finally {
+      setLoading(false)
+    }
+  }, [includeTeams])
+
+  useEffect(() => {
+    if (!active) return
+    void load()
+    return subscribeAgentTeam(() => { void load() }, () => { setError('事件连接已断开，正在等待重连') })
+  }, [active, load])
+
+  return { catalog, assistants, teams, loading, error, load }
+}
+
+export function AgentTeamSettingsSection(_props: SettingsSectionOwnerProps): JSX.Element {
+  const { catalog, assistants, loading, error, load } = useAgentTeamData(false)
+  return (
+    <section className={css.settingsSection}>
+      <div className={css.settingsHeading}>
+        <div>
+          <h1 className={css.settingsTitle}>Agent 团队</h1>
+          <p className={css.settingsDescription}>管理可在不同团队间复用的助手、模型和权限配置。</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => { void load() }} disabled={loading}>
+          {loading ? '刷新中…' : '刷新'}
+        </Button>
+      </div>
+      {error && <div role="alert" className={css.error}>{error}</div>}
+      <AssistantPanel catalog={catalog} assistants={assistants} onChanged={load} />
+    </section>
+  )
+}
+
+export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promise<WorkspaceChoice | null> }): JSX.Element | null {
+  const { visible, createTeamRequest, selectedTeamId } = useAgentTeamUi()
+  const { catalog, assistants, teams, error, load } = useAgentTeamData(true, visible)
+  const selectedTeam = teams.find(team => team.id === selectedTeamId)
+
+  if (!visible) return null
+
+  return (
+    <section className={css.fullscreenWorkbench} aria-label="Agent 团队工作台">
+      <aside className={css.teamNavigator} aria-label="团队列表">
+        <div className={css.teamNavigatorHeader}>
+          <button type="button" className={css.teamNavigatorTitle} onClick={openTeams}>
+            <IconAgentPresetOutline16 size={18} />
+            <span>团队</span>
+          </button>
+          <Tooltip label="组建团队" delayMs={400}>
+            <button type="button" className={css.teamNavigatorAdd} onClick={openTeamCreator} aria-label="组建团队">
+              <IconPlusOutline16 size={16} />
+            </button>
+          </Tooltip>
+        </div>
+        <div className={css.teamNavigatorList}>
+          {teams.length === 0
+            ? <div className={css.teamNavigatorEmpty}>还没有团队</div>
+            : teams.map(team => {
+              const tasks = Object.values(team.tasks)
+              const completed = tasks.filter(task => task.status === 'completed').length
+              const active = tasks.filter(task => task.status === 'assigned' || task.status === 'in_progress' || task.status === 'running').length
+              const progress = tasks.length === 0 ? 0 : Math.round(completed / tasks.length * 100)
+              const isSelected = team.id === selectedTeamId
+              return (
+                <button
+                  key={team.id}
+                  type="button"
+                  className={`${css.teamNavigatorItem} ${isSelected ? css.teamNavigatorItemActive : ''}`}
+                  onClick={() => { openTeam(team.id) }}
+                  aria-current={isSelected ? 'page' : undefined}
+                >
+                  <span className={css.teamNavigatorItemTop}>
+                    <strong>{team.name}</strong>
+                    <span className={`${css.teamNavigatorStateDot} ${team.state === 'active' ? css.teamNavigatorStateActive : ''}`} aria-hidden="true" />
+                  </span>
+                  <span className={css.teamNavigatorMeta}>
+                    <span>{teamStateLabel(team.state)}</span>
+                    <span>{tasks.length === 0 ? '暂无任务' : `任务 ${completed}/${tasks.length}${active > 0 ? ` · 进行中 ${active}` : ''}`}</span>
+                  </span>
+                  {tasks.length > 0 && (
+                    <span className={css.teamNavigatorProgress} aria-label={`任务完成度 ${progress}%`}>
+                      <span style={{ width: `${progress}%` }} />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+        </div>
+        <div className={css.teamNavigatorFooter}>
+          <span>{teams.length} 个团队</span>
+        </div>
+      </aside>
+
+      <div className={css.fullscreenWorkbenchMain}>
+        <header className={css.shellHeader}>
+          <div className={css.headerCopy}>
+            <h1 className={css.title}>{selectedTeam?.name ?? 'Agent 团队'}</h1>
+            <p className={css.subtitle}>
+              {selectedTeam === undefined ? '多个平级 Agent，共享一个 Workspace' : selectedTeam.workspacePath}
+            </p>
+          </div>
+          <button type="button" className={css.iconButton} onClick={closeAgentTeam} aria-label="关闭工作台">
+            <IconCloseOutline16 size={16} />
+          </button>
+        </header>
+        {error && <div role="alert" className={css.error}>{error}</div>}
+        <main className={`${css.content} ${selectedTeam === undefined ? '' : css.workbenchContent ?? ''}`}>
+          <TeamPanel
+            catalog={catalog}
+            assistants={assistants}
+            teams={teams}
+            createRequest={createTeamRequest}
+            selectedTeamId={selectedTeamId}
+            pickWorkspace={pickWorkspace}
+            onChanged={load}
+          />
+        </main>
+      </div>
+    </section>
+  )
+}
+
+function AssistantPanel({
+  catalog,
+  assistants,
+  onChanged,
+}: {
+  catalog: CatalogView | undefined
+  assistants: AssistantView[]
+  onChanged: () => Promise<void>
+}): JSX.Element {
+  const [creating, setCreating] = useState(false)
+  return (
+    <section className={css.section}>
+      <div className={css.sectionHeader}>
+        <div>
+          <h2 className={css.sectionHeading}>助手模板 <span className={css.count}>{assistants.length}</span></h2>
+          <p className={css.sectionDescription}>助手是可复用模板，解散团队不会删除助手。</p>
+        </div>
+        <Button variant="primary" onClick={() => { setCreating(true) }}>新建助手</Button>
+      </div>
+      {assistants.length === 0
+        ? <Empty text="还没有助手模板" hint="创建助手后，就可以把它作为 Leader 或普通成员加入不同团队。" />
+        : <div className={css.cardGrid}>{assistants.map(assistant => <AssistantCard key={assistant.id} assistant={assistant} onChanged={onChanged} />)}</div>}
+      <Modal
+        open={creating}
+        onClose={() => { setCreating(false) }}
+        title="新建助手"
+        closeLabel="关闭"
+        description="配置可复用的模型、权限与长期规则。具体任务在团队启动后发送。"
+        className={css.assistantDialog ?? ''}
+        contentClassName={css.modalScrollContent ?? ''}
+      >
+        <AssistantForm
+          catalog={catalog}
+          onCancel={() => { setCreating(false) }}
+          onCreated={async () => { setCreating(false); await onChanged() }}
+        />
+      </Modal>
+    </section>
+  )
+}
+
+function AssistantCard({ assistant, onChanged }: { assistant: AssistantView; onChanged: () => Promise<void> }): JSX.Element {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+
+  async function clone(): Promise<void> {
+    setBusy(true)
+    try {
+      await callAgentTeam('assistant.clone', { id: assistant.id, name: `${assistant.name} Copy` })
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(): Promise<void> {
+    if (!window.confirm(`删除助手模板“${assistant.name}”？团队不会被删除；被团队引用时后端会拒绝。`)) return
+    setBusy(true)
+    try {
+      await callAgentTeam('assistant.delete', { id: assistant.id })
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <article className={css.card}>
+      <strong>{assistant.name}</strong>
+      <span className={css.muted}>{assistant.provider} / {assistant.model}</span>
+      <span className={css.muted}>Preset: {assistant.agentPresetId} · 权限: {assistant.permissionPresetId}</span>
+      {assistant.description && <p className={css.description}>{assistant.description}</p>}
+      <div className={css.actions}>
+        <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void clone() }}>复制</button>
+        <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void remove() }}>删除</button>
+      </div>
+      {error && <div role="alert" className={css.inlineError}>{error}</div>}
+    </article>
+  )
+}
+
+function AssistantForm({
+  catalog,
+  onCancel,
+  onCreated,
+}: {
+  catalog: CatalogView | undefined
+  onCancel: () => void
+  onCreated: () => Promise<void>
+}): JSX.Element {
+  const providers = catalog?.providers ?? []
+  const presets = catalog?.agentPresets.filter(preset => preset.broken === undefined) ?? []
+  const permissions = catalog?.permissionPresets ?? []
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [instructions, setInstructions] = useState('')
+  const [provider, setProvider] = useState(providers[0]?.id ?? '')
+  const models = catalog?.models[provider] ?? []
+  const [modelChoice, setModelChoice] = useState('')
+  const [customModel, setCustomModel] = useState('')
+  const [agentPresetId, setAgentPresetId] = useState(presets[0]?.id ?? '')
+  const [permissionPresetId, setPermissionPresetId] = useState(permissions[0]?.value ?? '')
+  const [toolAllowlist, setToolAllowlist] = useState('')
+  const [skillAllowlist, setSkillAllowlist] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string>()
+
+  useEffect(() => {
+    if (!provider && providers[0]) setProvider(providers[0].id)
+    if (!agentPresetId && presets[0]) setAgentPresetId(presets[0].id)
+    if (!permissionPresetId && permissions[0]) setPermissionPresetId(permissions[0].value)
+  }, [agentPresetId, permissionPresetId, permissions, presets, provider, providers])
+  useEffect(() => {
+    setModelChoice(current => {
+      if (current === CUSTOM_MODEL_VALUE || models.some(candidate => candidate.id === current)) return current
+      return models[0]?.id ?? CUSTOM_MODEL_VALUE
+    })
+  }, [models])
+
+  const model = modelChoice === CUSTOM_MODEL_VALUE ? customModel.trim() : modelChoice
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    setSaving(true)
+    try {
+      await callAgentTeam('assistant.create', {
+        name,
+        ...(description.trim() ? { description } : {}),
+        instructions,
+        provider,
+        model,
+        agentPresetId,
+        permissionPresetId,
+        toolAllowlist: commaList(toolAllowlist),
+        skillAllowlist: commaList(skillAllowlist),
+      })
+      await onCreated()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={(event) => { void submit(event) }} className={css.form}>
+      <div className={css.formGrid}>
+        <Field label="名称"><input required value={name} onChange={event => { setName(event.target.value) }} className={css.input} /></Field>
+        <Field label="说明"><input value={description} onChange={event => { setDescription(event.target.value) }} className={css.input} /></Field>
+        <Field label="Provider">
+          <select required value={provider} onChange={event => { setProvider(event.target.value) }} className={css.input}>
+            <option value="">请选择</option>
+            {providers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </Field>
+        <Field label={`模型（${models.length} 个可选）`}>
+          <select required value={modelChoice} onChange={event => { setModelChoice(event.target.value) }} className={css.input}>
+            <option value="" disabled>请选择</option>
+            {models.map(item => (
+              <option key={item.id} value={item.id}>
+                {item.name === item.id ? item.id : `${item.name}（${item.id}）`}
+              </option>
+            ))}
+            <option value={CUSTOM_MODEL_VALUE}>自定义模型 ID…</option>
+          </select>
+          {modelChoice === CUSTOM_MODEL_VALUE && (
+            <input
+              required
+              value={customModel}
+              onChange={event => { setCustomModel(event.target.value) }}
+              placeholder="输入 Provider 支持的模型 ID"
+              aria-label="自定义模型 ID"
+              className={css.input}
+            />
+          )}
+        </Field>
+        <Field label="Agent Preset">
+          <select required value={agentPresetId} onChange={event => { setAgentPresetId(event.target.value) }} className={css.input}>
+            <option value="">请选择</option>
+            {presets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </Field>
+        <Field label="权限预设">
+          <select required value={permissionPresetId} onChange={event => { setPermissionPresetId(event.target.value) }} className={css.input}>
+            <option value="">请选择</option>
+            {permissions.map(item => <option key={item.value} value={item.value}>{item.name}</option>)}
+          </select>
+        </Field>
+        <Field label="助手规则（可选）" className={css.fullWidth ?? ''}>
+          <textarea
+            value={instructions}
+            onChange={event => { setInstructions(event.target.value) }}
+            rows={4}
+            placeholder="例如：你负责前端实现；遵循现有代码风格；修改前先阅读相关文件；完成后向 Leader 汇报测试结果。"
+            className={css.input}
+          />
+          <span className={css.hint}>随助手模板保存，在成员启动时加入系统提示词；这里不填写具体任务。</span>
+        </Field>
+        <Field label="工具白名单（逗号分隔）"><input value={toolAllowlist} onChange={event => { setToolAllowlist(event.target.value) }} placeholder="留空表示不额外限制" className={css.input} /></Field>
+        <Field label="Skill 白名单（逗号分隔）"><input value={skillAllowlist} onChange={event => { setSkillAllowlist(event.target.value) }} placeholder="留空表示不额外限制" className={css.input} /></Field>
+      </div>
+      {error && <div role="alert" className={css.inlineError}>{error}</div>}
+      <div className={css.formActions}>
+        <Button variant="outline" onClick={onCancel} disabled={saving}>取消</Button>
+        <Button variant="primary" type="submit" disabled={saving}>{saving ? '保存中…' : '保存助手'}</Button>
+      </div>
+    </form>
+  )
+}
+
+function TeamPanel({
+  catalog,
+  assistants,
+  teams,
+  createRequest,
+  selectedTeamId,
+  pickWorkspace,
+  onChanged,
+}: {
+  catalog: CatalogView | undefined
+  assistants: AssistantView[]
+  teams: TeamView[]
+  createRequest: number
+  selectedTeamId: string | undefined
+  pickWorkspace: () => Promise<WorkspaceChoice | null>
+  onChanged: () => Promise<void>
+}): JSX.Element {
+  const [creating, setCreating] = useState(false)
+  const selectedTeam = teams.find(team => team.id === selectedTeamId)
+  const visibleTeams = selectedTeamId === undefined
+    ? teams
+    : teams.filter(team => team.id === selectedTeamId)
+
+  useEffect(() => {
+    if (createRequest > 0) setCreating(true)
+  }, [createRequest])
+
+  return (
+    <section className={css.section}>
+      {selectedTeam === undefined && <div className={css.sectionHeader}>
+        <div>
+          <h2 className={css.sectionHeading}>团队 <span className={css.count}>{teams.length}</span></h2>
+          <p className={css.sectionDescription}>选择 Leader 和成员，共享同一个 Workspace 协作。</p>
+        </div>
+        <Button variant="primary" disabled={assistants.length === 0} onClick={() => { setCreating(true) }}>
+          组建团队
+        </Button>
+      </div>}
+      {selectedTeam === undefined
+        ? visibleTeams.length === 0
+          ? <Empty text="还没有团队" hint="先在“设置 → Agent 团队”创建助手，再选择 Leader 和团队成员。" />
+          : <div className={css.cardList}>{visibleTeams.map(team => <TeamCard key={team.id} team={team} assistants={assistants} onChanged={onChanged} />)}</div>
+        : <TeamWorkbench
+          team={selectedTeam}
+          assistants={assistants}
+          permissionPresets={catalog?.permissionPresets ?? []}
+          onChanged={onChanged}
+        />}
+      <Modal
+        open={creating}
+        onClose={() => { setCreating(false) }}
+        title="新建团队"
+        closeLabel="关闭"
+        description="让多个 AI 助手组队协作。一个团队必须有且只有一个 Leader。"
+        className={css.teamCreateDialog ?? ''}
+        contentClassName={css.teamCreateContent ?? ''}
+      >
+        <TeamForm
+          catalog={catalog}
+          assistants={assistants}
+          pickWorkspace={pickWorkspace}
+          onCancel={() => { setCreating(false) }}
+          onCreated={async () => { setCreating(false); await onChanged() }}
+        />
+      </Modal>
+    </section>
+  )
+}
+
+function TeamWorkbench({
+  team,
+  assistants,
+  permissionPresets,
+  onChanged,
+}: {
+  team: TeamView
+  assistants: AssistantView[]
+  permissionPresets: CatalogView['permissionPresets']
+  onChanged: () => Promise<void>
+}): JSX.Element {
+  const members = Object.values(team.members)
+  const [snapshot, setSnapshot] = useState<TeamWorkbenchView>()
+  const [visibleSlots, setVisibleSlots] = useState(() => members.slice(0, 3).map(member => member.id))
+  const [error, setError] = useState<string>()
+  const [managementOpen, setManagementOpen] = useState(false)
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>()
+  const loadGeneration = useRef(0)
+
+  const load = useCallback(async () => {
+    const generation = ++loadGeneration.current
+    try {
+      const next = await callAgentTeam<TeamWorkbenchView>('team.workbench.get', { id: team.id })
+      if (generation !== loadGeneration.current) return
+      setSnapshot(next)
+      setError(undefined)
+    } catch (cause) {
+      if (generation !== loadGeneration.current) return
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }, [team.id])
+
+  useEffect(() => { void load() }, [load, team.revision])
+  useEffect(() => subscribeAgentTeamConversation(team.id, conversation => {
+    if (conversation !== undefined) {
+      loadGeneration.current += 1
+      setSnapshot(current => {
+        if (current === undefined) return current
+        const conversations = current.conversations.filter(item => item.slotId !== conversation.slotId)
+        return { ...current, conversations: [...conversations, conversation] }
+      })
+      setError(undefined)
+      return
+    }
+    if (refreshTimer.current !== undefined) return
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = undefined
+      void load()
+    }, 50)
+  }, () => { setError('实时连接已断开，正在等待重连') }, () => {
+    setError(undefined)
+    void load()
+  }), [load, team.id])
+  useEffect(() => () => {
+    if (refreshTimer.current !== undefined) clearTimeout(refreshTimer.current)
+  }, [])
+  useEffect(() => {
+    setVisibleSlots(current => {
+      const valid = current.filter(slotId => team.members[slotId] !== undefined)
+      return valid.length > 0 ? valid.slice(0, 3) : members.slice(0, 3).map(member => member.id)
+    })
+  }, [team.members])
+
+  function toggleMember(slotId: string): void {
+    setVisibleSlots(current => {
+      if (current.includes(slotId)) {
+        return current.length === 1 ? current : current.filter(value => value !== slotId)
+      }
+      return [...current.slice(-2), slotId]
+    })
+  }
+
+  const conversations = new Map(snapshot?.conversations.map(item => [item.slotId, item]) ?? [])
+  const visibleMembers = visibleSlots.map(slotId => team.members[slotId]).filter((value): value is TeamView['members'][string] => value !== undefined)
+
+  return (
+    <div className={css.workbench}>
+      <div className={css.memberTabs} aria-label="团队成员">
+        {members.map(member => {
+          const conversation = conversations.get(member.id)
+          const selected = visibleSlots.includes(member.id)
+          return (
+            <button
+              key={member.id}
+              type="button"
+              className={`${css.memberTab} ${selected ? css.memberTabActive : ''}`}
+              onClick={() => { toggleMember(member.id) }}
+            >
+              <span className={css.memberAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
+              <span>{member.displayName}</span>
+              {member.role === 'leader' && <span className={css.leaderCrown} title="Leader">♛</span>}
+              <span className={`${css.statusDot} ${conversation?.status === 'running' ? css.statusRunning : css.statusIdle}`} />
+            </button>
+          )
+        })}
+        <Button variant="ghost" size="sm" className={css.manageButton} onClick={() => { setManagementOpen(value => !value) }}>
+          {managementOpen ? '收起管理' : '团队管理'}
+        </Button>
+      </div>
+      {error && <div role="alert" className={css.workbenchError}>{error}</div>}
+      <div className={css.workbenchBody}>
+        <div className={css.conversationGrid} style={{ '--member-columns': visibleMembers.length } as React.CSSProperties}>
+          {visibleMembers.map(member => (
+            <ConversationColumn
+              key={member.id}
+              team={team}
+              member={member}
+              conversation={conversations.get(member.id)}
+              permissionPresets={permissionPresets}
+              onSent={load}
+              onTeamChanged={onChanged}
+            />
+          ))}
+        </div>
+        <WorkspacePanel team={team} />
+      </div>
+      <Modal
+        open={managementOpen}
+        onClose={() => { setManagementOpen(false) }}
+        title="团队管理"
+        description="调整团队成员、Leader 和运行状态。"
+        closeLabel="关闭"
+        className={css.managementDialog ?? ''}
+        contentClassName={css.managementDialogContent ?? ''}
+      >
+        <div className={css.managementDialogBody}>
+          <TeamCard team={team} assistants={assistants} onChanged={async () => { await onChanged(); await load() }} compact />
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+function ConversationColumn({
+  team,
+  member,
+  conversation,
+  permissionPresets,
+  onSent,
+  onTeamChanged,
+}: {
+  team: TeamView
+  member: TeamView['members'][string]
+  conversation: MemberConversationView | undefined
+  permissionPresets: CatalogView['permissionPresets']
+  onSent: () => Promise<void>
+  onTeamChanged: () => Promise<void>
+}): JSX.Element {
+  const [content, setContent] = useState('')
+  const [sending, setSending] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const [changingPermission, setChangingPermission] = useState(false)
+  const [permissionPresetId, setPermissionPresetId] = useState(
+    member.permissionPresetId ?? member.assistantSnapshot.permissionPresetId,
+  )
+  const [error, setError] = useState<string>()
+  const [pendingMessages, setPendingMessages] = useState<ConversationNode[]>([])
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const stickToBottom = useRef(true)
+  const canChat = team.state === 'active' && (member.role === 'leader' || team.directMemberChat)
+  const running = conversation?.status === 'running'
+  const visibleNodes = [...(conversation?.nodes ?? []), ...pendingMessages]
+
+  useEffect(() => {
+    setPermissionPresetId(member.permissionPresetId ?? member.assistantSnapshot.permissionPresetId)
+  }, [member.permissionPresetId, member.assistantSnapshot.permissionPresetId])
+
+  useEffect(() => {
+    const committedIds = new Set(conversation?.nodes.map(node => node.id) ?? [])
+    setPendingMessages(current => {
+      const next = current.filter(node => !committedIds.has(node.id))
+      return next.length === current.length ? current : next
+    })
+  }, [conversation?.throughSeq])
+
+  useEffect(() => {
+    if (!stickToBottom.current) return
+    const frame = requestAnimationFrame(() => {
+      const timeline = timelineRef.current
+      if (timeline !== null) timeline.scrollTop = timeline.scrollHeight
+    })
+    return () => { cancelAnimationFrame(frame) }
+  }, [conversation?.throughSeq, pendingMessages.length])
+
+  async function send(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    const message = content.trim()
+    if (!message || sending) return
+    const pendingId = `pending:${crypto.randomUUID()}`
+    const pending: ConversationNode = {
+      id: pendingId,
+      kind: 'user',
+      seq: Number.MAX_SAFE_INTEGER,
+      time: Date.now(),
+      text: message,
+    }
+    setSending(true)
+    setContent('')
+    setPendingMessages(current => [...current, pending])
+    stickToBottom.current = true
+    try {
+      const delivered = await callAgentTeam<{ id: string }>('team.message.send', {
+        teamId: team.id,
+        targetSlotId: member.id,
+        content: message,
+      })
+      setPendingMessages(current => current.map(node => node.id === pendingId ? { ...node, id: delivered.id } : node))
+      setError(undefined)
+      await onSent()
+    } catch (cause) {
+      setPendingMessages(current => current.filter(node => node.id !== pendingId))
+      setContent(current => current.length === 0 ? message : current)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function stop(): Promise<void> {
+    if (stopping) return
+    setStopping(true)
+    try {
+      await callAgentTeam('team.member.stop', { teamId: team.id, slotId: member.id })
+      setError(undefined)
+      await onSent()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setStopping(false)
+    }
+  }
+
+  async function changePermission(nextPermissionPresetId: string): Promise<void> {
+    if (changingPermission || nextPermissionPresetId === permissionPresetId) return
+    const previous = permissionPresetId
+    setPermissionPresetId(nextPermissionPresetId)
+    setChangingPermission(true)
+    try {
+      await callAgentTeam('team.member.setPermissionPreset', {
+        teamId: team.id,
+        slotId: member.id,
+        permissionPresetId: nextPermissionPresetId,
+      })
+      setError(undefined)
+      await onTeamChanged()
+    } catch (cause) {
+      setPermissionPresetId(previous)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setChangingPermission(false)
+    }
+  }
+
+  return (
+    <section className={css.conversationColumn} aria-label={`${member.displayName} 对话`}>
+      <header className={css.columnHeader}>
+        <div className={css.columnIdentity}>
+          <span className={css.memberAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
+          <div>
+            <strong>{member.displayName} {member.role === 'leader' && <span className={css.leaderCrown}>♛</span>}</strong>
+            <span>{member.assistantSnapshot.provider} / {member.assistantSnapshot.model}</span>
+          </div>
+        </div>
+        <span className={css.columnStatus}>{statusLabel(conversation?.status ?? member.lastRuntimeState)}</span>
+      </header>
+      <div
+        className={css.timeline}
+        ref={timelineRef}
+        onScroll={event => {
+          const timeline = event.currentTarget
+          stickToBottom.current = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 80
+        }}
+      >
+        {visibleNodes.length === 0
+          ? <div className={css.columnEmpty}>
+            <span className={css.emptyAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
+            <strong>{member.displayName}</strong>
+            <span>{member.role === 'leader' ? '向 Leader 描述目标，由它组织团队协作。' : '等待 Leader 分配任务，或直接向该成员发送消息。'}</span>
+          </div>
+          : visibleNodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
+      </div>
+      <form className={css.composer} onSubmit={(event) => { void send(event) }}>
+        <textarea
+          value={content}
+          onChange={event => { setContent(event.target.value) }}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              event.currentTarget.form?.requestSubmit()
+            }
+          }}
+          disabled={!canChat}
+          placeholder={!canChat ? '当前不可直接对话' : `发送消息到 ${member.displayName}…`}
+          rows={2}
+        />
+        <div className={css.composerFooter}>
+          <select
+            className={css.permissionSelect}
+            aria-label={`${member.displayName} 权限`}
+            value={permissionPresetId}
+            disabled={changingPermission || permissionPresets.length === 0}
+            onChange={event => { void changePermission(event.target.value) }}
+          >
+            {permissionPresets.map(permission => (
+              <option key={permission.value} value={permission.value}>
+                权限 · {PERMISSION_LABELS[permission.value] ?? permission.name}
+              </option>
+            ))}
+          </select>
+          <div className={css.composerActions}>
+            {running && (
+              <Tooltip label={stopping ? '停止中…' : '停止生成'} side="top" delayMs={400}>
+                <button
+                  type="button"
+                  className={css.composerIconButton}
+                  disabled={stopping}
+                  aria-label={stopping ? '停止中' : '停止生成'}
+                  onClick={() => { void stop() }}
+                >
+                  <IconStopFill16 size={16} />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip label={sending ? '发送中…' : '发送消息'} side="top" delayMs={400}>
+              <button
+                type="submit"
+                className={css.composerIconButton}
+                disabled={!canChat || sending || !content.trim()}
+                aria-label={sending ? '发送中' : '发送消息'}
+              >
+                <IconSendOutline16 size={16} />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+        {error && <span className={css.composerError}>{error}</span>}
+      </form>
+    </section>
+  )
+}
+
+function ConversationNodeView({ node }: { node: ConversationNode }): JSX.Element {
+  if (node.kind === 'tool') return <ToolCard node={node} />
+  if (node.kind === 'notice') return <div className={`${css.noticeNode} ${node.tone === 'error' ? css.noticeError : ''}`}>{node.text}</div>
+  return (
+    <article className={`${css.messageNode} ${node.kind === 'user' ? css.userMessage : css.assistantMessage}`}>
+      {node.reasoning && (
+        <details className={css.reasoningBlock}>
+          <summary>思考过程</summary>
+          <pre>{node.reasoning}</pre>
+        </details>
+      )}
+      {node.text && (
+        <div className={css.messageText}>
+          {node.kind === 'assistant'
+            ? <MarkdownText text={node.text} streaming={node.streaming === true} />
+            : <MessageText text={node.text} />}
+        </div>
+      )}
+      {node.streaming && <span className={css.streamingMark}>生成中…</span>}
+    </article>
+  )
+}
+
+function ToolCard({ node }: { node: Extract<ConversationNode, { kind: 'tool' }> }): JSX.Element {
+  const status = node.status === 'running' ? '执行中' : node.status === 'success' ? '已完成' : '失败'
+  return (
+    <details className={`${css.toolCard} ${node.status === 'error' ? css.toolCardError : ''}`} open={node.status !== 'success'}>
+      <summary>
+        <span className={css.toolIcon}>⌘</span>
+        <strong>{node.name}</strong>
+        <span>{status}</span>
+      </summary>
+      {node.arguments && <div className={css.toolSection}><span>参数</span><pre>{prettyJson(node.arguments)}</pre></div>}
+      {node.result && <div className={css.toolSection}><span>结果</span><pre>{node.result}</pre></div>}
+      {node.error && <div className={css.toolError}>{node.error}</div>}
+    </details>
+  )
+}
+
+function WorkspacePanel({ team }: { team: TeamView }): JSX.Element {
+  const [entries, setEntries] = useState<WorkspaceEntryView[]>([])
+  const [error, setError] = useState<string>()
+  useEffect(() => {
+    void callAgentTeam<WorkspaceEntryView[]>('team.workspace.list', { teamId: team.id })
+      .then(setEntries)
+      .catch(cause => { setError(cause instanceof Error ? cause.message : String(cause)) })
+  }, [team.id])
+  return (
+    <aside className={css.workspacePanel}>
+      <div className={css.workspaceHeader}>
+        <div><strong>Workspace</strong><span>{team.workspacePath}</span></div>
+        <span>{entries.length}</span>
+      </div>
+      <div className={css.fileTree}>
+        {entries.map(entry => <WorkspaceTreeRow key={entry.path} teamId={team.id} entry={entry} depth={0} />)}
+        {entries.length === 0 && !error && <span className={css.fileEmpty}>目录为空</span>}
+        {error && <span className={css.fileError}>{error}</span>}
+      </div>
+      <div className={css.workspaceTasks}>
+        <strong>任务板</strong>
+        {Object.values(team.tasks).slice(0, 8).map(task => (
+          <div key={task.id}><span>{task.title}</span><em>{TASK_STATE_LABELS[task.status] ?? task.status}</em></div>
+        ))}
+        {Object.keys(team.tasks).length === 0 && <span className={css.fileEmpty}>暂无任务</span>}
+      </div>
+    </aside>
+  )
+}
+
+function WorkspaceTreeRow({ teamId, entry, depth }: { teamId: string; entry: WorkspaceEntryView; depth: number }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [children, setChildren] = useState<WorkspaceEntryView[]>()
+  async function toggle(): Promise<void> {
+    if (entry.kind !== 'directory') return
+    const next = !open
+    setOpen(next)
+    if (next && children === undefined) {
+      try {
+        setChildren(await callAgentTeam<WorkspaceEntryView[]>('team.workspace.list', { teamId, path: entry.path }))
+      } catch {
+        setChildren([])
+      }
+    }
+  }
+  return (
+    <div>
+      <button type="button" className={css.fileRow} style={{ paddingLeft: 8 + depth * 14 }} onClick={() => { void toggle() }}>
+        <span>{entry.kind === 'directory' ? open ? '▾' : '▸' : entry.kind === 'symlink' ? '↗' : '·'}</span>
+        <span>{entry.kind === 'directory' ? '📁' : '▧'}</span>
+        <span>{entry.name}</span>
+      </button>
+      {open && children?.map(child => <WorkspaceTreeRow key={child.path} teamId={teamId} entry={child} depth={depth + 1} />)}
+    </div>
+  )
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    offline: '离线', starting: '启动中', idle: '空闲', running: '运行中',
+    waiting_approval: '等待审批', error: '异常', paused: '已暂停',
+  }
+  return labels[status] ?? status
+}
+
+function prettyJson(value: string): string {
+  try { return JSON.stringify(JSON.parse(value), null, 2) } catch { return value }
+}
+
+function TeamCard({
+  team,
+  assistants,
+  onChanged,
+  compact = false,
+}: {
+  team: TeamView
+  assistants: AssistantView[]
+  onChanged: () => Promise<void>
+  compact?: boolean
+}): JSX.Element {
+  const [content, setContent] = useState('')
+  const [targetSlotId, setTargetSlotId] = useState(team.leaderSlotId)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+  const members = Object.values(team.members)
+  const tasks = Object.values(team.tasks)
+
+  async function action(method: 'team.start' | 'team.pause' | 'team.resume'): Promise<void> {
+    setBusy(true)
+    try {
+      await callAgentTeam(method, { id: team.id }, team.revision)
+      setError(undefined)
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function send(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    setBusy(true)
+    try {
+      await callAgentTeam('team.message.send', { teamId: team.id, targetSlotId, content })
+      setContent('')
+      setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function dissolve(): Promise<void> {
+    const confirmation = window.prompt(`永久解散团队“${team.name}”。请输入完整团队名称确认：`)
+    if (confirmation === null) return
+    setBusy(true)
+    try {
+      await callAgentTeam('team.dissolve', { teamId: team.id, confirmation })
+      setError(undefined)
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function resetTeam(): Promise<void> {
+    const confirmation = window.prompt(
+      `这会停止所有成员、清空任务板，并为每名成员创建全新的会话上下文。Workspace 文件不会回滚；旧 Session 日志仍由 Harness 保留，但团队不会继续使用。\n\n请输入团队名称“${team.name}”确认：`,
+    )
+    if (confirmation === null) return
+    setBusy(true)
+    try {
+      await callAgentTeam('team.reset', { teamId: team.id, confirmation }, team.revision)
+      setError(undefined)
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function addMember(assistantId: string): Promise<void> {
+    const assistant = assistants.find(candidate => candidate.id === assistantId)
+    if (assistant === undefined) return
+    const displayName = window.prompt('新成员在团队中的显示名称：', `${assistant.name} Member`)
+    if (displayName === null) return
+    setBusy(true)
+    try {
+      await callAgentTeam('team.addMember', {
+        teamId: team.id,
+        value: { assistantId: assistant.id, displayName },
+      }, team.revision)
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeMember(slotId: string, displayName: string): Promise<void> {
+    if (!window.confirm(`移出成员“${displayName}”？助手模板和 Session 历史都会保留。`)) return
+    setBusy(true)
+    try {
+      await callAgentTeam('team.removeMember', { teamId: team.id, slotId }, team.revision)
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function changeLeader(successorSlotId: string): Promise<void> {
+    if (successorSlotId === team.leaderSlotId) return
+    setBusy(true)
+    try {
+      await callAgentTeam('team.changeLeader', {
+        teamId: team.id,
+        successorSlotId,
+      }, team.revision)
+      await onChanged()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <article className={`${css.card} ${compact ? css.managementCard : ''}`}>
+      <header className={css.teamCardHeader}>
+        <div className={css.teamCardIdentity}>
+          <strong className={css.teamCardName}>{team.name}</strong>
+          <span className={css.teamCardWorkspace}>{team.workspacePath}</span>
+        </div>
+        <span className={`${css.badge} ${teamStateBadgeClass(team.state)}`}>{teamStateLabel(team.state)}</span>
+      </header>
+
+      <section className={css.teamMemberSection} aria-label="团队成员">
+        <div className={css.teamSectionHeader}>
+          <strong>团队成员</strong>
+          <span>{members.length} 人</span>
+        </div>
+        <div className={css.memberGrid}>
+          {members.map(member => (
+            <div key={member.id} className={`${css.memberTile} ${member.role === 'leader' ? css.memberTileLeader : ''}`}>
+              <span className={css.memberTileAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
+              <span className={css.memberTileCopy}>
+                <span className={css.memberTileName} title={member.displayName}>{member.displayName}</span>
+                <span className={css.memberRuntime}>
+                  <span className={`${css.statusDot} ${member.lastRuntimeState === 'running' ? css.statusRunning : css.statusIdle}`} />
+                  {statusLabel(member.lastRuntimeState)}
+                </span>
+              </span>
+              <span className={css.memberTileActions}>
+                <span className={css.memberRole}>{member.role === 'leader' ? 'Leader' : '成员'}</span>
+                {member.id !== team.leaderSlotId && (
+                  <button type="button" className={css.memberRemoveButton} disabled={busy} onClick={() => { void removeMember(member.id, member.displayName) }}>移出</button>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+      {tasks.length > 0 && (
+        <div className={css.taskList}>
+          <strong className={css.taskTitle}>任务板</strong>
+          {tasks.map(task => (
+            <div key={task.id} className={css.memberRow}>
+              <span>{task.title}</span>
+              <span className={css.muted}>{TASK_STATE_LABELS[task.status] ?? task.status}{task.ownerSlotId ? ` · ${team.members[task.ownerSlotId]?.displayName ?? '已移除成员'}` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className={css.teamRuntimeActions}>
+        {team.state === 'draft' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.start') }}>{busy ? '启动中…' : '启动团队'}</button>}
+        {team.state === 'active' && <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void action('team.pause') }}>暂停</button>}
+        {team.state === 'paused' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.resume') }}>{busy ? '恢复中…' : '继续运行'}</button>}
+        {team.state === 'error' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.resume') }}>{busy ? '重试中…' : '重试启动'}</button>}
+        {team.state === 'draft' && <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void dissolve() }}>解散</button>}
+      </div>
+      <div className={css.managementTools}>
+        <div className={css.managementTool}>
+          <div className={css.managementListHeader}>
+            <span className={css.managementToolLabel}>更改 Leader</span>
+            <span>{members.length} 名成员</span>
+          </div>
+          <div className={css.managementChoiceList} aria-label="选择新的 Leader">
+            {members.map(member => {
+              const isLeader = member.id === team.leaderSlotId
+              return (
+                <div key={member.id} className={`${css.managementChoiceRow} ${isLeader ? css.managementChoiceRowActive : ''}`}>
+                  <span className={css.managementChoiceAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
+                  <span className={css.managementChoiceCopy}>
+                    <strong title={member.displayName}>{member.displayName}</strong>
+                    <span>{statusLabel(member.lastRuntimeState)}</span>
+                  </span>
+                  {isLeader
+                    ? <span className={css.currentLeaderLabel}>当前 Leader</span>
+                    : <button type="button" className={css.managementRowAction} disabled={busy} onClick={() => { void changeLeader(member.id) }}>
+                      设为 Leader
+                    </button>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        <div className={css.managementTool}>
+          <div className={css.managementListHeader}>
+            <span className={css.managementToolLabel}>添加成员</span>
+            <span>{assistants.length} 个助手</span>
+          </div>
+          <div className={css.managementChoiceList} aria-label="可添加的助手">
+            {assistants.length === 0
+              ? <span className={css.managementListEmpty}>助手库为空</span>
+              : assistants.map(assistant => (
+                <div key={assistant.id} className={css.managementChoiceRow}>
+                  <span className={css.managementChoiceAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
+                  <span className={css.managementChoiceCopy}>
+                    <strong title={assistant.name}>{assistant.name}</strong>
+                    <span title={`${assistant.provider} / ${assistant.model}`}>{assistant.provider} / {assistant.model}</span>
+                  </span>
+                  <button type="button" className={css.managementRowAction} disabled={busy} onClick={() => { void addMember(assistant.id) }}>
+                    添加
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+      {team.state === 'active' && !compact && (
+        <form onSubmit={(event) => { void send(event) }} className={css.messageForm}>
+          <select value={targetSlotId} onChange={event => { setTargetSlotId(event.target.value) }} className={css.compactInput}>
+            {members
+              .filter(member => member.role === 'leader' || team.directMemberChat)
+              .map(member => <option key={member.id} value={member.id}>{member.displayName}（{member.role === 'leader' ? '负责人' : '成员'}）</option>)}
+          </select>
+          <input required value={content} onChange={event => { setContent(event.target.value) }} placeholder="发送任务或消息" className={css.compactInput} />
+          <button type="submit" className={css.primaryButton} disabled={busy}>发送</button>
+        </form>
+      )}
+      <div className={css.contextResetPanel}>
+        <div className={css.contextResetCopy}>
+          <strong>清空任务与上下文</strong>
+          <span>停止所有成员并清空任务板，为每位成员换用全新 Session。Workspace 文件和团队配置不变。</span>
+        </div>
+        <button type="button" className={css.dangerButton} disabled={busy} onClick={() => { void resetTeam() }}>
+          {busy ? '处理中…' : '清空'}
+        </button>
+      </div>
+      {team.state !== 'draft' && <span className={css.warning}>当前 Harness 无公开 Session 删除 API，已启动团队暂不能永久解散。</span>}
+      {error && <div role="alert" className={css.inlineError}>{error}</div>}
+    </article>
+  )
+}
+
+interface DraftMember {
+  key: string
+  assistantId: string
+  displayName: string
+}
+
+function TeamForm({
+  catalog,
+  assistants,
+  pickWorkspace,
+  onCancel,
+  onCreated,
+}: {
+  catalog: CatalogView | undefined
+  assistants: AssistantView[]
+  pickWorkspace: () => Promise<WorkspaceChoice | null>
+  onCancel: () => void
+  onCreated: () => Promise<void>
+}): JSX.Element {
+  const catalogWorkspaces = catalog?.workspaces.filter(workspace => workspace.status === 'ok') ?? []
+  const [name, setName] = useState('')
+  const [workspaceId, setWorkspaceId] = useState(catalogWorkspaces[0]?.id ?? '')
+  const [pickedWorkspace, setPickedWorkspace] = useState<WorkspaceChoice>()
+  const [query, setQuery] = useState('')
+  const [members, setMembers] = useState<DraftMember[]>([])
+  const [leaderKey, setLeaderKey] = useState<string>()
+  const [directMemberChat, setDirectMemberChat] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [pickingWorkspace, setPickingWorkspace] = useState(false)
+  const [error, setError] = useState<string>()
+  const workspaces = useMemo(() => {
+    if (pickedWorkspace === undefined || catalogWorkspaces.some(workspace => workspace.id === pickedWorkspace.id)) {
+      return catalogWorkspaces
+    }
+    return [...catalogWorkspaces, { ...pickedWorkspace, status: 'ok' as const }]
+  }, [catalogWorkspaces, pickedWorkspace])
+  const byId = useMemo(() => new Map(assistants.map(assistant => [assistant.id, assistant])), [assistants])
+  const filteredAssistants = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase()
+    if (!normalized) return assistants
+    return assistants.filter(assistant => [assistant.name, assistant.description, assistant.provider, assistant.model]
+      .some(value => value?.toLocaleLowerCase().includes(normalized)))
+  }, [assistants, query])
+
+  useEffect(() => { if (!workspaceId && workspaces[0]) setWorkspaceId(workspaces[0].id) }, [workspaceId, workspaces])
+
+  async function chooseWorkspace(): Promise<void> {
+    setPickingWorkspace(true)
+    try {
+      const workspace = await pickWorkspace()
+      if (workspace === null) return
+      setPickedWorkspace(workspace)
+      setWorkspaceId(workspace.id)
+      setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setPickingWorkspace(false)
+    }
+  }
+
+  function addAssistant(assistant: AssistantView): void {
+    const existingNames = new Set(members.map(member => member.displayName.trim().toLocaleLowerCase()))
+    let displayName = assistant.name
+    let suffix = 2
+    while (existingNames.has(displayName.toLocaleLowerCase())) {
+      displayName = `${assistant.name} ${suffix++}`
+    }
+    const member: DraftMember = {
+      key: crypto.randomUUID(),
+      assistantId: assistant.id,
+      displayName,
+    }
+    setMembers(current => [...current, member])
+    setLeaderKey(current => current ?? member.key)
+  }
+
+  function removeMember(key: string): void {
+    const remaining = members.filter(member => member.key !== key)
+    setMembers(remaining)
+    if (leaderKey === key) setLeaderKey(remaining[0]?.key)
+  }
+
+  function renameMember(key: string, displayName: string): void {
+    setMembers(current => current.map(member => member.key === key ? { ...member, displayName } : member))
+  }
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    if (leaderKey === undefined || members.length === 0) return
+    setSaving(true)
+    try {
+      await callAgentTeam('team.createDraft', {
+        name,
+        workspaceId,
+        directMemberChat,
+        members: members.map(member => ({
+          assistantId: member.assistantId,
+          displayName: member.displayName.trim(),
+          role: member.key === leaderKey ? 'leader' : 'member',
+        })),
+      })
+      await onCreated()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const canSubmit = name.trim().length > 0
+    && workspaceId.length > 0
+    && leaderKey !== undefined
+    && members.length > 0
+    && members.every(member => member.displayName.trim().length > 0)
+
+  return (
+    <form onSubmit={(event) => { void submit(event) }} className={css.teamBuilderForm}>
+      <div className={css.teamBuilderGrid}>
+        <section className={css.assistantPicker}>
+          <div className={css.builderSectionHeading}>
+            <strong>所有助手 <span className={css.count}>{assistants.length}</span></strong>
+          </div>
+          <input
+            type="search"
+            value={query}
+            onChange={event => { setQuery(event.target.value) }}
+            placeholder="搜索助手、Provider 或模型"
+            aria-label="搜索助手"
+            className={css.builderSearch}
+          />
+          <div className={css.assistantPickList}>
+            {filteredAssistants.map(assistant => (
+              <div key={assistant.id} className={css.assistantPickRow}>
+                <div className={css.assistantPickAvatar} aria-hidden="true">
+                  {assistant.name.slice(0, 1).toLocaleUpperCase()}
+                </div>
+                <div className={css.assistantPickCopy}>
+                  <strong>{assistant.name}</strong>
+                  <span>{assistant.provider} / {assistant.model}</span>
+                </div>
+                <button
+                  type="button"
+                  className={css.assistantAddButton}
+                  onClick={() => { addAssistant(assistant) }}
+                  aria-label={`添加 ${assistant.name}`}
+                >
+                  <IconPlusOutline16 size={16} />
+                </button>
+              </div>
+            ))}
+            {filteredAssistants.length === 0 && <Empty text="没有匹配的助手" />}
+          </div>
+        </section>
+
+        <section className={css.selectedMembers}>
+          <div className={css.builderSectionHeading}>
+            <div>
+              <strong>已选成员 {members.length}</strong>
+              <p>选择团队成员并指定一个 Leader。同一助手可多次选择。</p>
+            </div>
+            <span className={css.leaderLegend}>Leader</span>
+          </div>
+          <div className={css.selectedMemberList}>
+            {members.length === 0
+              ? (
+                  <div className={css.memberEmpty}>
+                    <strong>至少选择一个助手当团队 Leader。</strong>
+                    <span>从左侧助手列表添加成员。</span>
+                  </div>
+                )
+              : members.map(member => {
+                  const assistant = byId.get(member.assistantId)
+                  const leader = member.key === leaderKey
+                  return (
+                    <div key={member.key} className={`${css.selectedMemberRow} ${leader ? css.selectedLeader : ''}`}>
+                      <div className={css.assistantPickAvatar} aria-hidden="true">
+                        {assistant?.name.slice(0, 1).toLocaleUpperCase() ?? '?'}
+                      </div>
+                      <div className={css.selectedMemberCopy}>
+                        <input
+                          required
+                          value={member.displayName}
+                          onChange={event => { renameMember(member.key, event.target.value) }}
+                          aria-label={`${assistant?.name ?? '助手'}的成员显示名`}
+                          className={css.memberNameInput}
+                        />
+                        <span>{assistant?.provider} / {assistant?.model}</span>
+                      </div>
+                      {leader
+                        ? <span className={css.leaderBadge}>Leader</span>
+                        : <button type="button" className={css.setLeaderButton} onClick={() => { setLeaderKey(member.key) }}>设为 Leader</button>}
+                      <button
+                        type="button"
+                        className={css.removeDraftMember}
+                        onClick={() => { removeMember(member.key) }}
+                        aria-label={`移除 ${member.displayName}`}
+                      >
+                        <IconCloseOutline16 size={14} />
+                      </button>
+                    </div>
+                  )
+                })}
+          </div>
+          <div className={css.teamFields}>
+            <Field label="团队名称">
+              <input required value={name} onChange={event => { setName(event.target.value) }} placeholder="输入团队名称" className={css.input} />
+            </Field>
+            <Field label="Workspace">
+              <div className={css.workspacePickerRow}>
+                <select required value={workspaceId} onChange={event => { setWorkspaceId(event.target.value) }} className={css.input}>
+                  <option value="">{workspaces.length === 0 ? '暂无 Workspace' : '请选择 Workspace'}</option>
+                  {workspaces.map(item => <option key={item.id} value={item.id}>{item.title} — {item.path}</option>)}
+                </select>
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={pickingWorkspace || saving}
+                  onClick={() => { void chooseWorkspace() }}
+                  className={css.workspacePickButton}
+                >
+                  <IconFolderOpenOutline16 size={16} />
+                  {pickingWorkspace ? '选择中…' : '选择文件夹'}
+                </Button>
+              </div>
+            </Field>
+            <label className={css.checkboxRow}>
+              <input type="checkbox" checked={directMemberChat} onChange={event => { setDirectMemberChat(event.target.checked) }} />
+              允许用户和普通成员直接通信
+            </label>
+          </div>
+        </section>
+      </div>
+      {error && <div role="alert" className={css.inlineError}>{error}</div>}
+      <div className={css.teamBuilderActions}>
+        <Button variant="outline" onClick={onCancel} disabled={saving}>取消</Button>
+        <Button variant="primary" type="submit" disabled={saving || !canSubmit}>
+          {saving ? '创建中…' : '确认创建'}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }): JSX.Element {
+  return <label className={`${css.field} ${className}`}><span className={css.label}>{label}</span>{children}</label>
+}
+
+function Empty({ text, hint }: { text: string; hint?: string }): JSX.Element {
+  return (
+    <div className={css.empty}>
+      <div className={css.emptyCopy}>
+        <span className={css.emptyTitle}>{text}</span>
+        {hint && <span className={css.emptyHint}>{hint}</span>}
+      </div>
+    </div>
+  )
+}
+
+function commaList(value: string): string[] {
+  return [...new Set(value.split(',').map(item => item.trim()).filter(Boolean))]
+}

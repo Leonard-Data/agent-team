@@ -1,0 +1,64 @@
+import type {} from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-permission-presets'
+import type {} from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-session-persistence'
+import type {} from '@deepseek-ai/dsh-skill'
+import type {} from '@deepseek-ai/dsh-storage-domain'
+import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-workspace'
+import type { Context } from '@deepseek-ai/cordis'
+import { Config, type Config as AgentTeamConfig } from './config.js'
+import { AgentTeamService } from './service/agent-team-service.js'
+import { TeamRuntime } from './runtime/team-runtime.js'
+import { agentTeamDomainSpec } from './storage/domain.js'
+import { DomainAgentTeamStore } from './storage/store.js'
+import { registerWebTransport } from './transport/web.js'
+
+export const name = 'agent-team'
+export const inject = [
+  'agents',
+  'agentPresets',
+  'llm',
+  'permissionPresets',
+  'sessionPersistence',
+  'sessions',
+  'skills',
+  'storageDomain',
+  'systemPrompt',
+  'tools',
+  'webServer',
+  'workspaceRegistry',
+]
+export { Config }
+
+export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void> {
+  const domain = await ctx.storageDomain.open(agentTeamDomainSpec)
+  let runtime: TeamRuntime | undefined
+  let transport: ReturnType<typeof registerWebTransport> | undefined
+  try {
+    const store = new DomainAgentTeamStore(domain)
+    const service = new AgentTeamService(ctx, config, store)
+    runtime = new TeamRuntime(ctx, config, service)
+    service.attachRuntime(runtime)
+    transport = registerWebTransport(ctx, config, service)
+    ctx.effect(() => async () => {
+      transport?.dispose()
+      await runtime?.dispose()
+      await domain.close()
+    }, 'agent-team: ordered shutdown')
+    await runtime.recoverTeams()
+  } catch (error) {
+    transport?.dispose()
+    await runtime?.dispose()
+    await domain.close()
+    throw error
+  }
+}
+
+export { AgentTeamError } from './domain/errors.js'
+export type * from './domain/types.js'
+export type { AgentTeamChange, CatalogSnapshot } from './service/agent-team-service.js'
