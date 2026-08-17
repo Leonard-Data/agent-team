@@ -39,6 +39,17 @@ describe('DomainAssistantBuilderModelPreferenceStore', () => {
       provider: 'zai',
       model: 'glm',
     })
-    expect(global.set).toHaveBeenCalledTimes(2)
+
+    await store.setLastSelectedModel('deepseek', 'reasoner')
+
+    expect(store.getLastSelectedModel()).toEqual({
+      provider: 'deepseek',
+      model: 'reasoner',
+    })
+    expect(store.getConversationModel('conversation-2')).toEqual({
+      provider: 'zai',
+      model: 'glm',
+    })
+    expect(global.set).toHaveBeenCalledTimes(3)
   })
 })

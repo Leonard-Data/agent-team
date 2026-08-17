@@ -12,11 +12,14 @@ export type AgentTeamMethod =
   | 'assistant.clone'
   | 'assistant.delete'
   | 'assistant.builder.list'
-  | 'assistant.builder.create'
+  | 'assistant.builder.draft.get'
+  | 'assistant.builder.draft.configure'
+  | 'assistant.builder.start'
   | 'assistant.builder.get'
   | 'assistant.builder.configure'
   | 'assistant.builder.send'
   | 'assistant.builder.stop'
+  | 'assistant.builder.archive'
   | 'team.list'
   | 'team.get'
   | 'team.createDraft'
@@ -104,6 +107,11 @@ export interface AssistantBuilderConversationSummary {
 export interface AssistantBuilderConversationListView {
   items: AssistantBuilderConversationSummary[]
   total: number
+}
+
+export interface AssistantBuilderDraftView {
+  schemaVersion: 1
+  configuration: AssistantBuilderConversationView['configuration']
 }
 
 export interface WorkspaceEntryView {

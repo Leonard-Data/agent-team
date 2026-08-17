@@ -41,9 +41,22 @@ describe('AgentTeamService', () => {
         permissionPresetId: 'workspace-write',
       },
     }
+    const draft = {
+      schemaVersion: 1 as const,
+      configuration: conversation.configuration,
+    }
     const builder = {
       listConversations: vi.fn(async () => ({ items: [], total: 0 })),
-      createConversation: vi.fn(async () => conversation),
+      getDraft: vi.fn(async () => draft),
+      configureDraft: vi.fn(async () => ({
+        ...draft,
+        configuration: {
+          ...draft.configuration,
+          provider: 'another-provider',
+          model: 'another-model',
+        },
+      })),
+      startConversation: vi.fn(async () => conversation),
       getConversation: vi.fn(async () => conversation),
       configure: vi.fn(async () => ({
         ...conversation,
@@ -55,21 +68,34 @@ describe('AgentTeamService', () => {
       })),
       sendMessage: vi.fn(async () => ({ messageId: 'message-1' })),
       stop: vi.fn(async () => {}),
+      archiveConversation: vi.fn(async () => {}),
     }
     service.attachAssistantBuilderRuntime(builder as never)
 
     await expect(service.listAssistantBuilderConversations()).resolves.toEqual({ items: [], total: 0 })
-    await expect(service.createAssistantBuilderConversation()).resolves.toEqual(conversation)
+    await expect(service.getAssistantBuilderDraft()).resolves.toEqual(draft)
+    await expect(service.configureAssistantBuilderDraft('another-provider', 'another-model')).resolves.toMatchObject({
+      configuration: { provider: 'another-provider', model: 'another-model' },
+    })
+    await expect(service.startAssistantBuilderConversation(
+      'test-provider',
+      'test-model',
+      'Create a reviewer',
+    )).resolves.toEqual(conversation)
     await expect(service.getAssistantBuilderConversation(conversation.sessionId)).resolves.toEqual(conversation)
     await expect(service.configureAssistantBuilder(conversation.sessionId, 'another-provider', 'another-model')).resolves.toMatchObject({
       configuration: { provider: 'another-provider', model: 'another-model' },
     })
     await expect(service.sendAssistantBuilderMessage(conversation.sessionId, 'Create a reviewer')).resolves.toEqual({ messageId: 'message-1' })
     await service.stopAssistantBuilder(conversation.sessionId)
+    await service.archiveAssistantBuilderConversation(conversation.sessionId)
 
     expect(builder.sendMessage).toHaveBeenCalledWith(conversation.sessionId, 'Create a reviewer')
+    expect(builder.startConversation).toHaveBeenCalledWith('test-provider', 'test-model', 'Create a reviewer')
+    expect(builder.configureDraft).toHaveBeenCalledWith('another-provider', 'another-model')
     expect(builder.configure).toHaveBeenCalledWith(conversation.sessionId, 'another-provider', 'another-model')
     expect(builder.stop).toHaveBeenCalledWith(conversation.sessionId)
+    expect(builder.archiveConversation).toHaveBeenCalledWith(conversation.sessionId)
     expect(store.listAssistants()).toHaveLength(0)
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_get_catalog')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_prepare')

@@ -11,6 +11,9 @@ const assistantBuilderPreferencesSchema = z.object({
   schemaVersion: z.literal(1),
   lastSelectedModel: modelReferenceSchema.optional(),
   conversationModels: z.record(z.string(), modelReferenceSchema),
+  // Compatibility with local development snapshots written before Assistant
+  // Builder history switched to the official Workspace archive registry.
+  hiddenConversationIds: z.record(z.string(), z.iso.datetime({ offset: true })).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
 }).strict()
 
@@ -34,6 +37,7 @@ export interface AssistantBuilderModelPreferenceStore {
     provider: string,
     model: string,
   ): Promise<void>
+  setLastSelectedModel(provider: string, model: string): Promise<void>
 }
 
 export const assistantBuilderPreferencesDomainSpec = defineDomain({
@@ -78,7 +82,7 @@ export class DomainAssistantBuilderModelPreferenceStore implements AssistantBuil
     const current = this.domain.global.get()
     const selected = { provider, model }
     await this.domain.global.set({
-      schemaVersion: 1,
+      ...current,
       lastSelectedModel: selected,
       conversationModels: {
         ...current.conversationModels,
@@ -87,4 +91,14 @@ export class DomainAssistantBuilderModelPreferenceStore implements AssistantBuil
       updatedAt: new Date().toISOString(),
     })
   }
+
+  async setLastSelectedModel(provider: string, model: string): Promise<void> {
+    const current = this.domain.global.get()
+    await this.domain.global.set({
+      ...current,
+      lastSelectedModel: { provider, model },
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
 }

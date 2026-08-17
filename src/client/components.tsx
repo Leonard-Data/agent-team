@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Button, IconAgentPresetOutline16, IconCloseOutline16, IconFolderOpenOutline16, IconPlusOutline16,
+  Button, IconAgentPresetOutline16, IconArchiveOutline20, IconCloseOutline16, IconFolderOpenOutline16, IconPlusOutline16,
   IconSendOutline16, IconStopFill16, MarkdownText, MessageText, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -18,6 +18,7 @@ import type {
   AssistantBuilderConversationListView,
   AssistantBuilderConversationSummary,
   AssistantBuilderConversationView,
+  AssistantBuilderDraftView,
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
@@ -495,31 +496,54 @@ function AssistantPanel({
 
 function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | undefined }): JSX.Element {
   const [conversation, setConversation] = useState<AssistantBuilderConversationView>()
+  const [draft, setDraft] = useState<AssistantBuilderDraftView>()
   const [history, setHistory] = useState<AssistantBuilderConversationSummary[]>([])
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [applyingModel, setApplyingModel] = useState(false)
+  const [archivingSessionId, setArchivingSessionId] = useState<string>()
+  const [archiveCandidate, setArchiveCandidate] = useState<AssistantBuilderConversationSummary>()
+  const [archiveError, setArchiveError] = useState<string>()
   const [selectedProvider, setSelectedProvider] = useState('')
   const [selectedModel, setSelectedModel] = useState('')
   const [modelSelectionDirty, setModelSelectionDirty] = useState(false)
   const [error, setError] = useState<string>()
   const timeline = useRef<HTMLDivElement>(null)
+  const drafting = useRef(false)
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (): Promise<AssistantBuilderConversationListView> => {
     const next = await callAgentTeam<AssistantBuilderConversationListView>('assistant.builder.list')
     setHistory(next.items)
+    return next
   }, [])
 
   const load = useCallback(async (sessionId?: string) => {
     try {
-      const next = await callAgentTeam<AssistantBuilderConversationView>(
-        'assistant.builder.get',
-        sessionId === undefined ? {} : { sessionId },
-      )
-      setConversation(next)
+      if (sessionId !== undefined) {
+        const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.get', { sessionId })
+        setConversation(next)
+        setDraft(undefined)
+        drafting.current = false
+        await loadHistory()
+      } else {
+        const nextHistory = await loadHistory()
+        const latest = nextHistory.items[0]
+        if (latest !== undefined) {
+          const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.get', {
+            sessionId: latest.sessionId,
+          })
+          setConversation(next)
+          setDraft(undefined)
+          drafting.current = false
+        } else {
+          const next = await callAgentTeam<AssistantBuilderDraftView>('assistant.builder.draft.get')
+          setConversation(undefined)
+          setDraft(next)
+          drafting.current = true
+        }
+      }
       setModelSelectionDirty(false)
-      await loadHistory()
       setError(undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -538,21 +562,24 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           return next
         })
       }
+      else if (drafting.current) void loadHistory()
       else void load()
       setError(undefined)
     }, () => {
       setError('实时连接已断开，正在等待重连')
     }, () => {
       setError(undefined)
-      void load()
+      if (drafting.current) void loadHistory()
+      else void load()
     })
   }, [load, loadHistory])
 
   useEffect(() => {
-    if (conversation === undefined || modelSelectionDirty) return
-    setSelectedProvider(conversation.configuration.provider)
-    setSelectedModel(conversation.configuration.model)
-  }, [conversation, modelSelectionDirty])
+    const configuration = conversation?.configuration ?? draft?.configuration
+    if (configuration === undefined || modelSelectionDirty) return
+    setSelectedProvider(configuration.provider)
+    setSelectedModel(configuration.model)
+  }, [conversation, draft, modelSelectionDirty])
 
   useEffect(() => {
     const element = timeline.current
@@ -562,13 +589,32 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
 
   async function send(): Promise<void> {
     const message = content.trim()
-    if (message.length === 0 || sending || conversation === undefined || conversation.status === 'running') return
+    if (
+      message.length === 0
+      || !selectedProvider
+      || !selectedModel
+      || sending
+      || (conversation === undefined && draft === undefined)
+      || conversation?.status === 'running'
+    ) return
     setSending(true)
     try {
-      await callAgentTeam('assistant.builder.send', {
-        sessionId: conversation.sessionId,
-        content: message,
-      })
+      if (conversation === undefined) {
+        const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.start', {
+          provider: selectedProvider,
+          model: selectedModel,
+          content: message,
+        })
+        setConversation(next)
+        setDraft(undefined)
+        drafting.current = false
+        setModelSelectionDirty(false)
+      } else {
+        await callAgentTeam('assistant.builder.send', {
+          sessionId: conversation.sessionId,
+          content: message,
+        })
+      }
       setContent('')
       await loadHistory()
       setError(undefined)
@@ -590,15 +636,23 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
   }
 
   async function applyModel(): Promise<void> {
-    if (!selectedProvider || !selectedModel || applyingModel || conversation === undefined || conversation.status === 'running') return
+    if (!selectedProvider || !selectedModel || applyingModel || (conversation === undefined && draft === undefined) || conversation?.status === 'running') return
     setApplyingModel(true)
     try {
-      const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.configure', {
-        sessionId: conversation.sessionId,
-        provider: selectedProvider,
-        model: selectedModel,
-      })
-      setConversation(next)
+      if (conversation === undefined) {
+        const next = await callAgentTeam<AssistantBuilderDraftView>('assistant.builder.draft.configure', {
+          provider: selectedProvider,
+          model: selectedModel,
+        })
+        setDraft(next)
+      } else {
+        const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.configure', {
+          sessionId: conversation.sessionId,
+          provider: selectedProvider,
+          model: selectedModel,
+        })
+        setConversation(next)
+      }
       setModelSelectionDirty(false)
       setError(undefined)
     } catch (cause) {
@@ -608,15 +662,16 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
     }
   }
 
-  async function createConversation(): Promise<void> {
-    if (running || loading) return
+  async function createDraft(): Promise<void> {
+    if (running || loading || draft !== undefined) return
     setLoading(true)
     try {
-      const next = await callAgentTeam<AssistantBuilderConversationView>('assistant.builder.create')
-      setConversation(next)
+      const next = await callAgentTeam<AssistantBuilderDraftView>('assistant.builder.draft.get')
+      setConversation(undefined)
+      setDraft(next)
+      drafting.current = true
       setContent('')
       setModelSelectionDirty(false)
-      await loadHistory()
       setError(undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -629,43 +684,87 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
     if (running || loading || sessionId === conversation?.sessionId) return
     setLoading(true)
     setContent('')
+    setDraft(undefined)
+    drafting.current = false
     await load(sessionId)
+  }
+
+  async function archiveConversation(): Promise<void> {
+    const item = archiveCandidate
+    if (item === undefined || loading || archivingSessionId !== undefined) return
+    setArchivingSessionId(item.sessionId)
+    setArchiveError(undefined)
+    try {
+      await callAgentTeam('assistant.builder.archive', { sessionId: item.sessionId })
+      setContent('')
+      if (item.sessionId === conversation?.sessionId) {
+        setConversation(undefined)
+        setLoading(true)
+        await load()
+      } else {
+        await loadHistory()
+      }
+      setArchiveCandidate(undefined)
+      setError(undefined)
+    } catch (cause) {
+      setArchiveError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setArchivingSessionId(undefined)
+      setLoading(false)
+    }
   }
 
   const running = conversation?.status === 'running'
   const providers = catalog?.providers ?? []
   const models = catalog?.models[selectedProvider] ?? []
-  const modelChanged = conversation !== undefined && (
-    selectedProvider !== conversation.configuration.provider
-    || selectedModel !== conversation.configuration.model
+  const appliedConfiguration = conversation?.configuration ?? draft?.configuration
+  const modelChanged = appliedConfiguration !== undefined && (
+    selectedProvider !== appliedConfiguration.provider
+    || selectedModel !== appliedConfiguration.model
   )
   return (
-    <section className={css.assistantBuilderConversation}>
+    <>
+      <section className={css.assistantBuilderConversation}>
       <aside className={css.assistantBuilderHistory}>
         <button
           type="button"
           className={css.assistantBuilderNewConversation}
-          disabled={loading || running}
-          onClick={() => { void createConversation() }}
+          disabled={loading || running || draft !== undefined}
+          onClick={() => { void createDraft() }}
         >
           <IconPlusOutline16 size={14} />
           <span>新对话</span>
         </button>
         <div className={css.assistantBuilderHistoryList}>
           {history.map(item => (
-            <button
-              type="button"
-              key={item.sessionId}
-              className={`${css.assistantBuilderHistoryItem} ${item.sessionId === conversation?.sessionId ? css.assistantBuilderHistoryItemActive : ''}`}
-              disabled={loading || running}
-              onClick={() => { void selectConversation(item.sessionId) }}
-            >
-              <strong>{item.title}</strong>
-              <span>
-                <time dateTime={item.updatedAt}>{formatConversationTime(item.updatedAt)}</time>
-                <em>{assistantBuilderStateLabel(item.state)}</em>
-              </span>
-            </button>
+            <div key={item.sessionId} className={css.assistantBuilderHistoryRow}>
+              <button
+                type="button"
+                className={`${css.assistantBuilderHistoryItem} ${item.sessionId === conversation?.sessionId ? css.assistantBuilderHistoryItemActive : ''}`}
+                disabled={loading || running || archivingSessionId !== undefined}
+                onClick={() => { void selectConversation(item.sessionId) }}
+              >
+                <strong>{item.title}</strong>
+                <span>
+                  <time dateTime={item.updatedAt}>{formatConversationTime(item.updatedAt)}</time>
+                  <em>{assistantBuilderStateLabel(item.state)}</em>
+                </span>
+              </button>
+              <Tooltip label="归档会话" side="right" delayMs={400}>
+                <button
+                  type="button"
+                  className={css.assistantBuilderHistoryArchive}
+                  aria-label={`归档会话 ${item.title}`}
+                  disabled={loading || archivingSessionId !== undefined || (running && item.sessionId === conversation?.sessionId)}
+                  onClick={() => {
+                    setArchiveError(undefined)
+                    setArchiveCandidate(item)
+                  }}
+                >
+                  <IconArchiveOutline20 size={14} />
+                </button>
+              </Tooltip>
+            </div>
           ))}
           {!loading && history.length === 0 && <span className={css.assistantBuilderHistoryEmpty}>暂无历史对话</span>}
         </div>
@@ -716,7 +815,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         </div>
         </div>
         <div ref={timeline} className={`${css.timeline} ${css.assistantBuilderTimeline}`}>
-        {!loading && conversation?.nodes.length === 0 && (
+        {!loading && (draft !== undefined || conversation?.nodes.length === 0) && (
           <article className={`${css.messageNode} ${css.assistantMessage}`}>
             <div className={css.messageText}>
               <MarkdownText text="你好，我是团队 Agent 小助手。告诉我你想创建什么样的助手，以及它主要负责什么；缺少的配置我会逐项询问你。" />
@@ -755,7 +854,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
               <button
                 type="submit"
                 className={css.composerIconButton}
-                disabled={loading || running || sending || content.trim().length === 0}
+                disabled={loading || running || sending || !selectedProvider || !selectedModel || content.trim().length === 0}
                 aria-label={sending ? '发送中' : '发送消息'}
               >
                 <IconSendOutline16 size={16} />
@@ -766,7 +865,55 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         {error && <span className={css.composerError}>{error}</span>}
         </form>
       </div>
-    </section>
+      </section>
+      <Modal
+        open={archiveCandidate !== undefined}
+        onClose={() => {
+          if (archivingSessionId === undefined) {
+            setArchiveCandidate(undefined)
+            setArchiveError(undefined)
+          }
+        }}
+        title="归档会话"
+        closeLabel="关闭"
+        description="归档后，该会话将不再显示在团队 Agent 小助手的历史记录中。"
+        className={css.assistantBuilderArchiveDialog ?? ''}
+        footer={(
+          <>
+            <Button
+              variant="outline"
+              disabled={archivingSessionId !== undefined}
+              onClick={() => {
+                setArchiveCandidate(undefined)
+                setArchiveError(undefined)
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              disabled={archiveCandidate === undefined || archivingSessionId !== undefined}
+              onClick={() => { void archiveConversation() }}
+            >
+              {archivingSessionId !== undefined ? '归档中…' : '确认归档'}
+            </Button>
+          </>
+        )}
+      >
+        {archiveCandidate !== undefined && (
+          <div className={css.assistantBuilderArchiveConfirm}>
+            <div className={css.assistantBuilderArchiveIcon} aria-hidden="true">
+              <IconArchiveOutline20 size={20} />
+            </div>
+            <div>
+              <strong>{archiveCandidate.title}</strong>
+              <p>会话内容不会被删除，底层 Session 日志仍由 Harness 保留。</p>
+            </div>
+            {archiveError && <div role="alert" className={css.inlineError}>{archiveError}</div>}
+          </div>
+        )}
+      </Modal>
+    </>
   )
 }
 

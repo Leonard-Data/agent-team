@@ -154,6 +154,48 @@ describe('Agent Team client requests', () => {
     })
   })
 
+  it('starts an Assistant Builder Session only with the first draft message', async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { sessionId: 'conversation-1' } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('assistant.builder.start', {
+      provider: 'deepseek',
+      model: 'reasoner',
+      content: 'Create a reviewer',
+    })
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'assistant.builder.start',
+      payload: {
+        provider: 'deepseek',
+        model: 'reasoner',
+        content: 'Create a reviewer',
+      },
+    })
+  })
+
+  it('requests archival of one Assistant Builder conversation', async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { archived: true } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('assistant.builder.archive', {
+      sessionId: 'agent-team:assistant-builder:conversation-1',
+    })
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'assistant.builder.archive',
+      payload: { sessionId: 'agent-team:assistant-builder:conversation-1' },
+    })
+  })
+
   it('sends the current revision when updating an assistant', async () => {
     const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
       json: async () => ({ requestId: 'request-1', ok: true, value: { id: 'assistant-1' } }),

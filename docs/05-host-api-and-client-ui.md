@@ -50,7 +50,7 @@ type AgentTeamRequest = {
 
 客户端界面直接使用 `@deepseek-ai/dsh-client-ui-primitives` 的 `Modal`、`Button`，组件样式集中在 CSS Module，并且颜色只引用 Harness 的 `--dsw-alias-*` 语义 Tokens。插件不定义独立明暗色板，主题变化由 Harness 自动传递。助手库保持纯列表布局；点击“新建助手”后，在主面板之上打开独立标准弹窗，宽屏为两列表单，窄屏自动切换为单列。
 | `assistant.list/get` | Agent Team Domain |
-| `assistant.builder.list/create/get` | 列出历史、新建对话，或返回指定内置助手 Session 的 Conversation 投影 |
+| `assistant.builder.list/draft.get/draft.configure/start/get` | 列出历史、读取或配置未落地草稿、以首条消息创建 Session，或返回指定内置助手 Session 的 Conversation 投影 |
 | `team.list/get` | TeamAggregate 快照 |
 | `team.messages` | Message 表分页 |
 | `deleteOperation.get` | Operation 表 |
@@ -62,7 +62,7 @@ type AgentTeamRequest = {
 | `skill.catalog` | 按 Agent Preset standing scope 返回创建助手时可选择的模型可调用 Skills |
 | `mcp.catalog` | 按 Agent Preset standing scope 将 `mcp__<server>__<tool>` 工具分组为可选 MCP Servers |
 | `assistant.create/update/clone/delete` | 助手模板生命周期 |
-| `assistant.builder.configure/send/stop` | 按 Session 选择模型、驱动或停止内置“团队 Agent 小助手”对话 |
+| `assistant.builder.configure/send/stop/archive` | 按 Session 选择模型、驱动、停止或通过 Workspace Registry 归档内置“团队 Agent 小助手”对话 |
 | `team.createDraft/start` | 团队创建与启动；`start` 也用于启动失败后的重试 |
 | `team.addMember/removeMember` | 动态成员管理 |
 | `team.changeLeader` | 原子更换 Leader |
@@ -139,7 +139,7 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 
 ### 助手库
 
-- 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复当前/最近会话，只在用户点击“新对话”时创建新 Session。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。创建使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，选择持久化到独立偏好 Domain；历史会话恢复自己的模型，新会话继承最近一次选择。同一会话可连续创建多个助手。
+- 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复最近会话；点击“新对话”只进入客户端草稿，首次发送通过 `assistant.builder.start` 原子创建 Session 并投递消息。未发送草稿不进入历史、不能归档，历史列表同时过滤旧版本遗留的空 Session。用户可通过项目内确认弹窗调用 Harness 官方 `workspaceRegistry.archiveSession` 归档闲置历史；当前会话正在生成时必须先停止。归档会话依据 `archivedSessionIds` 从列表和恢复入口中排除，底层日志保留。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。创建助手模板使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，选择持久化到独立偏好 Domain；历史会话恢复自己的模型，新对话草稿继承最近一次选择。同一会话可连续创建多个助手。
 - Provider/Model 由 Host Catalog API 返回。
 - Provider 和 Model 必填；模型只能从 Host 返回的真实候选项中选择。
 - 设置页的助手卡片主体和“编辑”按钮都会打开编辑弹窗；编辑复用新建表单，并携带当前 Revision 调用 `assistant.update`，避免覆盖并发修改。模板更新只影响之后启动的成员，既有团队成员继续使用加入团队时的助手快照。

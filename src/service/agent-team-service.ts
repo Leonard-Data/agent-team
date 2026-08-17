@@ -33,6 +33,7 @@ import type { TeamRuntime } from '../runtime/team-runtime.js'
 import type {
   AssistantBuilderConversationView,
   AssistantBuilderConversationListView,
+  AssistantBuilderDraftView,
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
@@ -337,11 +338,23 @@ export class AgentTeamService extends Service {
     return this.requireAssistantBuilderRuntime().listConversations()
   }
 
-  createAssistantBuilderConversation(): Promise<AssistantBuilderConversationView> {
-    return this.requireAssistantBuilderRuntime().createConversation()
+  getAssistantBuilderDraft(): Promise<AssistantBuilderDraftView> {
+    return this.requireAssistantBuilderRuntime().getDraft()
   }
 
-  getAssistantBuilderConversation(sessionId?: string): Promise<AssistantBuilderConversationView> {
+  configureAssistantBuilderDraft(provider: string, model: string): Promise<AssistantBuilderDraftView> {
+    return this.requireAssistantBuilderRuntime().configureDraft(provider, model)
+  }
+
+  startAssistantBuilderConversation(
+    provider: string,
+    model: string,
+    content: string,
+  ): Promise<AssistantBuilderConversationView> {
+    return this.requireAssistantBuilderRuntime().startConversation(provider, model, content)
+  }
+
+  getAssistantBuilderConversation(sessionId: string): Promise<AssistantBuilderConversationView> {
     return this.requireAssistantBuilderRuntime().getConversation(sessionId)
   }
 
@@ -359,6 +372,10 @@ export class AgentTeamService extends Service {
 
   stopAssistantBuilder(sessionId: string): Promise<void> {
     return this.requireAssistantBuilderRuntime().stop(sessionId)
+  }
+
+  archiveAssistantBuilderConversation(sessionId: string): Promise<void> {
+    return this.requireAssistantBuilderRuntime().archiveConversation(sessionId)
   }
 
   getTeam(id: string): TeamAggregate {

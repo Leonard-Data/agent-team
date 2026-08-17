@@ -709,6 +709,49 @@
   padding: 0;
 }
 
+.assistantBuilderArchiveDialog {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.assistantBuilderArchiveConfirm {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+.assistantBuilderArchiveIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.assistantBuilderArchiveConfirm strong {
+  display: block;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistantBuilderArchiveConfirm p {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.assistantBuilderArchiveConfirm > .inlineError {
+  grid-column: 1 / -1;
+}
+
 .assistantBuilderConversation {
   height: 100%;
   min-height: 0;
@@ -750,7 +793,8 @@
 }
 
 .assistantBuilderNewConversation:disabled,
-.assistantBuilderHistoryItem:disabled {
+.assistantBuilderHistoryItem:disabled,
+.assistantBuilderHistoryArchive:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -766,8 +810,16 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+.assistantBuilderHistoryRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
 .assistantBuilderHistoryItem {
-  width: 100%;
+  width: auto;
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -780,6 +832,30 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.assistantBuilderHistoryArchive {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.assistantBuilderHistoryArchive:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.assistantBuilderHistoryArchive:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }
 
 .assistantBuilderHistoryItem:hover:not(:disabled) {

@@ -25,12 +25,16 @@ describe('AssistantBuilderRuntime', () => {
     const ctx = {
       on: vi.fn(() => vi.fn()),
       sessionPersistence: {
-        list: vi.fn(async () => [{
-          id: 'agent-team:assistant-builder:history-1',
-          createdAt,
-        }]),
-        inspect: vi.fn(async () => ({ meta: { createdAt }, events })),
+        list: vi.fn(async () => [
+          { id: 'agent-team:assistant-builder:history-1', createdAt },
+          { id: 'agent-team:assistant-builder:legacy-empty', createdAt: createdAt + 1 },
+        ]),
+        inspect: vi.fn(async (sessionId: string) => ({
+          meta: { createdAt },
+          events: sessionId.endsWith('legacy-empty') ? [] : events,
+        })),
       },
+      workspaceRegistry: { archivedSessionIds: [] },
     }
     const runtime = new AssistantBuilderRuntime(
       ctx as never,
@@ -65,13 +69,21 @@ describe('AssistantBuilderRuntime', () => {
       await options.setup?.(fakeAgentContext(handle.agent, cwdVariable, restrict))
       return handle
     })
+    const create = vi.fn(async (options: { setup?: (ctx: unknown) => Promise<void> }) => {
+      const handle = handles.shift()
+      if (handle === undefined) throw new Error('Missing fake Agent handle')
+      await options.setup?.(fakeAgentContext(handle.agent, cwdVariable, restrict))
+      return handle
+    })
     const flush = vi.fn(async () => {})
+    const archivedSessionIds: string[] = []
+    const archiveSession = vi.fn(async (sessionId: string) => { archivedSessionIds.push(sessionId) })
     const ctx = {
       on: vi.fn(() => vi.fn()),
       agents: {
         get: vi.fn(() => undefined),
         resume,
-        create: vi.fn(),
+        create,
       },
       llm: {
         listProviders: vi.fn(() => [
@@ -98,6 +110,7 @@ describe('AssistantBuilderRuntime', () => {
       },
       sessions: { flush },
       logger: { warn: vi.fn() },
+      workspaceRegistry: { archivedSessionIds, archiveSession },
     }
     const service = {
       publishAssistantBuilderConversation: vi.fn(),
@@ -115,6 +128,9 @@ describe('AssistantBuilderRuntime', () => {
         conversationModels.set(sessionId, selected)
         lastSelectedModel = selected
       }),
+      setLastSelectedModel: vi.fn(async (provider: string, model: string) => {
+        lastSelectedModel = { provider, model }
+      }),
     }
     const runtime = new AssistantBuilderRuntime(
       ctx as never,
@@ -122,6 +138,14 @@ describe('AssistantBuilderRuntime', () => {
       service as never,
       modelPreferences,
     )
+
+    await expect(runtime.getDraft()).resolves.toMatchObject({
+      configuration: {
+        provider: 'deepseek-official',
+        model: 'deepseek-v4-flash',
+      },
+    })
+    expect(ctx.agents.create).not.toHaveBeenCalled()
 
     const initial = await runtime.getConversation('agent-team:assistant-builder')
     const switched = await runtime.configure('agent-team:assistant-builder', 'zai-coding-cn', 'glm-5.3')
@@ -168,6 +192,26 @@ describe('AssistantBuilderRuntime', () => {
       agentOptions: { provider: 'zai-coding-cn', model: 'glm-5.3' },
     }))
 
+    await restartedRuntime.archiveConversation('agent-team:assistant-builder')
+
+    expect(archiveSession).toHaveBeenCalledWith('agent-team:assistant-builder')
+    await expect(restartedRuntime.listConversations()).resolves.toEqual({ items: [], total: 0 })
+    await expect(restartedRuntime.getConversation('agent-team:assistant-builder'))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' })
+
+    const fresh = fakeHandle()
+    handles.push(fresh)
+    await restartedRuntime.startConversation(
+      'zai-coding-cn',
+      'glm-5.3',
+      '创建一个代码审查助手',
+    )
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      agentOptions: { provider: 'zai-coding-cn', model: 'glm-5.3' },
+    }))
+    expect(fresh.agent.followup).toHaveBeenCalledOnce()
+
     await restartedRuntime.dispose()
   })
 
@@ -205,6 +249,7 @@ function fakeModelPreferences() {
     getLastSelectedModel: vi.fn(() => undefined),
     setConversationModel: vi.fn(async () => {}),
     setSelectedModel: vi.fn(async () => {}),
+    setLastSelectedModel: vi.fn(async () => {}),
   }
 }
 
@@ -213,6 +258,7 @@ function fakeHandle() {
     id: 'agent-team:assistant-builder',
     status: 'idle' as const,
     session: { events: [], header: {} },
+    followup: vi.fn(),
     cancel: vi.fn(),
     whenIdle: vi.fn(async () => {}),
   }

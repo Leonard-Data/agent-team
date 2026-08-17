@@ -17,11 +17,13 @@ import type {
   AssistantBuilderConversationListView,
   AssistantBuilderConversationSummary,
   AssistantBuilderConversationView,
+  AssistantBuilderDraftView,
 } from '../transport/contracts.js'
 import { projectConversation } from './conversation-projector.js'
 
 export const ASSISTANT_BUILDER_SESSION_ID = 'agent-team:assistant-builder'
 const ASSISTANT_BUILDER_SESSION_PREFIX = `${ASSISTANT_BUILDER_SESSION_ID}:`
+const ASSISTANT_BUILDER_DRAFT_ID = `${ASSISTANT_BUILDER_SESSION_PREFIX}draft`
 
 export const ASSISTANT_BUILDER_PROMPT = `
 你是“团队 Agent 小助手”，负责通过对话帮助用户创建可复用的 Agent 助手模板。
@@ -89,39 +91,72 @@ export class AssistantBuilderRuntime {
 
   async listConversations(): Promise<AssistantBuilderConversationListView> {
     const headers = (await this.ctx.sessionPersistence.list())
-      .filter(header => isAssistantBuilderSessionId(String(header.id)))
+      .filter(header => (
+        isAssistantBuilderSessionId(String(header.id))
+        && !this.isConversationArchived(String(header.id))
+      ))
     const active = this.handle?.agent.session
     const ids = new Map(headers.map(header => [String(header.id), header]))
-    if (active !== undefined && isAssistantBuilderSessionId(String(active.id))) {
+    if (
+      active !== undefined
+      && isAssistantBuilderSessionId(String(active.id))
+      && !this.isConversationArchived(String(active.id))
+    ) {
       ids.set(String(active.id), active.header)
     }
-    const items = await Promise.all([...ids.entries()].map(async ([sessionId, header]) => {
+    const summaries = await Promise.all([...ids.entries()].map(async ([sessionId, header]) => {
       const events = active !== undefined && String(active.id) === sessionId
         ? active.events
         : (await this.ctx.sessionPersistence.inspect(SessionId(sessionId))).events
       return summarizeConversation(sessionId, header.createdAt, events)
     }))
+    const items = summaries.filter(item => item.state !== 'new')
     items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.createdAt.localeCompare(left.createdAt))
     return { items, total: items.length }
   }
 
-  async createConversation(): Promise<AssistantBuilderConversationView> {
+  async getDraft(): Promise<AssistantBuilderDraftView> {
+    return {
+      schemaVersion: 1,
+      configuration: await this.resolveConfiguration(ASSISTANT_BUILDER_DRAFT_ID),
+    }
+  }
+
+  async configureDraft(rawProvider: string, rawModel: string): Promise<AssistantBuilderDraftView> {
+    const provider = rawProvider.trim()
+    const model = rawModel.trim()
+    await this.validateModelReference(provider, model)
+    await this.modelPreferences.setLastSelectedModel(provider, model)
+    const configuration = await this.resolveConfiguration(ASSISTANT_BUILDER_DRAFT_ID)
+    return { schemaVersion: 1, configuration: { ...configuration, provider, model } }
+  }
+
+  async startConversation(
+    rawProvider: string,
+    rawModel: string,
+    rawContent: string,
+  ): Promise<AssistantBuilderConversationView> {
+    const provider = rawProvider.trim()
+    const model = rawModel.trim()
+    const content = rawContent.trim()
+    if (content.length === 0) throw new AgentTeamError('INVALID_REQUEST', 'Message content is required')
+    await this.validateModelReference(provider, model)
+    const base = await this.resolveConfiguration(ASSISTANT_BUILDER_DRAFT_ID)
     const sessionId = `${ASSISTANT_BUILDER_SESSION_PREFIX}${randomUUID()}`
+    const configuration = { ...base, provider, model }
+    this.configurations.set(sessionId, configuration)
+    await this.modelPreferences.setSelectedModel(sessionId, provider, model)
     const handle = await this.ensureOnline(sessionId, true)
+    const message = createUserMessage({
+      content: [{ type: 'text', text: content }],
+      source: { kind: 'user' },
+    })
+    handle.agent.followup(message)
     return this.project(sessionId, handle.agent.session.events, handle.agent.status)
   }
 
-  async getConversation(rawSessionId?: string): Promise<AssistantBuilderConversationView> {
-    let sessionId: string
-    if (rawSessionId !== undefined) {
-      sessionId = await this.requireExistingSessionId(rawSessionId)
-    } else if (this.activeSessionId !== undefined) {
-      sessionId = this.activeSessionId
-    } else {
-      const latest = (await this.listConversations()).items[0]
-      if (latest === undefined) return this.createConversation()
-      sessionId = latest.sessionId
-    }
+  async getConversation(rawSessionId: string): Promise<AssistantBuilderConversationView> {
+    const sessionId = await this.requireExistingSessionId(rawSessionId)
     const handle = await this.ensureOnline(sessionId)
     return this.project(sessionId, handle.agent.session.events, handle.agent.status)
   }
@@ -162,6 +197,32 @@ export class AssistantBuilderRuntime {
     handle.agent.cancel({ kind: 'user' }, { keepInbox: false })
     await handle.agent.whenIdle()
     this.publishCurrent()
+  }
+
+  async archiveConversation(rawSessionId: string): Promise<void> {
+    if (this.closing) throw new Error('Assistant Builder runtime is closing')
+    await this.reconfiguring?.catch(() => undefined)
+    await this.switching?.catch(() => undefined)
+    await this.starting?.catch(() => undefined)
+    const sessionId = rawSessionId.trim()
+    if (!isAssistantBuilderSessionId(sessionId)) {
+      throw new AgentTeamError('INVALID_REQUEST', `Invalid Assistant Builder conversation '${sessionId}'`)
+    }
+    if (this.isConversationArchived(sessionId)) return
+    const current = sessionId === this.activeSessionId ? this.handle : undefined
+    if (current?.agent.status === 'running') {
+      throw new AgentTeamError('INVALID_REQUEST', '请先停止团队 Agent 小助手当前回复，再归档会话')
+    }
+    await this.ctx.workspaceRegistry.archiveSession(SessionId(sessionId))
+    if (current !== undefined) {
+      await this.ctx.sessions.flush(current.agent.session)
+      await current.dispose()
+      if (this.handle === current) this.handle = undefined
+      this.activeSessionId = undefined
+      this.configuration = undefined
+    }
+    this.configurations.delete(sessionId)
+    this.pendingDrafts.delete(sessionId)
   }
 
   async dispose(): Promise<void> {
@@ -243,16 +304,7 @@ export class AssistantBuilderRuntime {
   }
 
   private async reconfigure(sessionId: string, provider: string, model: string): Promise<void> {
-    try {
-      await this.ctx.llm.resolveModelInfo(provider, model)
-    } catch (error) {
-      throw new AgentTeamError(
-        'MODEL_REFERENCE_INVALID',
-        `Cannot resolve Assistant Builder model '${provider}/${model}'`,
-        undefined,
-        { cause: error },
-      )
-    }
+    await this.validateModelReference(provider, model)
     await this.activate(sessionId)
     await this.starting?.catch(() => undefined)
     const current = this.handle
@@ -438,10 +490,29 @@ export class AssistantBuilderRuntime {
     }
   }
 
+  private async validateModelReference(provider: string, model: string): Promise<void> {
+    if (provider.length === 0 || model.length === 0) {
+      throw new AgentTeamError('INVALID_REQUEST', 'Assistant Builder provider and model are required')
+    }
+    try {
+      await this.ctx.llm.resolveModelInfo(provider, model)
+    } catch (error) {
+      throw new AgentTeamError(
+        'MODEL_REFERENCE_INVALID',
+        `Cannot resolve Assistant Builder model '${provider}/${model}'`,
+        undefined,
+        { cause: error },
+      )
+    }
+  }
+
   private async requireExistingSessionId(rawSessionId: string): Promise<string> {
     const sessionId = rawSessionId.trim()
     if (!isAssistantBuilderSessionId(sessionId)) {
       throw new AgentTeamError('INVALID_REQUEST', `Invalid Assistant Builder conversation '${sessionId}'`)
+    }
+    if (this.isConversationArchived(sessionId)) {
+      throw new AgentTeamError('INVALID_REQUEST', `Unknown Assistant Builder conversation '${sessionId}'`)
     }
     if (sessionId === this.activeSessionId) return sessionId
     const exists = (await this.ctx.sessionPersistence.list())
@@ -450,6 +521,11 @@ export class AssistantBuilderRuntime {
       throw new AgentTeamError('INVALID_REQUEST', `Unknown Assistant Builder conversation '${sessionId}'`)
     }
     return sessionId
+  }
+
+  private isConversationArchived(sessionId: string): boolean {
+    return this.ctx.workspaceRegistry.archivedSessionIds
+      .some(archivedSessionId => String(archivedSessionId) === sessionId)
   }
 
   private registerTools(agentCtx: Context, sessionId: string): void {
