@@ -185,7 +185,7 @@ Client 插件使用现有公开 Slot：
 
 注册时必须先调用 `ctx.slots.inject(slotName, () => ctx.slots.register(...))`，确保父 Slot 已存在。工作台不覆盖 `conversation` single Slot，也不接管官方 Composer；Host 用公开 `session/event` 和 `sessionPersistence.inspect/readFrom` 建立成员 Conversation 投影。`ctx.sessions.open(sessionId)` 只用于打开标准单 Session 辅助页面。
 
-为保持 `AgentHandle` 所有权，暂停团队不 dispose 成员，只停止新任务并在 Agent scope 拒绝新的执行；成员 Session 的标准 Composer 由插件接管并通过 Team Service 投递。Runtime 每次恢复或变更前都检查 `ctx.agents.get(sessionId)`：如果发现 live Agent 但自己没有对应 Handle，进入 `ownership_conflict` 并停止操作，绝不能把 bare `Agent` 当作可销毁 Handle。
+成员 Session 的标准 Composer 由插件接管并通过 Team Service 投递。用户可以停止单个成员当前输出，或通过团队级“清空任务与上下文”轮换全部 Session。Runtime 每次冷恢复或变更前都检查 `ctx.agents.get(sessionId)`：如果发现 live Agent 但自己没有对应 Handle，进入 `ownership_conflict` 并停止操作，绝不能把 bare `Agent` 当作可销毁 Handle。
 
 ## 已知边界：Session 日志物理删除
 

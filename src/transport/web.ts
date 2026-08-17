@@ -28,8 +28,6 @@ const requestSchema = z.object({
     'team.addMember',
     'team.removeMember',
     'team.changeLeader',
-    'team.pause',
-    'team.resume',
     'team.reset',
     'team.message.list',
     'team.message.send',
@@ -194,8 +192,6 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
       const payload = z.object({ teamId: z.string().min(1), successorSlotId: z.string().min(1) }).strict().parse(request.payload)
       return service.changeLeader(payload.teamId, payload.successorSlotId, options)
     }
-    case 'team.pause': return service.pauseTeam(idPayload.parse(request.payload).id, options)
-    case 'team.resume': return service.resumeTeam(idPayload.parse(request.payload).id, options)
     case 'team.reset': {
       const payload = z.object({ teamId: z.string().min(1), confirmation: z.string() }).strict().parse(request.payload)
       return service.resetTeam(payload.teamId, payload.confirmation, options)

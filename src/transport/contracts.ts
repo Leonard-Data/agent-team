@@ -16,8 +16,6 @@ export type AgentTeamMethod =
   | 'team.addMember'
   | 'team.removeMember'
   | 'team.changeLeader'
-  | 'team.pause'
-  | 'team.resume'
   | 'team.reset'
   | 'team.message.list'
   | 'team.message.send'
@@ -62,7 +60,7 @@ export interface MemberConversationView {
   slotId: string
   sessionId: string
   throughSeq: number
-  status: 'offline' | 'starting' | 'idle' | 'running' | 'waiting_approval' | 'error' | 'paused'
+  status: 'offline' | 'starting' | 'idle' | 'running' | 'waiting_approval' | 'error'
   nodes: ConversationNode[]
 }
 

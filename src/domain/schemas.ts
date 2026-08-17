@@ -128,6 +128,8 @@ export const teamAggregateSchema = z.object({
     'draft',
     'starting',
     'active',
+    // Legacy persisted value. Plugin startup migrates it to active before the
+    // runtime and transport are initialized.
     'paused',
     'ownership_conflict',
     'deleting',

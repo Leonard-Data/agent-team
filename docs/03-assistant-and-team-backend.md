@@ -19,8 +19,6 @@ interface AssistantService {
 interface TeamService {
   createDraft(input: CreateTeamDraft, ctx: CommandContext): Promise<Team>;
   start(teamId: string, ctx: CommandContext): Promise<Team>;
-  pause(teamId: string, ctx: CommandContext): Promise<Team>;
-  resume(teamId: string, ctx: CommandContext): Promise<Team>;
   addMember(teamId: string, input: AddMember, ctx: CommandContext): Promise<TeamMemberSlot>;
   removeMember(teamId: string, slotId: string, ctx: CommandContext): Promise<void>;
   changeLeader(teamId: string, successorSlotId: string, ctx: CommandContext): Promise<Team>;
@@ -100,12 +98,12 @@ interface TeamService {
 
 不得通过“删除旧 Leader 后再创建新 Leader”完成更换。
 
-## 暂停与恢复
+## 故障重试与冷恢复
 
-- 暂停阻止新任务投递，可选择等待当前执行完成或取消执行；为保留 Handle 所有权，暂停后成员保持 live/idle，不 dispose。
-- 暂停不删除 Session、成员、任务或信箱。
-- 恢复时校验 Workspace 和 Provider 可用性，再恢复所有成员 Handle。
+- 启动失败的团队进入 `error`，用户通过同一个 `team.start` 命令重试，不另设 Resume 生命周期。
+- 插件重启时校验 Workspace 和 Provider 可用性，再按原 Session 恢复所有成员 Handle。
 - 单成员恢复失败不会把其他成员的 Session 替换为新 Session。
+- 旧版本的 `paused` 团队在插件启动时迁移为 `active` 后参与正常冷恢复。
 - 如果 `ctx.agents.get(sessionId)` 存在但 Team Runtime 没有对应 Handle，团队进入 `ownership_conflict` 并阻止变更，不能越权销毁由其他 Fiber 拥有的 Agent。
 
 ## 解散

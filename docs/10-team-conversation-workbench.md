@@ -138,7 +138,7 @@ interface MemberConversationSnapshot {
   slotId: string
   sessionId: string
   throughSeq: number
-  status: 'idle' | 'running' | 'waiting' | 'error' | 'paused' | 'offline'
+  status: 'idle' | 'running' | 'waiting' | 'error' | 'offline'
   nodes: ConversationNode[]
   partial?: AssistantPartial
   runningCalls: ToolCallNode[]
@@ -239,7 +239,7 @@ TeamWorkbench
 - 空闲成员：提交普通消息使用 `followup`。
 - 运行成员：默认新消息排队为下一 Turn；是否开放 `steer` 作为显式动作由产品设置决定。
 - 停止：对目标成员调用 `cancel({ kind: 'user' }, { keepInbox: true })`，只影响该成员。
-- 团队暂停：停止所有成员的新工作并保留可恢复 Inbox。
+- 单成员停止：取消该成员当前输出，Session 与后续对话能力保留。
 - 清空任务与上下文：使用 `cancel(..., { keepInbox: false })` 完全清除待处理输入，等待所有成员空闲后 dispose 旧 AgentHandle，再为原有 slot 分配全新 Session ID。Harness 无公开日志截断 API，因此不篡改旧 Session；旧日志保留但不再进入团队模型上下文。
 - 发送失败：输入草稿保留，显示可重试错误。
 - 用户与普通成员直接对话仍受 `directMemberChat` 策略约束。

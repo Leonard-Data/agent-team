@@ -85,6 +85,18 @@ export class AgentTeamService extends Service {
     this.runtime = runtime
   }
 
+  async migrateLegacyTeamStates(): Promise<void> {
+    for (const team of this.store.listTeams()) {
+      if (team.state !== 'paused') continue
+      await this.store.updateTeam(team.id, current => ({
+        ...current,
+        state: 'active',
+        revision: current.revision + 1,
+        updatedAt: new Date().toISOString(),
+      }))
+    }
+  }
+
   async catalog(): Promise<CatalogSnapshot> {
     const providers = this.ctx.llm.listProviders()
     const modelEntries = await Promise.all(providers.map(async provider => [
@@ -303,7 +315,7 @@ export class AgentTeamService extends Service {
     const team = requireTeam(this.store, teamId)
     assertTeamMutable(team)
     assertRevision('team', team.revision, options.expectedRevision)
-    if (!['draft', 'active', 'paused'].includes(team.state)) {
+    if (team.state !== 'draft' && team.state !== 'active') {
       throw new AgentTeamError('TEAM_NOT_ACTIVE', `Cannot add a member while team is '${team.state}'`)
     }
     const displayName = input.displayName.trim()
@@ -356,18 +368,6 @@ export class AgentTeamService extends Service {
     const team = requireTeam(this.store, teamId)
     assertRevision('team', team.revision, options.expectedRevision)
     return this.requireRuntime().startTeam(teamId)
-  }
-
-  async pauseTeam(teamId: string, options: MutationOptions = {}): Promise<TeamAggregate> {
-    const team = requireTeam(this.store, teamId)
-    assertRevision('team', team.revision, options.expectedRevision)
-    return this.requireRuntime().pauseTeam(teamId)
-  }
-
-  async resumeTeam(teamId: string, options: MutationOptions = {}): Promise<TeamAggregate> {
-    const team = requireTeam(this.store, teamId)
-    assertRevision('team', team.revision, options.expectedRevision)
-    return this.requireRuntime().resumeTeam(teamId)
   }
 
   async resetTeam(

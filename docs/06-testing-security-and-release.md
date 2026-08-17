@@ -123,7 +123,7 @@ CI 增加禁止模式扫描和架构测试：
 - 事件流采用增量 Cursor，不重复推送完整任务板。
 - Agent 启动采用可配置并发上限，避免一次组建大量成员耗尽 Provider 或系统资源。
 - 消息队列有容量、退避和死信策略，不能无限占用内存。
-- Runtime Handle 在暂停时继续由 Team Runtime 持有且最终 idle；在移除和解散的 RuntimeStopped 阶段可证明已释放。
+- Runtime Handle 在团队运行期间由 Team Runtime 持有；单成员停止后保持可继续使用，在移除和解散的 RuntimeStopped 阶段可证明已释放。
 
 ## 发布流程
 

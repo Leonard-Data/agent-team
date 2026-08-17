@@ -120,7 +120,7 @@ export class TeamRuntime {
   ): Promise<TeamAggregate> {
     return this.exclusive(teamId, async () => {
       const team = this.service.getTeam(teamId)
-      if (!['active', 'paused', 'error'].includes(team.state)) {
+      if (team.state !== 'active' && team.state !== 'error') {
         throw new AgentTeamError(
           'TEAM_NOT_ACTIVE',
           `Cannot change member permission while team is '${team.state}'`,
@@ -156,9 +156,7 @@ export class TeamRuntime {
     events: readonly SessionEvent[],
   ): MemberConversationView {
     const owned = this.owned.get(member.sessionId)
-    const status: MemberConversationView['status'] = team.state === 'paused'
-      ? 'paused'
-      : owned?.handle.agent.status ?? member.lastRuntimeState
+    const status: MemberConversationView['status'] = owned?.handle.agent.status ?? member.lastRuntimeState
     return {
       slotId: member.id,
       sessionId: member.sessionId,
@@ -190,7 +188,7 @@ export class TeamRuntime {
   removeMember(teamId: string, slotId: string): Promise<TeamAggregate> {
     return this.exclusive(teamId, async () => {
       const team = this.service.getTeam(teamId)
-      if (!['active', 'paused', 'error'].includes(team.state)) {
+      if (team.state !== 'active' && team.state !== 'error') {
         throw new AgentTeamError('TEAM_NOT_ACTIVE', `Cannot remove a runtime member while team is '${team.state}'`)
       }
       const member = team.members[slotId]
@@ -249,28 +247,10 @@ export class TeamRuntime {
     })
   }
 
-  pauseTeam(teamId: string): Promise<TeamAggregate> {
-    return this.exclusive(teamId, async () => {
-      const team = this.service.getTeam(teamId)
-      if (team.state !== 'active') {
-        throw new AgentTeamError('TEAM_NOT_ACTIVE', `Cannot pause team in state '${team.state}'`)
-      }
-      const agents = this.ownedAgents(team)
-      for (const agent of agents) agent.cancel({ kind: 'user' }, { keepInbox: true })
-      await Promise.all(agents.map(agent => agent.whenIdle()))
-      return this.service.updateRuntimeTeam(
-        teamId,
-        current => ({ ...current, state: 'paused' }),
-        'team.paused',
-        `Team ${team.name} paused`,
-      )
-    })
-  }
-
   resetTeam(teamId: string): Promise<TeamAggregate> {
     return this.exclusive(teamId, async () => {
       const team = this.service.getTeam(teamId)
-      if (!['draft', 'active', 'paused', 'error'].includes(team.state)) {
+      if (!['draft', 'active', 'error'].includes(team.state)) {
         throw new AgentTeamError('TEAM_NOT_ACTIVE', `Cannot reset team in state '${team.state}'`)
       }
 
@@ -317,12 +297,12 @@ export class TeamRuntime {
 
       await this.service.retireQueuedMessages(teamId)
       const resetAt = new Date().toISOString()
-      const shouldRestart = team.state === 'active'
+      const shouldRestart = team.state !== 'draft'
       const next = await this.service.updateRuntimeTeam(
         teamId,
         current => ({
           ...current,
-          state: shouldRestart ? 'starting' : current.state === 'draft' ? 'draft' : 'paused',
+          state: shouldRestart ? 'starting' : 'draft',
           tasks: {},
           leases: {},
           outbox: {},
@@ -445,23 +425,6 @@ export class TeamRuntime {
     })
   }
 
-  resumeTeam(teamId: string): Promise<TeamAggregate> {
-    return this.exclusive(teamId, async () => {
-      const team = this.service.getTeam(teamId)
-      if (team.state !== 'paused' && team.state !== 'error') {
-        throw new AgentTeamError('TEAM_NOT_ACTIVE', `Cannot resume team in state '${team.state}'`)
-      }
-      await this.ensureMembersOnline(team)
-      await this.recoverPendingMessages(this.service.getTeam(teamId))
-      return this.service.updateRuntimeTeam(
-        teamId,
-        current => ({ ...current, state: 'active' }),
-        'team.resumed',
-        `Team ${team.name} resumed`,
-      )
-    })
-  }
-
   async sendUserMessage(
     teamId: string,
     rawContent: string,
@@ -509,7 +472,6 @@ export class TeamRuntime {
   async recoverTeams(): Promise<void> {
     const recoverable = this.service.listTeams().items.filter(team =>
       team.state === 'active'
-      || team.state === 'paused'
       || team.state === 'starting'
       || team.state === 'error')
     await mapConcurrent(recoverable, this.config.runtimeConcurrency, async team => {
@@ -517,10 +479,9 @@ export class TeamRuntime {
         await this.exclusive(team.id, async () => {
           await this.ensureMembersOnline(team)
           await this.recoverPendingMessages(this.service.getTeam(team.id))
-          const targetState = team.state === 'paused' ? 'paused' : 'active'
           await this.service.updateRuntimeTeam(
             team.id,
-            current => ({ ...current, state: targetState }),
+            current => ({ ...current, state: 'active' }),
             'team.recovered',
             `Team ${team.name} recovered after plugin startup`,
           )
@@ -1043,12 +1004,6 @@ export class TeamRuntime {
       throw new AgentTeamError('TEAM_NOT_ACTIVE', `Team member session '${sessionId}' is not online`)
     }
     return owned
-  }
-
-  private ownedAgents(team: TeamAggregate): Agent[] {
-    return Object.values(team.members)
-      .map(member => this.owned.get(member.sessionId)?.handle.agent)
-      .filter((agent): agent is Agent => agent !== undefined)
   }
 
   private async setMemberRuntimeState(

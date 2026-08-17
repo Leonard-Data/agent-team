@@ -42,7 +42,7 @@ type TeamAggregate = {
   workspaceId: string;
   workspacePath: string;
   leaderSlotId: string;
-  state: "draft" | "starting" | "active" | "paused" | "ownership_conflict" | "deleting" | "delete_blocked" | "error";
+  state: "draft" | "starting" | "active" | "ownership_conflict" | "deleting" | "delete_blocked" | "error";
   directMemberChat: boolean;
   members: Record<string, TeamMemberSlot>;
   retiredSessions: Record<string, RetiredMemberSession>;
@@ -74,6 +74,8 @@ type RetiredMemberSession = {
   removedAt: string;
 };
 ```
+
+早期版本持久化的 `paused` 只作为旧数据输入值保留在 Schema 编解码层；插件启动时会将其一次性迁移为 `active`，不会再向 Runtime、Host API 或 UI 暴露暂停状态。
 
 `AssistantTemplate.permissionPresetId` 是创建成员时的默认权限；`TeamMemberSlot.permissionPresetId` 是该成员当前 Session 的运行权限。聊天窗口切换权限只更新成员字段，不修改模板或不可变助手快照。早期成员记录缺少该字段时，运行时回退到 `assistantSnapshot.permissionPresetId`。
 

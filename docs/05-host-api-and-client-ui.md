@@ -57,7 +57,7 @@ type AgentTeamRequest = {
 | 方法 | 用途 |
 | --- | --- |
 | `assistant.create/update/clone/delete` | 助手模板生命周期 |
-| `team.createDraft/start/pause/resume` | 团队生命周期 |
+| `team.createDraft/start` | 团队创建与启动；`start` 也用于启动失败后的重试 |
 | `team.addMember/removeMember` | 动态成员管理 |
 | `team.changeLeader` | 原子更换 Leader |
 | `team.syncMember` | 同步模板快照 |

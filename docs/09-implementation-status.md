@@ -4,7 +4,7 @@
 
 当前代码以 npm 发布的 DeepSeek Harness `0.1.0-rc.6` 类型接口为编译基线，并用本地参考树 `/private/tmp/deepseek-harness-reference/docs/user/develop` 及其公开源码接口逐项复核。现有代码只调用包入口公开 API，没有导入 Harness 私有 `src/*`。
 
-已实现的主链路是：创建助手模板 → 创建团队草稿 → 为每个成员创建独立根级 Agent → 在同一 Workspace attach 各自 Session → Leader/Member 通过任务板和信箱协作 → 暂停/恢复 → 进程重启后按原 Session ID resume。成员没有父子 Session、Subagent origin 或级联所有权。
+已实现的主链路是：创建助手模板 → 创建团队草稿 → 为每个成员创建独立根级 Agent → 在同一 Workspace attach 各自 Session → Leader/Member 通过任务板和信箱协作 → 进程重启后按原 Session ID 冷恢复。成员没有父子 Session、Subagent origin 或级联所有权。
 
 ## 已实现
 
@@ -12,7 +12,7 @@
 
 - 单包 Host/Client 插件清单、Cordis patch、Schemastery Config 和 Web-only Client 注入。
 - Assistant CRUD 服务、复制、引用保护、Provider/Model/Preset/Permission Catalog 与不可变成员快照。
-- 团队草稿、唯一 Leader、同模板多实例、动态增删成员、原子换 Leader、启动、暂停、恢复。
+- 团队草稿、唯一 Leader、同模板多实例、动态增删成员、原子换 Leader、启动和启动失败重试。
 - 独立 `AgentHandle` Registry、并发限流启动、Prompt 兼容性预检、Workspace attach、状态同步和冷恢复。
 - 组建团队时可直接选择已有 Workspace，或使用 Harness 原生目录选择器添加文件夹；插件不读取浏览器伪路径，也不修改 Harness 源码。
 - 工具白名单使用 `tools.restrict()`；Skill 白名单使用 Agent-scope Catalog 校验和单调 `tools.guard()`。
@@ -20,7 +20,8 @@
 - 用户向 Leader 或策略允许的普通成员发送消息。
 - 普通消息先写 queued 记录再投递；任务与通知通过 Team Aggregate Outbox 原子保存。两条链路都使用稳定 MessageId，恢复时检查 Session inbox 事件，避免重复插入。
 - 固定 JSON API、同源检查、Body 限制、Revision、SSE 心跳和有序 teardown。
-- Web Overlay：助手创建/复制/删除、团队组建/启动/暂停/恢复、增删成员、换 Leader、成员消息和解散失败重试提示。
+- Web Overlay：助手创建/复制/删除、团队组建/启动、增删成员、换 Leader、成员消息和解散失败重试提示。
+- 团队暂停能力已移除；旧 `paused` 记录启动时迁移为 `active`。用户可停止单个成员，或清空团队全部任务与上下文。
 - 团队工作台首版：最多三列独立成员 Conversation、每列独立输入/停止、真实 Session 历史与流式文本/推理投影、通用工具调用卡、成员状态、团队管理悬浮窗及自适应成员网格。添加成员和更改 Leader 使用可滚动列表直接操作，不再使用下拉选择后二次确认。
 - 全屏工作台左侧团队导航：可在不关闭工作台的情况下切换团队，并显示团队运行状态、任务完成数、进行中数量和完成度。
 - 团队级“清空任务与上下文”：停止所有成员、清空任务/文件租约/待投递信箱，将旧 Session 转入保留索引，为每个成员轮换全新 Session 并在团队原为运行状态时自动重启。成员、Leader、助手快照、权限和 Workspace 保留，Workspace 文件不回滚。

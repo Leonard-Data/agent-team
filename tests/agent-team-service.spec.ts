@@ -62,6 +62,25 @@ describe('AgentTeamService', () => {
     } as never)).rejects.toThrow()
   })
 
+  it('migrates legacy paused teams to active exactly once', async () => {
+    const { service, store } = createHarness()
+    const assistant = await service.createAssistant(assistantInput())
+    const draft = await service.createTeamDraft({
+      name: 'Legacy Paused Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+    })
+    const legacy = await store.updateTeam(draft.id, team => ({ ...team, state: 'paused' }))
+
+    await service.migrateLegacyTeamStates()
+    const migrated = service.getTeam(draft.id)
+    await service.migrateLegacyTeamStates()
+
+    expect(migrated.state).toBe('active')
+    expect(migrated.revision).toBe(legacy.revision + 1)
+    expect(service.getTeam(draft.id).revision).toBe(migrated.revision)
+  })
+
   it('dissolves a started team while preserving its assistant template', async () => {
     const { ctx, service, store } = createHarness()
     const assistant = await service.createAssistant(assistantInput())

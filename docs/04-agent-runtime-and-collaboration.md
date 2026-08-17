@@ -20,15 +20,14 @@ stateDiagram-v2
     WaitingApproval --> Idle: rejected/cancelled
     Running --> Idle: turn completed
     Running --> Error: unrecoverable failure
-    Error --> Starting: retry/resume
-    Idle --> Idle: pause (admission gate)
+    Error --> Starting: retry start
     Idle --> Offline: remove/dissolve/unload
     Running --> Offline: cancel + dispose
 ```
 
 Team Runtime 维护内存 Handle Registry，但真相来源是领域存储和 Harness Session 持久化。进程退出后不能依赖内存状态。
 
-暂停只关闭任务与消息准入，成员 Handle 保持 live 并最终处于 idle。每次操作都校验 `ctx.agents.get(sessionId)` 与 Handle Registry；发现 bare Agent 存在但 Handle 不属于 Runtime 时进入 `ownership_conflict`，因为公开 API 不允许从 Registry 取回别人的 disposer。
+团队不提供暂停状态。单成员“停止”只取消该成员当前输出并保持 Session 可继续使用；团队级“清空任务与上下文”停止全部成员并轮换 Session。每次操作都校验 `ctx.agents.get(sessionId)` 与 Handle Registry；发现 bare Agent 存在但 Handle 不属于 Runtime 时进入 `ownership_conflict`，因为公开 API 不允许从 Registry 取回别人的 disposer。
 
 ## 成员装配
 
@@ -143,7 +142,7 @@ Agent 可能完成 turn 但忘记调用 `team_update_task`。Runtime 观察 `run
 - 直接聊天仍记录在该成员独立 Session。
 - 用户可选择“仅讨论”或“关联任务”；不自动改变任务状态。
 - 普通成员不能把用户消息伪装为 Leader 指令。
-- 团队暂停或删除中时 UI 转为只读或关闭入口。
+- 团队删除中时 UI 转为只读并关闭其他管理入口。
 - 团队工作台的每列 Composer 调用 Team Service，由服务端解析真实成员 Session 并校验团队状态后再由 Runtime 投递；Browser 不直接持有 Agent Handle。官方标准 Conversation 不被替换。首版 Approval/Question 在列内显示等待状态并跳转标准 Session 处理，避免绕过 Harness 交互策略。
 
 ## 验收标准

@@ -89,7 +89,7 @@ Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件�
 
 ## Phase 4：团队生命周期领域服务
 
-- [x] 实现 Draft、Start、Pause、Resume。
+- [x] 实现 Draft、Start 和启动失败重试；已移除低价值的 Pause/Resume 生命周期。
 - [x] 实现唯一 Leader、同模板多实例和动态新增成员。
 - [x] 实现原子换 Leader。
 - [ ] 实现移除成员时任务等待/取消/转派状态机（当前要求先由任务工具完成、失败、取消或转派，存在开放任务时拒绝移除）。
@@ -110,7 +110,7 @@ Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件�
 - [x] 实现 `cancel -> whenIdle -> sessions.flush -> handle.dispose`。
 - [x] 实现 `ctx.agents.resume` 冷恢复，不生成替代 Session。
 - [x] 检测 live bare Agent 与 Handle Registry 不一致的 `ownership_conflict`。
-- [x] 暂停让 Agent idle 并保留 Handle；所有 Team API 新投递都受 active 状态 gate。
+- [x] 单成员停止让 Agent 回到 idle 并保留 Handle；团队删除期间所有新投递都受状态 gate。
 - [x] 把所有顺序相关清理放入同一个 `ctx.effect` disposer。
 
 退出标准：Codex/GLM 等两个已配置路由能在同一 Workspace 并行运行，Session 不串线。

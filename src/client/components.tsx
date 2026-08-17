@@ -80,7 +80,6 @@ const TEAM_STATE_LABELS: Record<string, string> = {
   draft: '待启动',
   starting: '启动中',
   active: '运行中',
-  paused: '已暂停',
   error: '启动失败',
   ownership_conflict: '会话冲突',
   deleting: '解散中',
@@ -1048,7 +1047,7 @@ function WorkspaceTreeRow({ teamId, entry, depth }: { teamId: string; entry: Wor
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     offline: '离线', starting: '启动中', idle: '空闲', running: '运行中',
-    waiting_approval: '等待审批', error: '异常', paused: '已暂停',
+    waiting_approval: '等待审批', error: '异常',
   }
   return labels[status] ?? status
 }
@@ -1075,7 +1074,7 @@ function TeamCard({
   const members = Object.values(team.members)
   const tasks = Object.values(team.tasks)
 
-  async function action(method: 'team.start' | 'team.pause' | 'team.resume'): Promise<void> {
+  async function action(method: 'team.start'): Promise<void> {
     setBusy(true)
     try {
       await callAgentTeam(method, { id: team.id }, team.revision)
@@ -1233,9 +1232,7 @@ function TeamCard({
       )}
       <div className={css.teamRuntimeActions}>
         {team.state === 'draft' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.start') }}>{busy ? '启动中…' : '启动团队'}</button>}
-        {team.state === 'active' && <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void action('team.pause') }}>暂停</button>}
-        {team.state === 'paused' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.resume') }}>{busy ? '恢复中…' : '继续运行'}</button>}
-        {team.state === 'error' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.resume') }}>{busy ? '重试中…' : '重试启动'}</button>}
+        {team.state === 'error' && <button type="button" className={css.primaryButton} disabled={busy} onClick={() => { void action('team.start') }}>{busy ? '重试中…' : '重试启动'}</button>}
       </div>
       <div className={css.managementTools}>
         <div className={css.managementTool}>
