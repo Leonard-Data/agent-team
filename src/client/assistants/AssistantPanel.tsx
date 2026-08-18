@@ -25,6 +25,7 @@ import { shouldSubmitComposer } from '../keyboard.js'
 import { PERMISSION_LABELS } from '../labels.js'
 import { AnimatedModal, Empty, Field } from '../shared.js'
 import { ConversationNodeView } from '../workbench/ConversationColumn.js'
+import conversationCss from '../workbench/ConversationColumn.module.css'
 
 const ASSISTANT_FORM_ID = 'agent-team-assistant-form'
 const ASSISTANT_EDIT_FORM_ID = 'agent-team-assistant-edit-form'
@@ -481,10 +482,10 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           </Button>
         </div>
         </div>
-        <div ref={timeline} className={`${css.timeline} ${css.assistantBuilderTimeline}`}>
+        <div ref={timeline} className={`${conversationCss.timeline} ${css.assistantBuilderTimeline}`}>
         {!loading && (draft !== undefined || conversation?.nodes.length === 0) && (
-          <article className={`${css.messageNode} ${css.assistantMessage}`}>
-            <div className={css.messageText}>
+          <article className={`${conversationCss.messageNode} ${conversationCss.assistantMessage}`}>
+            <div className={conversationCss.messageText}>
               <MarkdownText text="你好，我是团队 Agent 小助手。告诉我你想创建什么样的助手，以及它主要负责什么；缺少的配置我会逐项询问你。" />
             </div>
           </article>
@@ -492,7 +493,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         {conversation?.nodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
         </div>
         <form
-        className={`${css.composer} ${css.assistantBuilderComposer}`}
+        className={`${conversationCss.composer} ${css.assistantBuilderComposer}`}
         onSubmit={event => { event.preventDefault(); void send() }}
       >
         <textarea
@@ -514,12 +515,12 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           disabled={loading || running}
           rows={3}
         />
-        <div className={css.composerFooter}>
+        <div className={conversationCss.composerFooter}>
           <span className={css.muted}>Enter 发送 · Shift+Enter 换行</span>
-          <div className={css.composerActions}>
+          <div className={conversationCss.composerActions}>
             {running && (
               <Tooltip label="停止生成" side="top" delayMs={400}>
-                <button type="button" className={css.composerIconButton} onClick={() => { void stop() }} aria-label="停止生成">
+                <button type="button" className={conversationCss.composerIconButton} onClick={() => { void stop() }} aria-label="停止生成">
                   <IconStopFill16 size={16} />
                 </button>
               </Tooltip>
@@ -527,7 +528,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             <Tooltip label={sending ? '发送中…' : '发送消息'} side="top" delayMs={400}>
               <button
                 type="submit"
-                className={css.composerIconButton}
+                className={conversationCss.composerIconButton}
                 disabled={loading || running || sending || !selectedProvider || !selectedModel || content.trim().length === 0}
                 aria-label={sending ? '发送中' : '发送消息'}
               >
@@ -536,7 +537,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             </Tooltip>
           </div>
         </div>
-        {error && <span className={css.composerError}>{error}</span>}
+        {error && <span className={conversationCss.composerError}>{error}</span>}
         </form>
       </div>
       </section>
@@ -925,7 +926,7 @@ function AssistantForm({
         >
           <div className={css.skillPicker} role="group" aria-label="选择助手可使用的 Skills">
             {skillsLoading && <span className={css.hint}>正在读取该 Preset 的 Skills…</span>}
-            {!skillsLoading && skillsError && <span className={css.composerError}>{skillsError}</span>}
+            {!skillsLoading && skillsError && <span className={conversationCss.composerError}>{skillsError}</span>}
             {!skillsLoading && !skillsError && availableSkills.length === 0 && (
               <span className={css.hint}>该 Agent Preset 没有可用的 Skill。</span>
             )}
@@ -955,7 +956,7 @@ function AssistantForm({
         >
           <div className={css.skillPicker} role="group" aria-label="选择助手可使用的 MCP Server">
             {mcpLoading && <span className={css.hint}>正在读取该 Preset 的 MCP Server…</span>}
-            {!mcpLoading && mcpError && <span className={css.composerError}>{mcpError}</span>}
+            {!mcpLoading && mcpError && <span className={conversationCss.composerError}>{mcpError}</span>}
             {!mcpLoading && !mcpError && availableMcpServers.length === 0 && (
               <span className={css.hint}>当前 Harness 未为该 Agent Preset 配置 MCP Server。</span>
             )}
