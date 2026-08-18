@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { projectConversation } from '../src/runtime/conversation-projector.js'
+import { projectContextUsage, projectConversation } from '../src/runtime/conversation-projector.js'
 
 describe('projectConversation', () => {
   it('projects independent messages, streaming text, and reasoning', () => {
@@ -149,6 +149,65 @@ describe('projectConversation', () => {
       messageType: 'result',
       relatedTaskId: 'task-1',
     }])
+  })
+})
+
+describe('projectContextUsage', () => {
+  it('uses the latest prompt-side provider sample and context capacity', () => {
+    const projected = projectContextUsage([
+      event(0, 'request/context', { provider: 'zai-coding-cn', model: 'glm-5.3', contextWindow: 128_000 }),
+      event(1, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'assistant-1', role: 'assistant', source: { kind: 'model', provider: 'zai-coding-cn', model: 'glm-5.3' },
+          content: [{ type: 'text', text: 'First' }],
+        },
+        usage: { inputTokens: 1_000, outputTokens: 250, cacheReadTokens: 2_000, cacheWriteTokens: 300 },
+      }),
+      event(2, 'assistant/chunk', {
+        turn: 2,
+        step: 1,
+        chunk: {
+          type: 'usage',
+          usage: { inputTokens: 2_000, outputTokens: 400, cacheReadTokens: 4_000, cacheWriteTokens: 500 },
+        },
+      }),
+    ])
+
+    expect(projected).toEqual({
+      usedTokens: 6_900,
+      inputTokens: 6_500,
+      outputTokens: 400,
+      cacheReadTokens: 4_000,
+      cacheWriteTokens: 500,
+      reasoningTokens: 0,
+      contextWindow: 128_000,
+    })
+  })
+
+  it('requires real usage but still reports details when the window is unknown', () => {
+    expect(projectContextUsage([
+      event(0, 'request/context', { provider: 'openai', model: 'codex', contextWindow: 200_000 }),
+    ])).toBeUndefined()
+    expect(projectContextUsage([
+      event(0, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'assistant-1', role: 'assistant', source: { kind: 'model', provider: 'openai', model: 'codex' },
+          content: [],
+        },
+        usage: { inputTokens: 1_000, outputTokens: 100 },
+      }),
+    ])).toEqual({
+      usedTokens: 1_100,
+      inputTokens: 1_000,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+    })
   })
 })
 

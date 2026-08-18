@@ -64,7 +64,12 @@ interface TeamView {
     sessionId: string
     lastRuntimeState: string
     permissionPresetId: string
-    assistantSnapshot: { provider: string; model: string; permissionPresetId: string }
+    assistantSnapshot: {
+      provider: string
+      model: string
+      permissionPresetId: string
+      skillAllowlist: string[]
+    }
   }>
   directMemberChat: boolean
   tasks: Record<string, {
@@ -1921,6 +1926,7 @@ function ConversationColumn({
               tabIndex={-1}
               onChange={event => { void uploadFiles(event.currentTarget.files) }}
             />
+            <AssistantSkillsInfo skills={member.assistantSnapshot.skillAllowlist} />
             <select
               className={css.permissionSelect}
               aria-label={`${member.displayName} 权限`}
@@ -1936,6 +1942,9 @@ function ConversationColumn({
             </select>
           </div>
           <div className={css.composerActions}>
+            {conversation?.contextUsage !== undefined && (
+              <ContextUsageMeter usage={conversation.contextUsage} />
+            )}
             {running && (
               <Tooltip label={stopping ? '停止中…' : '停止生成'} side="top" delayMs={400}>
                 <button
@@ -1964,6 +1973,102 @@ function ConversationColumn({
         {error && <span className={css.composerError}>{error}</span>}
       </form>
     </section>
+  )
+}
+
+function AssistantSkillsInfo({ skills }: { skills: readonly string[] }): JSX.Element {
+  return (
+    <div className={css.skillsInfo}>
+      <button
+        type="button"
+        className={css.skillsInfoButton}
+        aria-label={skills.length === 0 ? '当前助手未加载 Skills' : `查看当前助手加载的 ${skills.length} 个 Skills`}
+      >
+        <InfoIcon size={16} />
+      </button>
+      <div className={css.skillsInfoPopover} role="tooltip">
+        <div className={css.skillsInfoHeading}>
+          <strong>已加载 Skills</strong>
+          <span>{skills.length} 个</span>
+        </div>
+        {skills.length === 0
+          ? <span className={css.skillsInfoEmpty}>当前助手未加载 Skill</span>
+          : (
+            <ul className={css.skillsInfoList}>
+              {skills.map(skill => <li key={skill}>{skill}</li>)}
+            </ul>
+          )}
+      </div>
+    </div>
+  )
+}
+
+function InfoIcon({ size }: { size: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="8" cy="5" r="1" fill="currentColor" />
+      <path d="M8 7.5V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ContextUsageMeter({
+  usage,
+}: {
+  usage: NonNullable<MemberConversationView['contextUsage']>
+}): JSX.Element {
+  const percent = usage.contextWindow === undefined
+    ? undefined
+    : Math.min(100, Math.round(usage.usedTokens / usage.contextWindow * 100))
+  const pressureClass = percent !== undefined && percent >= 90
+    ? css.contextUsageCritical
+    : percent !== undefined && percent >= 75
+      ? css.contextUsageWarning
+      : ''
+  const cacheHitPercent = usage.inputTokens === 0
+    ? 0
+    : Math.round(usage.cacheReadTokens / usage.inputTokens * 100)
+  const details = [
+    `输入 ${formatTokenCount(usage.inputTokens)}`,
+    `输出 ${formatTokenCount(usage.outputTokens)}`,
+    `缓存命中 ${cacheHitPercent}%`,
+    ...(usage.cacheWriteTokens > 0 ? [`缓存写 ${formatTokenCount(usage.cacheWriteTokens)}`] : []),
+    ...(usage.reasoningTokens > 0 ? [`思考 ${formatTokenCount(usage.reasoningTokens)}`] : []),
+  ]
+  return (
+    <div className={`${css.contextUsage} ${pressureClass}`}>
+      <button
+        type="button"
+        className={css.contextUsageButton}
+        aria-label={percent === undefined
+          ? `已使用约 ${usage.usedTokens} tokens，上下文窗口大小未知`
+          : `上下文已使用约 ${usage.usedTokens} / ${usage.contextWindow} tokens，${percent}%`}
+      >
+        <svg className={css.contextUsageRing} viewBox="0 0 36 36" aria-hidden="true">
+          <circle className={css.contextUsageRingTrack} cx="18" cy="18" r="14" />
+          {percent !== undefined && (
+            <circle
+              className={css.contextUsageRingValue}
+              cx="18"
+              cy="18"
+              r="14"
+              pathLength="100"
+              strokeDasharray={`${percent} 100`}
+            />
+          )}
+        </svg>
+      </button>
+      <div className={css.contextUsagePopover} role="tooltip">
+        <strong>已使用 {formatTokenCount(usage.usedTokens)} tokens</strong>
+        <span>
+          {usage.contextWindow === undefined
+            ? '上下文窗口大小未知'
+            : `上下文窗口 ${formatTokenCount(usage.contextWindow)} · 已用 ${percent}%`}
+        </span>
+        <span>{details.join(' · ')}</span>
+      </div>
+    </div>
   )
 }
 
@@ -2177,6 +2282,16 @@ function statusLabel(status: string): string {
     waiting_approval: '等待审批', error: '异常',
   }
   return labels[status] ?? status
+}
+
+function formatTokenCount(value: number): string {
+  if (value < 1_000) return String(value)
+  if (value < 1_000_000) {
+    const scaled = value / 1_000
+    return `${scaled >= 100 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, '')}k`
+  }
+  const scaled = value / 1_000_000
+  return `${scaled >= 100 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, '')}m`
 }
 
 function prettyJson(value: string): string {

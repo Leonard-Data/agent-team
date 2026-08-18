@@ -2731,6 +2731,113 @@ textarea.input {
   color: var(--dsw-alias-label-caption);
 }
 
+.contextUsage {
+  position: relative;
+  flex: none;
+}
+
+.contextUsageButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  outline: 0;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  cursor: help;
+}
+
+.contextUsageButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.contextUsageButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.contextUsageRing {
+  width: 30px;
+  height: 30px;
+  transform: rotate(-90deg);
+}
+
+.contextUsageRingTrack,
+.contextUsageRingValue {
+  fill: none;
+  stroke-width: 3;
+}
+
+.contextUsageRingTrack {
+  stroke: var(--dsw-alias-border-l2);
+}
+
+.contextUsageRingValue {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dasharray 180ms ease;
+}
+
+.contextUsageWarning {
+  color: var(--dsw-alias-state-warning-primary);
+}
+
+.contextUsageCritical {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.contextUsagePopover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 6;
+  width: 250px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-alias-shadow-l2, var(--dsw-alias-shadow-l1));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.contextUsagePopover::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  transform: rotate(45deg);
+}
+
+.contextUsagePopover strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.contextUsage:hover .contextUsagePopover,
+.contextUsage:focus-within .contextUsagePopover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .composerFooter {
   display: flex;
   align-items: center;
@@ -2825,6 +2932,117 @@ textarea.input {
 
 .hiddenFileInput {
   display: none;
+}
+
+.skillsInfo {
+  position: relative;
+  flex: none;
+}
+
+.skillsInfoButton {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  outline: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: help;
+}
+
+.skillsInfoButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.skillsInfoButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.skillsInfoPopover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 6;
+  width: 250px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-alias-shadow-l2, var(--dsw-alias-shadow-l1));
+  color: var(--dsw-alias-label-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.skillsInfoPopover::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  transform: rotate(45deg);
+}
+
+.skillsInfo:hover .skillsInfoPopover,
+.skillsInfo:focus-within .skillsInfoPopover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.skillsInfoHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.skillsInfoHeading strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.skillsInfoHeading span,
+.skillsInfoEmpty {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.skillsInfoList {
+  max-height: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skillsInfoList li {
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }
 
 .composerError {

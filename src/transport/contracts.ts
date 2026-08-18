@@ -86,6 +86,15 @@ export interface MemberConversationView {
   throughSeq: number
   status: 'offline' | 'starting' | 'idle' | 'running' | 'waiting_approval' | 'error'
   nodes: ConversationNode[]
+  contextUsage?: {
+    usedTokens: number
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    reasoningTokens: number
+    contextWindow?: number
+  }
 }
 
 export interface TeamWorkbenchView {

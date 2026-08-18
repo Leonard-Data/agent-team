@@ -21,7 +21,7 @@ import type {
 } from '../domain/types.js'
 import type { AgentTeamService } from '../service/agent-team-service.js'
 import type { MemberConversationView, TeamWorkbenchView } from '../transport/contracts.js'
-import { projectConversation } from './conversation-projector.js'
+import { projectContextUsage, projectConversation } from './conversation-projector.js'
 import { registerScopedSkillProvider } from './scoped-skills.js'
 
 interface OwnedAgent {
@@ -159,6 +159,7 @@ export class TeamRuntime {
   ): MemberConversationView {
     const owned = this.owned.get(member.sessionId)
     const status: MemberConversationView['status'] = owned?.handle.agent.status ?? member.lastRuntimeState
+    const contextUsage = projectContextUsage(events)
     return {
       slotId: member.id,
       sessionId: member.sessionId,
@@ -167,6 +168,7 @@ export class TeamRuntime {
         team,
         messages: this.service.listMessages(team.id).items,
       }),
+      ...(contextUsage === undefined ? {} : { contextUsage }),
     }
   }
 

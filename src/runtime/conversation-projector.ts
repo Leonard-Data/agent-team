@@ -1,7 +1,7 @@
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { TeamAggregate, TeamMessage } from '../domain/types.js'
-import type { ConversationNode } from '../transport/contracts.js'
+import type { ConversationNode, MemberConversationView } from '../transport/contracts.js'
 
 interface PartialAssistant {
   id: string
@@ -14,6 +14,45 @@ interface PartialAssistant {
 interface TeamProjectionContext {
   team: Pick<TeamAggregate, 'leaderSlotId' | 'members' | 'retiredSessions'>
   messages: readonly TeamMessage[]
+}
+
+export function projectContextUsage(
+  events: readonly SessionEvent[],
+): MemberConversationView['contextUsage'] {
+  let latestUsage: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+    reasoningTokens?: number
+  } | undefined
+  let contextWindow: number | undefined
+
+  for (const event of events) {
+    if (event.type === 'request/context') contextWindow = event.data.contextWindow
+
+    const usage = event.type === 'assistant/chunk' && event.data.chunk.type === 'usage'
+      ? event.data.chunk.usage
+      : event.type === 'assistant/message'
+        ? event.data.usage
+        : undefined
+    if (usage !== undefined) latestUsage = usage
+  }
+
+  if (latestUsage === undefined) return undefined
+  const cacheReadTokens = latestUsage.cacheReadTokens ?? 0
+  const cacheWriteTokens = latestUsage.cacheWriteTokens ?? 0
+  const inputTokens = latestUsage.inputTokens + cacheReadTokens + cacheWriteTokens
+  const outputTokens = latestUsage.outputTokens
+  return {
+    usedTokens: inputTokens + outputTokens,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    reasoningTokens: latestUsage.reasoningTokens ?? 0,
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+  }
 }
 
 export function projectConversation(
