@@ -33,6 +33,7 @@ import type {
   AssistantBuilderConversationView,
   AssistantBuilderConversationListView,
   AssistantBuilderDraftView,
+  InteractionResponseInput,
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
@@ -359,6 +360,14 @@ export class AgentTeamService extends Service {
     return this.requireAssistantBuilderRuntime().sendMessage(sessionId, content)
   }
 
+  respondToAssistantBuilderInteraction(
+    sessionId: string,
+    interactionId: string,
+    response: InteractionResponseInput,
+  ): Promise<void> {
+    return this.requireAssistantBuilderRuntime().respondToInteraction(sessionId, interactionId, response)
+  }
+
   stopAssistantBuilder(sessionId: string): Promise<void> {
     return this.requireAssistantBuilderRuntime().stop(sessionId)
   }
@@ -553,6 +562,19 @@ export class AgentTeamService extends Service {
   stopMember(teamId: string, slotId: string): Promise<void> {
     requireTeam(this.store, teamId)
     return this.requireRuntime().stopMember(teamId, slotId)
+  }
+
+  async respondToInteraction(
+    teamId: string,
+    slotId: string,
+    interactionId: string,
+    response: InteractionResponseInput,
+  ): Promise<void> {
+    const team = requireTeam(this.store, teamId)
+    if (team.members[slotId] === undefined) {
+      throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown member '${slotId}'`)
+    }
+    await this.requireRuntime().respondToInteraction(teamId, slotId, interactionId, response)
   }
 
   async setMemberPermissionPreset(

@@ -23,6 +23,20 @@ const requestSchema = z.object({
 }).strict()
 
 const idPayload = z.object({ id: z.string().trim().min(1) }).strict()
+const interactionResponseSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('question'),
+    answers: z.array(z.object({
+      id: z.string().trim().min(1).max(200),
+      selected: z.array(z.string().min(1).max(500)).max(50),
+      custom: z.string().max(32_000).optional(),
+    }).strict()).min(1).max(32),
+  }).strict(),
+  z.object({
+    kind: z.literal('approval'),
+    outcome: z.enum(['allowed-once', 'rejected']),
+  }).strict(),
+])
 
 export interface WebTransport {
   dispose(): void
@@ -248,6 +262,28 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
       }).strict().parse(request.payload)
       return service.sendAssistantBuilderMessage(payload.sessionId, payload.content)
     }
+    case 'assistant.builder.interaction.respond': {
+      const payload = z.object({
+        sessionId: z.string().trim().min(1).max(200),
+        interactionId: z.string().trim().min(1).max(500),
+        response: interactionResponseSchema,
+      }).strict().parse(request.payload)
+      await service.respondToAssistantBuilderInteraction(
+        payload.sessionId,
+        payload.interactionId,
+        payload.response.kind === 'approval'
+          ? payload.response
+          : {
+            kind: 'question',
+            answers: payload.response.answers.map(answer => ({
+              id: answer.id,
+              selected: answer.selected,
+              ...(answer.custom === undefined ? {} : { custom: answer.custom }),
+            })),
+          },
+      )
+      return { accepted: true }
+    }
     case 'assistant.builder.stop': {
       const payload = z.object({ sessionId: z.string().trim().min(1).max(200) }).strict().parse(request.payload)
       await service.stopAssistantBuilder(payload.sessionId)
@@ -291,6 +327,30 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
     case 'team.member.stop': {
       const payload = z.object({ teamId: z.string().min(1), slotId: z.string().min(1) }).strict().parse(request.payload)
       await service.stopMember(payload.teamId, payload.slotId)
+      return { accepted: true }
+    }
+    case 'team.interaction.respond': {
+      const payload = z.object({
+        teamId: z.string().trim().min(1).max(200),
+        slotId: z.string().trim().min(1).max(200),
+        interactionId: z.string().trim().min(1).max(300),
+        response: interactionResponseSchema,
+      }).strict().parse(request.payload)
+      await service.respondToInteraction(
+        payload.teamId,
+        payload.slotId,
+        payload.interactionId,
+        payload.response.kind === 'approval'
+          ? payload.response
+          : {
+            kind: 'question',
+            answers: payload.response.answers.map(answer => ({
+              id: answer.id,
+              selected: answer.selected,
+              ...(answer.custom === undefined ? {} : { custom: answer.custom }),
+            })),
+          },
+      )
       return { accepted: true }
     }
     case 'team.member.setPermissionPreset': {

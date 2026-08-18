@@ -29,6 +29,7 @@ export const AGENT_TEAM_METHODS = [
   'assistant.builder.get',
   'assistant.builder.configure',
   'assistant.builder.send',
+  'assistant.builder.interaction.respond',
   'assistant.builder.stop',
   'assistant.builder.archive',
   'team.list',
@@ -43,6 +44,7 @@ export const AGENT_TEAM_METHODS = [
   'team.message.send',
   'team.workbench.get',
   'team.member.stop',
+  'team.interaction.respond',
   'team.member.setPermissionPreset',
   'team.workspace.list',
   'team.workspace.changes',
@@ -128,12 +130,62 @@ export type ConversationNode =
     text: string
   }
 
+export interface QuestionOptionView {
+  label: string
+  description?: string
+}
+
+export interface QuestionItemView {
+  id: string
+  question: string
+  detail?: string
+  header?: string
+  options?: QuestionOptionView[]
+  multiSelect?: boolean
+  intent?: {
+    kind: 'plan-review'
+    approve: string
+  }
+}
+
+export type PendingInteractionView =
+  | {
+    id: string
+    kind: 'question'
+    questions: QuestionItemView[]
+  }
+  | {
+    id: string
+    kind: 'approval'
+    approvalId: string
+    toolName: string
+    callId?: string
+    reason?: string
+  }
+
+export interface QuestionAnswerView {
+  id: string
+  selected: string[]
+  custom?: string
+}
+
+export type InteractionResponseInput =
+  | {
+    kind: 'question'
+    answers: QuestionAnswerView[]
+  }
+  | {
+    kind: 'approval'
+    outcome: 'allowed-once' | 'rejected'
+  }
+
 export interface MemberConversationView {
   slotId: string
   sessionId: string
   throughSeq: number
   status: 'offline' | 'starting' | 'idle' | 'running' | 'waiting_approval' | 'error'
   nodes: ConversationNode[]
+  pendingInteractions: PendingInteractionView[]
   contextUsage?: {
     usedTokens: number
     inputTokens: number
@@ -158,6 +210,7 @@ export interface AssistantBuilderConversationView {
   status: 'starting' | 'idle' | 'running' | 'error'
   throughSeq: number
   nodes: ConversationNode[]
+  pendingInteractions: PendingInteractionView[]
   configuration: {
     provider: string
     model: string
@@ -250,6 +303,14 @@ export interface AgentTeamRequestMap {
     payload: { sessionId: string; content: string }
     result: { messageId: string }
   }
+  'assistant.builder.interaction.respond': {
+    payload: {
+      sessionId: string
+      interactionId: string
+      response: InteractionResponseInput
+    }
+    result: { accepted: boolean }
+  }
   'assistant.builder.stop': { payload: { sessionId: string }; result: { accepted: boolean } }
   'assistant.builder.archive': { payload: { sessionId: string }; result: { archived: boolean } }
   'team.list': { payload: undefined; result: PageView<TeamView> }
@@ -267,6 +328,15 @@ export interface AgentTeamRequestMap {
   }
   'team.workbench.get': { payload: { id: string }; result: TeamWorkbenchView }
   'team.member.stop': { payload: { teamId: string; slotId: string }; result: { accepted: boolean } }
+  'team.interaction.respond': {
+    payload: {
+      teamId: string
+      slotId: string
+      interactionId: string
+      response: InteractionResponseInput
+    }
+    result: { accepted: boolean }
+  }
   'team.member.setPermissionPreset': {
     payload: { teamId: string; slotId: string; permissionPresetId: string }
     result: TeamView

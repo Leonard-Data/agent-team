@@ -4,7 +4,7 @@
 
 已完成 WB1/WB2 的可用纵向切片：Host 从成员真实 Session 事件构建隔离的 Conversation Snapshot，监听 `session/event` 并发布独立 Conversation SSE；Browser 最多并排显示三名成员，支持真实历史、流式文本/推理、通用 ToolCard、独立发送和停止。右侧 Workspace 面板提供逐层目录浏览、“文件 / 变更”页签、实时刷新和 Git Diff 预览。团队入口通过公开 `shell.overlay` Slot 直接渲染全屏工作台；工作台左侧能够切换团队，并仅在成员或任务实际运行时显示“任务执行中”。
 
-当前流式刷新以 50ms 合并事件触发 `team.workbench.get` 权威快照重取，尚未实现按节点 upsert 的增量 Patch；专用工具卡、普通文件阅读、Conversation 虚拟列表、标准 Session 跳转以及 Approval/Question 列内处理仍按后续阶段执行。消息正文已复用 Harness 公开的 `MarkdownText` 原语。Git Diff 使用 `@pierre/diffs` 在 Host 端生成隔离 HTML，避免 Harness 客户端模块表加载第三方 Shiki 分块。首版没有用团队业务消息冒充 Session 历史，也没有复制官方 Conversation 内部组件。
+当前流式刷新以 50ms 合并事件触发 `team.workbench.get` 权威快照重取，尚未实现按节点 upsert 的增量 Patch；专用工具卡、普通文件阅读、Conversation 虚拟列表和标准 Session 跳转仍按后续阶段执行。Approval/Question 已通过 rc7 ApiProxy mux 的待处理请求帧进入成员列，并使用原始 rpcId 经官方 `respond` seam 提交；刷新重放、取消和多页面重复回答仍由 Harness 作为权威状态管理。消息正文已复用 Harness 公开的 `MarkdownText` 原语。Git Diff 使用 `@pierre/diffs` 在 Host 端生成隔离 HTML，避免 Harness 客户端模块表加载第三方 Shiki 分块。首版没有用团队业务消息冒充 Session 历史，也没有复制官方 Conversation 内部组件。
 
 ## 目标
 
@@ -242,7 +242,7 @@ TeamWorkbench
 - 发送失败：输入草稿保留，显示可重试错误。
 - 用户与普通成员直接对话仍受 `directMemberChat` 策略约束。
 
-Approval 和 Question 属于 Harness Connection 的临时交互，不只存在于持久 Session 日志。第一阶段在成员列显示“等待审批/等待回答”并提供“在标准会话中处理”入口，确保不绕过 Harness 策略。只有在目标 Harness 版本公开了可被自定义多 Session UI 安全调用的 response carrier 后，才在列内实现允许一次、拒绝和结构化回答；禁止通过 Host 插件伪造批准结果。
+Approval 和 Question 属于 Harness Connection 的临时交互，不只存在于持久 Session 日志。rc7 已通过 `apiProxy.events.mux` 和 `apiProxy.respond` 公开安全 response carrier：Host 只消费一条官方 mux，按插件拥有的 Session 投影“等待审批/等待回答”卡片，并携带原始 rpcId 提交允许一次、拒绝或结构化答案。成员工作台与团队 Agent 小助手共享这条桥接；刷新重放、取消和重复回答仍由 Harness 判定，插件不伪造 Session 事件或批准结果。
 
 ## RPC 与 SSE 设计
 
@@ -347,7 +347,7 @@ Browser 内所有 Agent Team 消费者共享一个 EventSource，由单例事件
 
 ### WB4：交互、可访问性与稳定性
 
-- 接入目标版本允许的 Approval/Question 响应能力；不可用时保持标准会话跳转。
+- [x] 接入 rc7 官方 Approval/Question mux 与响应能力，并覆盖成员工作台和团队 Agent 小助手。
 - 完成键盘、焦点、屏幕阅读器、小窗口和多成员压力测试。
 - 完成断线、乱序、重复事件、成员失败和冷恢复测试。
 

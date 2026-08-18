@@ -123,6 +123,38 @@ describe('Agent Team client requests', () => {
     })
   })
 
+  it('submits a structured team interaction response', async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { accepted: true } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('team.interaction.respond', {
+      teamId: 'team-1',
+      slotId: 'slot-1',
+      interactionId: 'question:rpc-1',
+      response: {
+        kind: 'question',
+        answers: [{ id: 'name', selected: [], custom: 'Reviewer' }],
+      },
+    })
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'team.interaction.respond',
+      payload: {
+        teamId: 'team-1',
+        slotId: 'slot-1',
+        interactionId: 'question:rpc-1',
+        response: {
+          kind: 'question',
+          answers: [{ id: 'name', selected: [], custom: 'Reviewer' }],
+        },
+      },
+    })
+  })
+
   it('uploads a system-selected file to the team Workspace upload route', async () => {
     const fetch = vi.fn(async () => ({
       json: async () => ({
@@ -184,6 +216,32 @@ describe('Agent Team client requests', () => {
       payload: {
         sessionId: 'agent-team:assistant-builder:conversation-1',
         content: 'Create a reviewer',
+      },
+    })
+  })
+
+  it('submits an Assistant Builder structured interaction response', async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
+      json: async () => ({ requestId: 'request-1', ok: true, value: { accepted: true } }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { callAgentTeam } = await import('../src/client/api.js')
+
+    await callAgentTeam('assistant.builder.interaction.respond', {
+      sessionId: 'agent-team:assistant-builder:conversation-1',
+      interactionId: 'question:question-rpc-1',
+      response: {
+        kind: 'question',
+        answers: [{ id: 'name', selected: ['代码审查助手'] }],
+      },
+    })
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1].body))).toMatchObject({
+      method: 'assistant.builder.interaction.respond',
+      payload: {
+        sessionId: 'agent-team:assistant-builder:conversation-1',
+        interactionId: 'question:question-rpc-1',
       },
     })
   })

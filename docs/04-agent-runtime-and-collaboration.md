@@ -144,7 +144,7 @@ Agent 可能完成 turn 但忘记调用 `team_update_task`。Runtime 观察 `run
 - 用户可选择“仅讨论”或“关联任务”；不自动改变任务状态。
 - 普通成员不能把用户消息伪装为 Leader 指令。
 - 团队删除中时 UI 转为只读并关闭其他管理入口。
-- 团队工作台的每列 Composer 调用 Team Service，由服务端解析真实成员 Session 并校验团队状态后再由 Runtime 投递；Browser 不直接持有 Agent Handle。官方标准 Conversation 不被替换。首版 Approval/Question 在列内显示等待状态并跳转标准 Session 处理，避免绕过 Harness 交互策略。
+- 团队工作台的每列 Composer 调用 Team Service，由服务端解析真实成员 Session 并校验团队状态后再由 Runtime 投递；Browser 不直接持有 Agent Handle。官方标准 Conversation 不被替换。Approval/Question 通过 rc7 ApiProxy 官方 mux 投影到列内，并携带原始 rpcId 经官方 response carrier 提交，避免绕过 Harness 交互策略。
 
 ## 验收标准
 

@@ -439,6 +439,225 @@
   line-height: 17px;
 }
 
+.interactionCard {
+  width: min(94%, 680px);
+  box-sizing: border-box;
+  align-self: center;
+  padding: 13px;
+  border: 1px solid var(--dsw-alias-state-warn-label);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-alias-shadow-l1);
+}
+
+.approvalCard {
+  border-color: var(--dsw-alias-state-warn-label);
+}
+
+.questionCard {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.interactionHeader,
+.interactionActions {
+  display: flex;
+  align-items: center;
+}
+
+.interactionHeader {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.interactionHeader strong {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.interactionHeader span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.approvalToolName {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-module-platform);
+  font: 11px/17px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.interactionDescription {
+  margin: 9px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.questionList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.questionFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.questionFieldset legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+}
+
+.questionFieldset legend > span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.questionFieldset legend > strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.questionDetail {
+  max-height: 260px;
+  margin-top: 8px;
+  overflow: auto;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.questionOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.questionOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.questionOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.questionOption input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+}
+
+.questionOption > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.questionOption strong {
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.questionOption small {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.questionCustomInput {
+  width: 100%;
+  min-height: 52px;
+  max-height: 120px;
+  box-sizing: border-box;
+  margin-top: 8px;
+  resize: vertical;
+  padding: 8px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: 12px/18px inherit;
+}
+
+.questionCustomInput:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.interactionActions {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.interactionPrimaryButton,
+.interactionSecondaryButton {
+  min-height: 30px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.interactionPrimaryButton {
+  border: 0;
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.interactionPrimaryButton:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover);
+}
+
+.interactionSecondaryButton {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.interactionSecondaryButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.interactionPrimaryButton:disabled,
+.interactionSecondaryButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.interactionError {
+  display: block;
+  margin-top: 8px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .composer {
   flex: none;
   margin: 0 12px 12px;

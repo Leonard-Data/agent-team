@@ -1,0 +1,275 @@
+import { randomUUID } from 'node:crypto'
+import type { Context } from '@deepseek-ai/cordis'
+import {
+  RpcId,
+  type MuxFrame,
+  type RpcRequest,
+} from '@deepseek-ai/dsh-host-apiproxy'
+import { AgentTeamError } from '../domain/errors.js'
+import type {
+  InteractionResponseInput,
+  PendingInteractionView,
+  QuestionAnswerView,
+  QuestionItemView,
+} from '../transport/contracts.js'
+
+type QuestionRequestedFrame = Extract<MuxFrame, { type: 'question/requested' }>
+type ApprovalRequestedFrame = Extract<MuxFrame, { type: 'approval/requested' }>
+
+type PendingInteractionRecord =
+  | {
+    id: string
+    kind: 'question'
+    rpcId: RpcRequest<MuxFrame>['rpcId']
+    sessionId: QuestionRequestedFrame['sessionId']
+    questions: QuestionItemView[]
+  }
+  | {
+    id: string
+    kind: 'approval'
+    rpcId: RpcRequest<MuxFrame>['rpcId']
+    sessionId: ApprovalRequestedFrame['sessionId']
+    approvalId: ApprovalRequestedFrame['approvalId']
+    toolName: string
+    callId?: string
+    reason?: string
+  }
+
+export interface TeamInteractionScope {
+  acceptsSession: (sessionId: string) => boolean
+  onChange: (sessionId: string) => void
+}
+
+export class TeamInteractionBridge {
+  private readonly records = new Map<string, PendingInteractionRecord>()
+  private readonly scopes = new Set<TeamInteractionScope>()
+  private abortController: AbortController | undefined
+  private consumeTask: Promise<void> | undefined
+
+  constructor(
+    private readonly ctx: Context,
+    scope?: TeamInteractionScope,
+  ) {
+    if (scope !== undefined) this.scopes.add(scope)
+  }
+
+  registerScope(scope: TeamInteractionScope): () => void {
+    this.scopes.add(scope)
+    return () => { this.scopes.delete(scope) }
+  }
+
+  start(): void {
+    if (this.abortController !== undefined) return
+    const controller = new AbortController()
+    this.abortController = controller
+    this.consumeTask = this.consume(controller.signal).catch(error => {
+      if (!controller.signal.aborted) {
+        this.ctx.logger.error('agent-team: interaction mux stopped unexpectedly', error)
+      }
+    })
+  }
+
+  list(sessionId: string): PendingInteractionView[] {
+    return [...this.records.values()]
+      .filter(record => String(record.sessionId) === sessionId)
+      .map(toView)
+  }
+
+  forget(sessionId: string): void {
+    for (const [id, record] of this.records) {
+      if (String(record.sessionId) === sessionId) this.records.delete(id)
+    }
+  }
+
+  async respond(
+    sessionId: string,
+    interactionId: string,
+    response: InteractionResponseInput,
+  ): Promise<void> {
+    const record = this.records.get(interactionId)
+    if (record === undefined) {
+      throw new AgentTeamError('INTERACTION_NOT_FOUND', '该交互请求已结束或不存在')
+    }
+    if (String(record.sessionId) !== sessionId || !this.acceptsSession(sessionId)) {
+      throw new AgentTeamError('INTERACTION_NOT_FOUND', '该交互请求不属于指定的会话')
+    }
+    let value: unknown
+    if (record.kind === 'question') {
+      if (response.kind !== 'question') {
+        throw new AgentTeamError('INTERACTION_INVALID', '交互响应类型与待处理请求不匹配')
+      }
+      value = {
+        sessionId: record.sessionId,
+        answer: { answers: normalizeQuestionAnswers(record.questions, response.answers) },
+      }
+    } else {
+      if (response.kind !== 'approval') {
+        throw new AgentTeamError('INTERACTION_INVALID', '交互响应类型与待处理请求不匹配')
+      }
+      value = {
+        sessionId: record.sessionId,
+        approvalId: record.approvalId,
+        outcome: response.outcome,
+      }
+    }
+    const receipt = await this.ctx.apiProxy.respond({
+      type: 'client-response',
+      rpcId: record.rpcId,
+      result: { ok: true, value },
+    })
+    if (receipt.accepted) return
+    if (receipt.reason === 'not-pending') {
+      this.records.delete(record.id)
+      this.notifyChange(String(record.sessionId))
+      throw new AgentTeamError('INTERACTION_NOT_PENDING', '该交互请求已由其他页面处理')
+    }
+    throw new AgentTeamError('INTERACTION_INVALID', 'Harness 拒绝了该交互响应')
+  }
+
+  async dispose(): Promise<void> {
+    const controller = this.abortController
+    this.abortController = undefined
+    controller?.abort()
+    await this.consumeTask
+    this.consumeTask = undefined
+    this.records.clear()
+  }
+
+  private async consume(signal: AbortSignal): Promise<void> {
+    const stream = this.ctx.apiProxy.events.mux({
+      rpcId: RpcId(randomUUID()),
+      payload: {},
+    }, signal)
+    for await (const envelope of stream) {
+      if (signal.aborted) return
+      this.accept(envelope)
+    }
+  }
+
+  private accept(envelope: RpcRequest<MuxFrame>): void {
+    const frame = envelope.payload
+    if (frame.type === 'question/requested') {
+      if (!this.acceptsSession(String(frame.sessionId))) return
+      const record: PendingInteractionRecord = {
+        id: `question:${String(envelope.rpcId)}`,
+        kind: 'question',
+        rpcId: envelope.rpcId,
+        sessionId: frame.sessionId,
+        questions: frame.questions.map(question => ({
+          id: question.id,
+          question: question.question,
+          ...(question.detail === undefined ? {} : { detail: question.detail }),
+          ...(question.header === undefined ? {} : { header: question.header }),
+          ...(question.options === undefined ? {} : {
+            options: question.options.map(option => ({
+              label: option.label,
+              ...(option.description === undefined ? {} : { description: option.description }),
+            })),
+          }),
+          ...(question.multiSelect === undefined ? {} : { multiSelect: question.multiSelect }),
+          ...(question.intent === undefined ? {} : { intent: { ...question.intent } }),
+        })),
+      }
+      this.records.set(record.id, record)
+      this.notifyChange(String(frame.sessionId))
+      return
+    }
+    if (frame.type === 'approval/requested') {
+      if (!this.acceptsSession(String(frame.sessionId))) return
+      const record: PendingInteractionRecord = {
+        id: `approval:${String(frame.approvalId)}`,
+        kind: 'approval',
+        rpcId: envelope.rpcId,
+        sessionId: frame.sessionId,
+        approvalId: frame.approvalId,
+        toolName: frame.toolName,
+        ...(frame.callId === undefined ? {} : { callId: String(frame.callId) }),
+        ...(frame.reason === undefined ? {} : { reason: frame.reason }),
+      }
+      this.records.set(record.id, record)
+      this.notifyChange(String(frame.sessionId))
+      return
+    }
+    if (frame.type === 'question/resolved') {
+      this.remove(`question:${String(frame.questionRpcId)}`, String(frame.sessionId))
+      return
+    }
+    if (frame.type === 'approval/resolved') {
+      this.remove(`approval:${String(frame.approvalId)}`, String(frame.sessionId))
+    }
+  }
+
+  private remove(id: string, sessionId: string): void {
+    if (!this.records.delete(id)) return
+    this.notifyChange(sessionId)
+  }
+
+  private acceptsSession(sessionId: string): boolean {
+    return [...this.scopes].some(scope => scope.acceptsSession(sessionId))
+  }
+
+  private notifyChange(sessionId: string): void {
+    for (const scope of this.scopes) {
+      if (scope.acceptsSession(sessionId)) scope.onChange(sessionId)
+    }
+  }
+}
+
+export function normalizeQuestionAnswers(
+  questions: readonly QuestionItemView[],
+  answers: readonly QuestionAnswerView[],
+): QuestionAnswerView[] {
+  const byId = new Map<string, QuestionAnswerView>()
+  for (const answer of answers) {
+    if (byId.has(answer.id)) {
+      throw new AgentTeamError('INTERACTION_INVALID', `问题“${answer.id}”存在重复答案`)
+    }
+    byId.set(answer.id, answer)
+  }
+  if (byId.size !== questions.length) {
+    throw new AgentTeamError('INTERACTION_INVALID', '请完成全部问题后再提交')
+  }
+  return questions.map(question => {
+    const answer = byId.get(question.id)
+    if (answer === undefined) {
+      throw new AgentTeamError('INTERACTION_INVALID', `缺少问题“${question.id}”的答案`)
+    }
+    const selected = [...answer.selected]
+    if (new Set(selected).size !== selected.length) {
+      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”包含重复选项`)
+    }
+    const allowed = new Set(question.options?.map(option => option.label) ?? [])
+    if (selected.some(label => !allowed.has(label))) {
+      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”包含无效选项`)
+    }
+    if (question.multiSelect !== true && selected.length > 1) {
+      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”只能选择一个选项`)
+    }
+    const custom = answer.custom?.trim()
+    if (question.multiSelect !== true && custom !== undefined && custom.length > 0 && selected.length > 0) {
+      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”的自定义答案不能与单选项同时提交`)
+    }
+    if (selected.length === 0 && (custom === undefined || custom.length === 0)) {
+      throw new AgentTeamError('INTERACTION_INVALID', `请回答问题“${question.question}”`)
+    }
+    return {
+      id: question.id,
+      selected,
+      ...(custom === undefined || custom.length === 0 ? {} : { custom }),
+    }
+  })
+}
+
+function toView(record: PendingInteractionRecord): PendingInteractionView {
+  if (record.kind === 'question') {
+    return { id: record.id, kind: record.kind, questions: record.questions }
+  }
+  return {
+    id: record.id,
+    kind: record.kind,
+    approvalId: String(record.approvalId),
+    toolName: record.toolName,
+    ...(record.callId === undefined ? {} : { callId: record.callId }),
+    ...(record.reason === undefined ? {} : { reason: record.reason }),
+  }
+}

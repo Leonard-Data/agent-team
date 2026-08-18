@@ -25,6 +25,7 @@ import { shouldSubmitComposer } from '../keyboard.js'
 import { PERMISSION_LABELS } from '../labels.js'
 import { AnimatedModal, Empty, Field } from '../shared.js'
 import { ConversationNodeView } from '../workbench/ConversationColumn.js'
+import { PendingInteractionCard } from '../workbench/PendingInteractionCard.js'
 import conversationCss from '../workbench/ConversationColumn.module.css'
 
 const ASSISTANT_FORM_ID = 'agent-team-assistant-form'
@@ -50,7 +51,7 @@ export function AssistantPanel({
           <h2 className={css.sectionHeading}>助手模板 <span className={css.count}>{assistants.length}</span></h2>
           <p className={css.sectionDescription}>助手是可复用模板，解散团队不会删除助手。</p>
         </div>
-        <div className={css.actions}>
+        <div className={css.sectionHeaderActions}>
           <Button variant="primary" onClick={() => { setCreating(true) }}>手动新建</Button>
         </div>
       </div>
@@ -251,7 +252,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
     const element = timeline.current
     if (element === null) return
     element.scrollTop = element.scrollHeight
-  }, [conversation?.throughSeq, conversation?.nodes.length])
+  }, [conversation?.throughSeq, conversation?.nodes.length, conversation?.pendingInteractions.length])
 
   async function send(): Promise<void> {
     const message = content.trim()
@@ -383,6 +384,16 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
   }
 
   const running = conversation?.status === 'running'
+  const pendingInteractions = conversation?.pendingInteractions ?? []
+  const runtimeLabel = pendingInteractions.some(interaction => interaction.kind === 'approval')
+    ? '等待审批'
+    : pendingInteractions.length > 0
+      ? '等待回答'
+      : loading
+        ? '正在启动…'
+        : running
+          ? '正在思考'
+          : '可以对话'
   const providers = catalog?.providers ?? []
   const models = catalog?.models[selectedProvider] ?? []
   const appliedConfiguration = conversation?.configuration ?? draft?.configuration
@@ -441,7 +452,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         <div className={css.assistantBuilderRuntime}>
         <span className={css.assistantBuilderRuntimeState}>
           <span className={`${css.statusDot} ${running ? css.statusRunning : css.statusIdle}`} aria-hidden="true" />
-          <span>{loading ? '正在启动…' : running ? '正在思考' : '可以对话'}</span>
+          <span>{runtimeLabel}</span>
         </span>
         <div className={css.assistantBuilderModelControls}>
           <select
@@ -491,6 +502,20 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           </article>
         )}
         {conversation?.nodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
+        {pendingInteractions.map(interaction => (
+          <PendingInteractionCard
+            key={interaction.id}
+            interaction={interaction}
+            onRespond={async response => {
+              if (conversation === undefined) return
+              await callAgentTeam('assistant.builder.interaction.respond', {
+                sessionId: conversation.sessionId,
+                interactionId: interaction.id,
+                response,
+              })
+            }}
+          />
+        ))}
         </div>
         <form
         className={`${conversationCss.composer} ${css.assistantBuilderComposer}`}

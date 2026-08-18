@@ -41,6 +41,7 @@ describe('AssistantBuilderRuntime', () => {
       config,
       {} as never,
       fakeModelPreferences(),
+      fakeInteractionBridge() as never,
     )
 
     await expect(runtime.listConversations()).resolves.toEqual({
@@ -132,11 +133,13 @@ describe('AssistantBuilderRuntime', () => {
         lastSelectedModel = { provider, model }
       }),
     }
+    const interactions = fakeInteractionBridge()
     const runtime = new AssistantBuilderRuntime(
       ctx as never,
       config,
       service as never,
       modelPreferences,
+      interactions as never,
     )
 
     await expect(runtime.getDraft()).resolves.toMatchObject({
@@ -148,6 +151,10 @@ describe('AssistantBuilderRuntime', () => {
     expect(ctx.agents.create).not.toHaveBeenCalled()
 
     const initial = await runtime.getConversation('agent-team:assistant-builder')
+    await runtime.respondToInteraction('agent-team:assistant-builder', 'question:rpc-1', {
+      kind: 'question',
+      answers: [{ id: 'name', selected: ['Reviewer'] }],
+    })
     const switched = await runtime.configure('agent-team:assistant-builder', 'zai-coding-cn', 'glm-5.3')
 
     expect(initial.configuration).toMatchObject({
@@ -170,7 +177,12 @@ describe('AssistantBuilderRuntime', () => {
       'glm-5.3',
     )
     expect(cwdVariable).toHaveBeenCalledWith('cwd', expect.any(Function))
-    expect(restrict).toHaveBeenCalledWith({ deny: ['ask_user_question', 'bash'] })
+    expect(restrict).toHaveBeenCalledWith({ deny: ['bash'] })
+    expect(interactions.respond).toHaveBeenCalledWith(
+      'agent-team:assistant-builder',
+      'question:rpc-1',
+      { kind: 'question', answers: [{ id: 'name', selected: ['Reviewer'] }] },
+    )
 
     await runtime.dispose()
 
@@ -181,6 +193,7 @@ describe('AssistantBuilderRuntime', () => {
       config,
       service as never,
       modelPreferences,
+      fakeInteractionBridge() as never,
     )
     const restarted = await restartedRuntime.getConversation('agent-team:assistant-builder')
 
@@ -250,6 +263,14 @@ function fakeModelPreferences() {
     setConversationModel: vi.fn(async () => {}),
     setSelectedModel: vi.fn(async () => {}),
     setLastSelectedModel: vi.fn(async () => {}),
+  }
+}
+
+function fakeInteractionBridge() {
+  return {
+    registerScope: vi.fn(() => vi.fn()),
+    list: vi.fn(() => []),
+    respond: vi.fn(async () => undefined),
   }
 }
 

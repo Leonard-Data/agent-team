@@ -23,6 +23,7 @@ import { insertWorkspaceFileMention } from '../file-mentions.js'
 import { CrownIcon } from '../icons/CrownIcon.js'
 import { shouldSubmitComposer } from '../keyboard.js'
 import { memberStatusLabel, PERMISSION_LABELS } from '../labels.js'
+import { PendingInteractionCard } from './PendingInteractionCard.js'
 
 export function ConversationColumn({
   team,
@@ -61,6 +62,12 @@ export function ConversationColumn({
   const canChat = team.state === 'active' && (member.role === 'leader' || team.directMemberChat)
   const running = conversation?.status === 'running'
   const visibleNodes = mergeConversationNodes(conversation?.nodes ?? [], pendingMessages)
+  const pendingInteractions = conversation?.pendingInteractions ?? []
+  const statusLabel = pendingInteractions.some(interaction => interaction.kind === 'approval')
+    ? '等待审批'
+    : pendingInteractions.length > 0
+      ? '等待回答'
+      : memberStatusLabel(conversation?.status ?? member.lastRuntimeState)
 
   useEffect(() => {
     setPermissionPresetId(member.permissionPresetId)
@@ -81,7 +88,7 @@ export function ConversationColumn({
       if (timeline !== null) timeline.scrollTop = timeline.scrollHeight
     })
     return () => { cancelAnimationFrame(frame) }
-  }, [conversation?.throughSeq, pendingMessages.length])
+  }, [conversation?.throughSeq, pendingInteractions.length, pendingMessages.length])
 
   async function send(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -208,7 +215,7 @@ export function ConversationColumn({
           </div>
         </div>
         <div className={css.columnHeaderActions}>
-          <span className={css.columnStatus}>{memberStatusLabel(conversation?.status ?? member.lastRuntimeState)}</span>
+          <span className={css.columnStatus}>{statusLabel}</span>
           {expanded && (
             <Tooltip label="关闭放大对话" side="bottom" delayMs={400}>
               <button
@@ -232,13 +239,30 @@ export function ConversationColumn({
           stickToBottom.current = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 80
         }}
       >
-        {visibleNodes.length === 0
+        {visibleNodes.length === 0 && pendingInteractions.length === 0
           ? <div className={css.columnEmpty}>
             <span className={css.emptyAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
             <strong>{member.displayName}</strong>
             <span>{member.role === 'leader' ? '向 Leader 描述目标，由它组织团队协作。' : '等待 Leader 分配任务，或直接向该成员发送消息。'}</span>
           </div>
-          : visibleNodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
+          : <>
+            {visibleNodes.map(node => <ConversationNodeView key={node.id} node={node} />)}
+            {pendingInteractions.map(interaction => (
+              <PendingInteractionCard
+                key={interaction.id}
+                interaction={interaction}
+                onRespond={async response => {
+                  await callAgentTeam('team.interaction.respond', {
+                    teamId: team.id,
+                    slotId: member.id,
+                    interactionId: interaction.id,
+                    response,
+                  })
+                  await onSent()
+                }}
+              />
+            ))}
+          </>}
       </div>
       <form className={css.composer} onSubmit={(event) => { void send(event) }}>
         <textarea

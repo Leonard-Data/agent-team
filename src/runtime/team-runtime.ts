@@ -19,10 +19,15 @@ import type {
   TeamMessage,
 } from '../domain/types.js'
 import type { AgentTeamService } from '../service/agent-team-service.js'
-import type { MemberConversationView, TeamWorkbenchView } from '../transport/contracts.js'
+import type {
+  InteractionResponseInput,
+  MemberConversationView,
+  TeamWorkbenchView,
+} from '../transport/contracts.js'
 import { projectContextUsage, projectConversation } from './conversation-projector.js'
 import { registerScopedSkillProvider } from './scoped-skills.js'
 import { TeamCommandHandler } from './team-command-handler.js'
+import { TeamInteractionBridge } from './team-interaction-bridge.js'
 import { TeamMessageDispatcher } from './team-message-dispatcher.js'
 import {
   createSystemTeamMessage as systemTeamMessage,
@@ -47,6 +52,7 @@ export class TeamRuntime {
   private readonly conversationPublishes = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly messages: TeamMessageDispatcher
   private readonly commands: TeamCommandHandler
+  private readonly interactions: TeamInteractionBridge
   private closing = false
 
   constructor(
@@ -62,6 +68,10 @@ export class TeamRuntime {
       deliverMessage: (teamId, messageId) => this.messages.deliver(teamId, messageId),
       followup: (sessionId, message) => { this.requireOwned(sessionId).handle.agent.followup(message) },
     })
+    this.interactions = new TeamInteractionBridge(ctx, {
+      acceptsSession: sessionId => this.owned.has(sessionId),
+      onChange: sessionId => { this.publishOwnedConversation(sessionId) },
+    })
     this.disposeStatusListener = ctx.on('agent/status', ({ agent, status }) => {
       const owned = this.owned.get(String(agent.id))
       if (owned === undefined) return
@@ -74,21 +84,21 @@ export class TeamRuntime {
       const timer = setTimeout(() => {
         this.conversationPublishes.delete(String(session.id))
         try {
-          const team = this.service.getTeam(owned.teamId)
-          const member = team.members[owned.slotId]
-          const current = this.owned.get(String(session.id))
-          if (member === undefined || current === undefined) return
-          this.service.publishConversation(
-            team.id,
-            team.revision,
-            this.projectMemberConversation(team, member, current.handle.agent.session.events),
-          )
+          this.publishOwnedConversation(String(session.id))
         } catch (error) {
           this.ctx.logger.warn('agent-team: failed to publish conversation update', error)
         }
       }, 48)
       this.conversationPublishes.set(String(session.id), timer)
     })
+  }
+
+  startInteractionBridge(): void {
+    this.interactions.start()
+  }
+
+  interactionBridge(): TeamInteractionBridge {
+    return this.interactions
   }
 
   async getWorkbench(teamId: string): Promise<TeamWorkbenchView> {
@@ -131,6 +141,22 @@ export class TeamRuntime {
         this.projectMemberConversation(current, currentMember, owned.handle.agent.session.events),
       )
     }
+  }
+
+  async respondToInteraction(
+    teamId: string,
+    slotId: string,
+    interactionId: string,
+    response: InteractionResponseInput,
+  ): Promise<void> {
+    const team = this.service.getTeam(teamId)
+    const member = team.members[slotId]
+    if (member === undefined) throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown member '${slotId}'`)
+    const owned = this.owned.get(member.sessionId)
+    if (owned === undefined || owned.teamId !== teamId || owned.slotId !== slotId) {
+      throw new AgentTeamError('INTERACTION_NOT_FOUND', '该交互请求不属于指定的团队成员')
+    }
+    await this.interactions.respond(member.sessionId, interactionId, response)
   }
 
   setMemberPermissionPreset(
@@ -182,6 +208,7 @@ export class TeamRuntime {
       slotId: member.id,
       sessionId: member.sessionId,
       status,
+      pendingInteractions: this.interactions.list(member.sessionId),
       ...projectConversation(events, 240, {
         team,
         messages: this.service.listMessages(team.id).items,
@@ -264,6 +291,7 @@ export class TeamRuntime {
         await owned.handle.agent.whenIdle()
         await this.ctx.sessions.flush(owned.handle.agent.session)
         this.owned.delete(member.sessionId)
+        this.interactions.forget(member.sessionId)
         await owned.handle.dispose()
       }
       const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
@@ -340,6 +368,7 @@ export class TeamRuntime {
           this.ctx.logger.warn(`agent-team: old session flush failed during reset for ${entry.member.sessionId}`, error)
         }
         this.owned.delete(entry.member.sessionId)
+        this.interactions.forget(entry.member.sessionId)
         await entry.owned.handle.dispose()
       }
       for (const member of members) {
@@ -442,6 +471,7 @@ export class TeamRuntime {
           }
           await entry.owned.handle.dispose()
           this.owned.delete(entry.member.sessionId)
+          this.interactions.forget(entry.member.sessionId)
         }
 
         const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
@@ -553,6 +583,7 @@ export class TeamRuntime {
     this.closing = true
     this.disposeStatusListener()
     this.disposeConversationListener()
+    await this.interactions.dispose()
     for (const timer of this.conversationPublishes.values()) clearTimeout(timer)
     this.conversationPublishes.clear()
     await Promise.allSettled([...this.operations.values()])
@@ -568,6 +599,23 @@ export class TeamRuntime {
     }
     await Promise.allSettled(owned.map(entry => entry.handle.dispose()))
     this.owned.clear()
+  }
+
+  private publishOwnedConversation(sessionId: string): void {
+    try {
+      const owned = this.owned.get(sessionId)
+      if (owned === undefined) return
+      const team = this.service.getTeam(owned.teamId)
+      const member = team.members[owned.slotId]
+      if (member === undefined) return
+      this.service.publishConversation(
+        team.id,
+        team.revision,
+        this.projectMemberConversation(team, member, owned.handle.agent.session.events),
+      )
+    } catch (error) {
+      this.ctx.logger.warn('agent-team: failed to publish interaction update', error)
+    }
   }
 
   private async startTeamUnlocked(teamId: string): Promise<TeamAggregate> {

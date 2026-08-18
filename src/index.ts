@@ -1,5 +1,6 @@
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-host-apiproxy'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
@@ -27,6 +28,7 @@ export const name = 'agent-team'
 export const inject = [
   'agents',
   'agentPresets',
+  'apiProxy',
   'llm',
   'permissionPresets',
   'sessionPersistence',
@@ -64,6 +66,7 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
       config,
       service,
       assistantBuilderModelPreferences,
+      runtime.interactionBridge(),
     )
     service.attachRuntime(runtime)
     service.attachAssistantBuilderRuntime(assistantBuilderRuntime)
@@ -77,6 +80,7 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
       await domain.close()
     }, 'agent-team: ordered shutdown')
     await runtime.recoverTeams()
+    runtime.startInteractionBridge()
     service.startWorkspaceTracking()
   } catch (error) {
     transport?.dispose()

@@ -18,8 +18,10 @@ import type {
   AssistantBuilderConversationSummary,
   AssistantBuilderConversationView,
   AssistantBuilderDraftView,
+  InteractionResponseInput,
 } from '../transport/contracts.js'
 import { projectConversation } from './conversation-projector.js'
+import type { TeamInteractionBridge } from './team-interaction-bridge.js'
 
 export const ASSISTANT_BUILDER_SESSION_ID = 'agent-team:assistant-builder'
 const ASSISTANT_BUILDER_SESSION_PREFIX = `${ASSISTANT_BUILDER_SESSION_ID}:`
@@ -32,7 +34,7 @@ export const ASSISTANT_BUILDER_PROMPT = `
 1. 先理解用户希望这个助手承担的职责、工作边界、输出方式和协作习惯。
 2. 创建前必须收集名称、Provider、模型、Agent Preset、权限预设和长期提示词。说明按需要收集；可用 Skills 和 MCP Servers 由用户从真实目录中选择，都可以不选。
 3. 必须先调用 assistant_builder_get_catalog 获取当前真实可选项；Provider、模型、Preset 和权限只能使用目录中存在的标识，不能编造。确定 Agent Preset 后，再携带 agentPresetId 调用一次目录工具，取得该 Preset 可用的 Skills 和 MCP Servers。
-4. 参数不完整或意图含糊时，一次只追问最关键的少量问题，并给出基于目录的简短选项和建议。追问必须直接输出中文文本，不调用 ask_user_question 或其他交互式问答工具。
+4. 参数不完整或意图含糊时，优先调用 ask_user_question，一次询问一至三个最关键的问题，并给出基于真实目录的简短选项和建议。问题较开放、需要用户详细描述，或只是普通解释时，可以直接输出中文文本。
 5. 长期提示词应描述稳定职责、约束、工作流程和验收要求，不要写入用户眼前的一次性任务。
 6. 只保存用户明确选择的 Skills 和 MCP Servers；未选择就表示不使用，不能猜测名称。不要询问或限制普通工具，工具能力由 Agent Preset 提供。
 7. 配置完整后调用 assistant_builder_prepare 校验并暂存草稿；此步骤不会创建助手，新草稿会替代旧草稿。
@@ -68,6 +70,7 @@ export class AssistantBuilderRuntime {
   private publishTimer: ReturnType<typeof setTimeout> | undefined
   private readonly disposeStatusListener: () => void
   private readonly disposeConversationListener: () => void
+  private readonly disposeInteractionScope: () => void
   private closing = false
 
   constructor(
@@ -75,7 +78,14 @@ export class AssistantBuilderRuntime {
     private readonly config: Config,
     private readonly service: AgentTeamService,
     private readonly modelPreferences: AssistantBuilderModelPreferenceStore,
+    private readonly interactions: TeamInteractionBridge,
   ) {
+    this.disposeInteractionScope = interactions.registerScope({
+      acceptsSession: isAssistantBuilderSessionId,
+      onChange: sessionId => {
+        if (sessionId === this.activeSessionId) this.publishCurrent()
+      },
+    })
     this.disposeStatusListener = ctx.on('agent/status', ({ agent }) => {
       if (String(agent.id) !== this.activeSessionId || this.closing) return
       this.publishCurrent()
@@ -199,6 +209,19 @@ export class AssistantBuilderRuntime {
     this.publishCurrent()
   }
 
+  async respondToInteraction(
+    rawSessionId: string,
+    interactionId: string,
+    response: InteractionResponseInput,
+  ): Promise<void> {
+    const sessionId = await this.requireExistingSessionId(rawSessionId)
+    await this.ensureOnline(sessionId)
+    if (this.activeSessionId !== sessionId) {
+      throw new AgentTeamError('INTERACTION_NOT_FOUND', '该交互请求不属于当前团队 Agent 小助手会话')
+    }
+    await this.interactions.respond(sessionId, interactionId, response)
+  }
+
   async archiveConversation(rawSessionId: string): Promise<void> {
     if (this.closing) throw new Error('Assistant Builder runtime is closing')
     await this.reconfiguring?.catch(() => undefined)
@@ -230,6 +253,7 @@ export class AssistantBuilderRuntime {
     this.closing = true
     this.disposeStatusListener()
     this.disposeConversationListener()
+    this.disposeInteractionScope()
     if (this.publishTimer !== undefined) clearTimeout(this.publishTimer)
     this.publishTimer = undefined
     await this.reconfiguring?.catch(() => undefined)
@@ -367,6 +391,7 @@ export class AssistantBuilderRuntime {
         'assistant_builder_get_catalog',
         'assistant_builder_prepare',
         'assistant_builder_commit',
+        'ask_user_question',
       ])
       agentCtx.tools.guard(execution => allowedTools.has(execution.name)
         ? undefined
@@ -684,6 +709,7 @@ export class AssistantBuilderRuntime {
       schemaVersion: 1,
       sessionId,
       status,
+      pendingInteractions: this.interactions.list(sessionId),
       ...projectConversation(events),
       configuration: this.configuration,
     }

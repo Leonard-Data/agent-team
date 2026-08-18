@@ -105,6 +105,7 @@ describe('AgentTeamService', () => {
       status: 'idle' as const,
       throughSeq: -1,
       nodes: [],
+      pendingInteractions: [],
       configuration: {
         provider: 'test-provider',
         model: 'test-model',
@@ -138,6 +139,7 @@ describe('AgentTeamService', () => {
         },
       })),
       sendMessage: vi.fn(async () => ({ messageId: 'message-1' })),
+      respondToInteraction: vi.fn(async () => {}),
       stop: vi.fn(async () => {}),
       archiveConversation: vi.fn(async () => {}),
     }
@@ -158,10 +160,19 @@ describe('AgentTeamService', () => {
       configuration: { provider: 'another-provider', model: 'another-model' },
     })
     await expect(service.sendAssistantBuilderMessage(conversation.sessionId, 'Create a reviewer')).resolves.toEqual({ messageId: 'message-1' })
+    await service.respondToAssistantBuilderInteraction(conversation.sessionId, 'question:1', {
+      kind: 'question',
+      answers: [{ id: 'name', selected: ['Reviewer'] }],
+    })
     await service.stopAssistantBuilder(conversation.sessionId)
     await service.archiveAssistantBuilderConversation(conversation.sessionId)
 
     expect(builder.sendMessage).toHaveBeenCalledWith(conversation.sessionId, 'Create a reviewer')
+    expect(builder.respondToInteraction).toHaveBeenCalledWith(
+      conversation.sessionId,
+      'question:1',
+      { kind: 'question', answers: [{ id: 'name', selected: ['Reviewer'] }] },
+    )
     expect(builder.startConversation).toHaveBeenCalledWith('test-provider', 'test-model', 'Create a reviewer')
     expect(builder.configureDraft).toHaveBeenCalledWith('another-provider', 'another-model')
     expect(builder.configure).toHaveBeenCalledWith(conversation.sessionId, 'another-provider', 'another-model')
@@ -177,7 +188,7 @@ describe('AgentTeamService', () => {
     expect(ASSISTANT_BUILDER_PROMPT).toContain('明确表达同意')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('不要询问或限制普通工具')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('MCP Servers')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('不调用 ask_user_question')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('优先调用 ask_user_question')
   })
 
   it('lists only model-invocable Skills for the chosen Agent Preset', async () => {

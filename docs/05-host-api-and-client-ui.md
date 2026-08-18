@@ -63,6 +63,7 @@ type AgentTeamRequest = {
 | `mcp.catalog` | 按 Agent Preset standing scope 将 `mcp__<server>__<tool>` 工具分组为可选 MCP Servers |
 | `assistant.create/update/clone/delete` | 助手模板生命周期 |
 | `assistant.builder.configure/send/stop/archive` | 按 Session 选择模型、驱动、停止或通过 Workspace Registry 归档内置“团队 Agent 小助手”对话 |
+| `assistant.builder.interaction.respond` | 通过 rc7 ApiProxy response carrier 回答团队 Agent 小助手的 Question 或 Approval |
 | `team.createDraft/start` | 团队创建与启动；`start` 也用于启动失败后的重试 |
 | `team.addMember/removeMember` | 动态成员管理 |
 | `team.changeLeader` | 原子更换 Leader |
@@ -120,7 +121,7 @@ ctx.slots.inject('shell.overlay', () =>
 
 Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使用公开的底部 `sidebar.footer.action`；插件不修改 Harness 源码，不使用 DOM/CSS 注入。
 
-多列工作台不依赖全局当前 Session，也不接管官方 `conversation.composer`。它通过 Team API 把每列输入投递到对应成员 Session，并从 Host Conversation Projector 接收历史和流式 patch。`ctx.sessions.open(SessionId(member.sessionId))` 只用于“在标准会话中打开”辅助入口，特别是首版处理 Harness Approval/Question 时。
+多列工作台不依赖全局当前 Session，也不接管官方 `conversation.composer`。它通过 Team API 把每列输入投递到对应成员 Session，并从 Host Conversation Projector 接收历史和流式 patch。Approval/Question 由 rc7 ApiProxy 官方 mux 与 response carrier 处理，无需切换全局当前 Session。
 
 ## UI 信息架构
 
@@ -139,7 +140,7 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 
 ### 助手库
 
-- 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复最近会话；点击“新对话”只进入客户端草稿，首次发送通过 `assistant.builder.start` 原子创建 Session 并投递消息。未发送草稿不进入历史、不能归档，历史列表同时过滤旧版本遗留的空 Session。用户可通过项目内确认弹窗调用 Harness 官方 `workspaceRegistry.archiveSession` 归档闲置历史；当前会话正在生成时必须先停止。归档会话依据 `archivedSessionIds` 从列表和恢复入口中排除，底层日志保留。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。创建助手模板使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，选择持久化到独立偏好 Domain；历史会话恢复自己的模型，新对话草稿继承最近一次选择。同一会话可连续创建多个助手。
+- 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复最近会话；点击“新对话”只进入客户端草稿，首次发送通过 `assistant.builder.start` 原子创建 Session 并投递消息。未发送草稿不进入历史、不能归档，历史列表同时过滤旧版本遗留的空 Session。用户可通过项目内确认弹窗调用 Harness 官方 `workspaceRegistry.archiveSession` 归档闲置历史；当前会话正在生成时必须先停止。归档会话依据 `archivedSessionIds` 从列表和恢复入口中排除，底层日志保留。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。缺少结构化配置时，小助手优先调用 `ask_user_question`，Question/Approval 由与成员工作台共享的 rc7 官方 mux 桥接在弹窗内展示和提交。创建助手模板使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，选择持久化到独立偏好 Domain；历史会话恢复自己的模型，新对话草稿继承最近一次选择。同一会话可连续创建多个助手。
 - Provider/Model 由 Host Catalog API 返回。
 - Provider 和 Model 必填；模型只能从 Host 返回的真实候选项中选择。
 - 助手列表统一按创建时间正序展示，先创建的助手排在最前；设置页、团队组建器和添加成员入口共用 `assistant.list` 的顺序。

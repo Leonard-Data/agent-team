@@ -147,7 +147,7 @@ Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件�
 - [x] 实现助手创建/复制/删除和基础团队组建器。
 - [ ] 实现完整多列 Conversation 工作台、任务板和管理抽屉。
 - [ ] 可选注册 `conversation.session.header.actions`，提供从标准单 Session 返回团队的入口。
-- [ ] 为 Approval/Question 提供安全衔接；首版跳转标准 Session，不能伪造交互响应。
+- [x] 为 Approval/Question 提供安全衔接；Host 侧消费 rc7 官方 mux 并通过 `apiProxy.respond` 提交结构化响应，不伪造 Session 事件。
 - [ ] 实现换 Leader、增删成员和模板同步交互（换 Leader、增删成员已完成；模板同步未完成）。
 - [x] 团队管理提供名称精确确认的解散入口；失败进入 `delete_blocked` 并可重试。
 - [ ] 完成键盘、焦点、小窗口和断线恢复测试。

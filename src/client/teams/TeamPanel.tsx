@@ -15,6 +15,7 @@ import type {
   TeamWorkbenchView,
 } from '../../transport/contracts.js'
 import { callAgentTeam, subscribeAgentTeamConversation } from '../api.js'
+import { AssistantPanel } from '../assistants/AssistantPanel.js'
 import css from '../AgentTeam.module.css'
 import { CrownIcon } from '../icons/CrownIcon.js'
 import { memberStatusLabel, TASK_STATE_LABELS } from '../labels.js'
@@ -48,14 +49,22 @@ export function TeamPanel({
   onChanged: () => Promise<void>
 }): JSX.Element {
   const [creating, setCreating] = useState(false)
+  const [managingAssistants, setManagingAssistants] = useState(false)
   const selectedTeam = teams.find(team => team.id === selectedTeamId)
   const visibleTeams = selectedTeamId === undefined
     ? teams
     : teams.filter(team => team.id === selectedTeamId)
 
   useEffect(() => {
-    if (createRequest > 0) setCreating(true)
+    if (createRequest > 0) {
+      setManagingAssistants(false)
+      setCreating(true)
+    }
   }, [createRequest])
+
+  useEffect(() => {
+    if (selectedTeamId !== undefined) setManagingAssistants(false)
+  }, [selectedTeamId])
 
   return (
     <section className={css.section}>
@@ -64,13 +73,18 @@ export function TeamPanel({
           <h2 className={css.sectionHeading}>团队 <span className={css.count}>{teams.length}</span></h2>
           <p className={css.sectionDescription}>选择 Leader 和成员，共享同一个 Workspace 协作。</p>
         </div>
-        <Button variant="primary" disabled={assistants.length === 0} onClick={() => { setCreating(true) }}>
-          组建团队
-        </Button>
+        <div className={css.sectionHeaderActions}>
+          <Button variant="outline" onClick={() => { setManagingAssistants(true) }}>
+            管理助手
+          </Button>
+          <Button variant="primary" disabled={assistants.length === 0} onClick={() => { setCreating(true) }}>
+            组建团队
+          </Button>
+        </div>
       </div>}
       {selectedTeam === undefined
         ? visibleTeams.length === 0
-          ? <Empty text="还没有团队" hint="先在“设置 → Agent 团队”创建助手，再选择 Leader 和团队成员。" />
+          ? <Empty text="还没有团队" hint="先通过右上角“管理助手”创建助手，再选择 Leader 和团队成员。" />
           : <div className={css.cardList}>{visibleTeams.map(team => <TeamCard key={team.id} team={team} assistants={assistants} onChanged={onChanged} />)}</div>
         : <TeamWorkbench
           team={selectedTeam}
@@ -78,6 +92,23 @@ export function TeamPanel({
           permissionPresets={catalog?.permissionPresets ?? []}
           onChanged={onChanged}
         />}
+      <AnimatedModal
+        open={managingAssistants}
+        onClose={() => { setManagingAssistants(false) }}
+        title="管理助手"
+        closeLabel="关闭"
+        description="创建和维护可在不同团队间复用的助手模板。"
+        className={css.assistantManagementDialog ?? ''}
+        contentClassName={css.assistantManagementDialogContent ?? ''}
+      >
+        <div className={css.assistantManagementBody}>
+          <AssistantPanel
+            catalog={catalog}
+            assistants={assistants}
+            onChanged={onChanged}
+          />
+        </div>
+      </AnimatedModal>
       <AnimatedModal
         open={creating}
         onClose={() => { setCreating(false) }}

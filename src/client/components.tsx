@@ -42,10 +42,15 @@ export function TeamSidebarEntry({ wide }: { wide: boolean }): JSX.Element {
     <section className={`${css.sidebarTeams} ${wide ? '' : css.sidebarTeamsRail}`} aria-label="团队">
       <div className={css.sidebarTeamHeader}>
         <Tooltip label="团队" delayMs={500} disabled={wide}>
-          <div className={css.sidebarTeamMain}>
+          <button
+            type="button"
+            className={css.sidebarTeamMain}
+            onClick={openTeams}
+            aria-label="打开团队工作台"
+          >
             <IconAgentPresetOutline16 size={wide ? 16 : 18} />
             {wide && <span className={css.sidebarTeamLabel}>团队</span>}
-          </div>
+          </button>
         </Tooltip>
         {wide && (
           <Tooltip label="组建团队" delayMs={500}>
