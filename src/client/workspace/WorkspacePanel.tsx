@@ -7,7 +7,6 @@ import {
   IconFolderOpen16,
   IconRefreshOutline16,
   IconRightUpOutline14,
-  Modal,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
@@ -18,6 +17,7 @@ import type {
   WorkspaceGitStatusView,
 } from '../../transport/contracts.js'
 import { callAgentTeam, subscribeAgentTeamWorkspace } from '../api.js'
+import { AnimatedModal } from '../shared.js'
 import css from './WorkspacePanel.module.css'
 
 export function WorkspacePanel({
@@ -314,7 +314,7 @@ function WorkspaceDiffDialog({
   const scopeLabel = target?.scope === 'staged' ? '已暂存' : '工作区'
   const hasTextPatch = diff !== undefined && !diff.binary && diff.html.length > 0
   return (
-    <Modal
+    <AnimatedModal
       open={target !== undefined}
       onClose={onClose}
       title={target?.change.path ?? '文件变更'}
@@ -359,7 +359,7 @@ function WorkspaceDiffDialog({
           {hasTextPatch && diff !== undefined && <WorkspaceDiffHtml html={diff.html} />}
         </div>
       </div>
-    </Modal>
+    </AnimatedModal>
   )
 }
 

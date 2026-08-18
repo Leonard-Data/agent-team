@@ -7,7 +7,6 @@ import {
   IconSendOutline16,
   IconStopFill16,
   MarkdownText,
-  Modal,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
@@ -24,7 +23,7 @@ import { callAgentTeam, subscribeAssistantBuilderConversation } from '../api.js'
 import css from '../AgentTeam.module.css'
 import { shouldSubmitComposer } from '../keyboard.js'
 import { PERMISSION_LABELS } from '../labels.js'
-import { Empty, Field } from '../shared.js'
+import { AnimatedModal, Empty, Field } from '../shared.js'
 import { ConversationNodeView } from '../workbench/ConversationColumn.js'
 
 const ASSISTANT_FORM_ID = 'agent-team-assistant-form'
@@ -77,7 +76,7 @@ export function AssistantPanel({
               ))}
             </div>
           )}
-      <Modal
+      <AnimatedModal
         open={builderOpen}
         onClose={() => { setBuilderOpen(false) }}
         title="团队 Agent 小助手"
@@ -87,8 +86,8 @@ export function AssistantPanel({
         contentClassName={css.assistantBuilderDialogContent ?? ''}
       >
         {builderOpen && <AssistantBuilderConversation catalog={catalog} />}
-      </Modal>
-      <Modal
+      </AnimatedModal>
+      <AnimatedModal
         open={creating}
         onClose={() => { setCreating(false) }}
         title="新建助手"
@@ -117,8 +116,8 @@ export function AssistantPanel({
           setSaving={setAssistantSaving}
           onSaved={async () => { setCreating(false); await onChanged() }}
         />
-      </Modal>
-      <Modal
+      </AnimatedModal>
+      <AnimatedModal
         open={editingAssistant !== undefined}
         onClose={() => { setEditingAssistant(undefined) }}
         title="编辑助手"
@@ -153,7 +152,7 @@ export function AssistantPanel({
             onSaved={async () => { setEditingAssistant(undefined); await onChanged() }}
           />
         )}
-      </Modal>
+      </AnimatedModal>
     </section>
   )
 }
@@ -541,7 +540,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         </form>
       </div>
       </section>
-      <Modal
+      <AnimatedModal
         open={archiveCandidate !== undefined}
         onClose={() => {
           if (archivingSessionId === undefined) {
@@ -587,7 +586,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             {archiveError && <div role="alert" className={css.inlineError}>{archiveError}</div>}
           </div>
         )}
-      </Modal>
+      </AnimatedModal>
     </>
   )
 }
@@ -691,7 +690,7 @@ function AssistantCard({
         </div>
         {error && !deleteOpen && <div role="alert" className={css.inlineError}>{error}</div>}
       </article>
-      <Modal
+      <AnimatedModal
         open={deleteOpen}
         onClose={() => {
           if (busy) return
@@ -735,7 +734,7 @@ function AssistantCard({
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
-      </Modal>
+      </AnimatedModal>
     </>
   )
 }

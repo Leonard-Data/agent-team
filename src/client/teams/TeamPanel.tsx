@@ -6,7 +6,6 @@ import {
   IconCloseOutline16,
   IconFolderOpenOutline16,
   IconPlusOutline16,
-  Modal,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
@@ -24,7 +23,7 @@ import {
   reconcileVisibleMemberSlots,
   toggleVisibleMemberSlot,
 } from '../member-visibility.js'
-import { Empty, Field } from '../shared.js'
+import { AnimatedModal, Empty, Field } from '../shared.js'
 import { openTeam } from '../store.js'
 import { isTeamExecuting } from '../team-status.js'
 import type { WorkspaceChoice } from '../types.js'
@@ -79,7 +78,7 @@ export function TeamPanel({
           permissionPresets={catalog?.permissionPresets ?? []}
           onChanged={onChanged}
         />}
-      <Modal
+      <AnimatedModal
         open={creating}
         onClose={() => { setCreating(false) }}
         title="新建团队"
@@ -99,7 +98,7 @@ export function TeamPanel({
             await onChanged()
           }}
         />
-      </Modal>
+      </AnimatedModal>
     </section>
   )
 }
@@ -317,7 +316,7 @@ function TeamWorkbench({
           onCollapse={() => { setWorkspaceVisible(false) }}
         />
       )}
-      <Modal
+      <AnimatedModal
         open={managementOpen}
         onClose={() => { setManagementOpen(false) }}
         title="团队管理"
@@ -329,7 +328,7 @@ function TeamWorkbench({
         <div className={css.managementDialogBody}>
           <TeamCard team={team} assistants={assistants} onChanged={async () => { await onChanged(); await load() }} compact />
         </div>
-      </Modal>
+      </AnimatedModal>
       <AddTeamMemberDialog
         open={addMemberOpen}
         team={team}
@@ -337,7 +336,7 @@ function TeamWorkbench({
         onClose={() => { setAddMemberOpen(false) }}
         onChanged={async () => { await onChanged(); await load() }}
       />
-      <Modal
+      <AnimatedModal
         open={memberToRemove !== undefined}
         onClose={() => {
           if (memberActionBusy) return
@@ -379,7 +378,7 @@ function TeamWorkbench({
           </div>
           {memberActionError && <div role="alert" className={css.inlineError}>{memberActionError}</div>}
         </div>
-      </Modal>
+      </AnimatedModal>
     </div>
   )
 }
@@ -425,7 +424,7 @@ function AddTeamMemberDialog({
   }
 
   return (
-    <Modal
+    <AnimatedModal
       open={open}
       onClose={close}
       title="添加助手"
@@ -460,7 +459,7 @@ function AddTeamMemberDialog({
         {assistants.length === 0 && <span className={css.addMemberEmpty}>还没有可添加的助手模板</span>}
       </div>
       {error && <div role="alert" className={css.inlineError}>{error}</div>}
-    </Modal>
+    </AnimatedModal>
   )
 }
 
@@ -698,7 +697,7 @@ function TeamCard({
         onClose={() => { setAddingMember(false) }}
         onChanged={onChanged}
       />
-      <Modal
+      <AnimatedModal
         open={memberToRemove !== undefined}
         onClose={() => {
           if (busy) return
@@ -740,8 +739,8 @@ function TeamCard({
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
-      </Modal>
-      <Modal
+      </AnimatedModal>
+      <AnimatedModal
         open={resetOpen}
         onClose={() => {
           if (busy) return
@@ -783,8 +782,8 @@ function TeamCard({
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
-      </Modal>
-      <Modal
+      </AnimatedModal>
+      <AnimatedModal
         open={dissolveOpen}
         onClose={() => {
           if (busy) return
@@ -826,7 +825,7 @@ function TeamCard({
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
-      </Modal>
+      </AnimatedModal>
     </>
   )
 }
