@@ -433,8 +433,9 @@
 }
 
 .cardList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(560px, 100%), 1fr));
+  align-items: start;
   gap: 12px;
 }
 
@@ -1558,8 +1559,7 @@
   line-height: 17px;
 }
 
-.input,
-.compactInput {
+.input {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -1576,23 +1576,15 @@
   padding: 7px 10px;
 }
 
-.compactInput {
-  min-height: 32px;
-  padding: 6px 9px;
-  font-size: 12px;
-}
-
 textarea.input {
   resize: vertical;
 }
 
-.input:focus,
-.compactInput:focus {
+.input:focus {
   border-color: var(--dsw-alias-brand-primary);
 }
 
-.input::placeholder,
-.compactInput::placeholder {
+.input::placeholder {
   color: var(--dsw-alias-label-caption);
 }
 
@@ -2103,13 +2095,6 @@ textarea.input {
   background: var(--dsw-alias-interactive-bg-hover-danger);
 }
 
-.messageForm {
-  display: grid;
-  grid-template-columns: minmax(130px, 0.5fr) minmax(180px, 1.5fr) auto;
-  gap: 8px;
-  margin-top: 8px;
-}
-
 .warning {
   margin-top: 5px;
   color: var(--dsw-alias-state-warn-label);
@@ -2575,9 +2560,6 @@ textarea.input {
     grid-column: auto;
   }
 
-  .messageForm {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

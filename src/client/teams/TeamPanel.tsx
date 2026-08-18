@@ -505,8 +505,6 @@ function TeamCard({
   onChanged: () => Promise<void>
   compact?: boolean
 }): JSX.Element {
-  const [content, setContent] = useState('')
-  const [targetSlotId, setTargetSlotId] = useState(team.leaderSlotId)
   const [busy, setBusy] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
   const [dissolveOpen, setDissolveOpen] = useState(false)
@@ -516,20 +514,6 @@ function TeamCard({
   const members = Object.values(team.members)
   const tasks = Object.values(team.tasks)
   const executing = isTeamExecuting(team)
-
-  async function send(event: FormEvent): Promise<void> {
-    event.preventDefault()
-    setBusy(true)
-    try {
-      await callAgentTeam('team.message.send', { teamId: team.id, targetSlotId, content })
-      setContent('')
-      setError(undefined)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function dissolve(): Promise<void> {
     setBusy(true)
@@ -671,17 +655,6 @@ function TeamCard({
             </div>
           ))}
         </div>
-      )}
-      {team.state === 'active' && !compact && (
-        <form onSubmit={(event) => { void send(event) }} className={css.messageForm}>
-          <select value={targetSlotId} onChange={event => { setTargetSlotId(event.target.value) }} className={css.compactInput}>
-            {members
-              .filter(member => member.role === 'leader' || team.directMemberChat)
-              .map(member => <option key={member.id} value={member.id}>{member.displayName}（{member.role === 'leader' ? '负责人' : '成员'}）</option>)}
-          </select>
-          <input required value={content} onChange={event => { setContent(event.target.value) }} placeholder="发送任务或消息" className={css.compactInput} />
-          <button type="submit" className={css.primaryButton} disabled={busy}>发送</button>
-        </form>
       )}
       {team.state !== 'deleting' && team.state !== 'delete_blocked' && (
         <div className={css.contextResetPanel}>
