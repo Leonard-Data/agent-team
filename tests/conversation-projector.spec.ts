@@ -111,6 +111,45 @@ describe('projectConversation', () => {
     expect(JSON.stringify(projected.nodes)).not.toContain('Current runtime context')
     expect(JSON.stringify(projected.nodes)).not.toContain('available_skills')
   })
+
+  it('projects persisted member relays as structured compact team messages', () => {
+    const projected = projectConversation([
+      event(0, 'user/message', {
+        id: 'relay-1', role: 'user',
+        source: { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
+        content: [{ type: 'text', text: '[Team message from Coder]\nParser implemented.' }],
+      }),
+    ], 240, {
+      team: {
+        leaderSlotId: 'leader-1',
+        members: {
+          'leader-1': { id: 'leader-1', displayName: 'Lead' },
+          'member-1': { id: 'member-1', displayName: 'Coder' },
+        },
+        retiredSessions: {},
+      } as never,
+      messages: [{
+        id: 'relay-1',
+        sender: { kind: 'member', id: 'member-1' },
+        type: 'result',
+        content: 'Parser implemented.',
+        relatedTaskId: 'task-1',
+      } as never],
+    })
+
+    expect(projected.nodes).toEqual([{
+      id: 'relay-1',
+      kind: 'team-message',
+      seq: 0,
+      time: 1_700_000_000_000,
+      text: 'Parser implemented.',
+      senderName: 'Coder',
+      senderId: 'member-1',
+      senderRole: 'member',
+      messageType: 'result',
+      relatedTaskId: 'task-1',
+    }])
+  })
 })
 
 function event(seq: number, type: SessionEvent['type'], data: unknown): SessionEvent {

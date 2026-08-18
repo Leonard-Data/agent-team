@@ -15,6 +15,8 @@ const prohibited = [
   [/\bctx\.jobs\b/, 'Job runtime used as an Agent substitute'],
   [/\bagentCtx\.agentPresets\b/, 'Agent Presets must be mounted through the injected plugin context'],
   [/\bagentCtx\.permissionPresets\b/, 'Permission Presets must be applied through the injected plugin context'],
+  [/\b(?:window|globalThis)\.(?:alert|confirm|prompt)\s*\(/, 'Browser-native dialogs are prohibited; use Harness Modal'],
+  [/(^|[^\w.])(?:alert|confirm|prompt)\s*\(/m, 'Browser-native dialogs are prohibited; use Harness Modal'],
 ]
 
 const violations = []

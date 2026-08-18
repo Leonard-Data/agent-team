@@ -159,13 +159,13 @@ Phase 0 的能力审计已经完成。团队解散使用公开 API 删除插件�
 - [ ] 按 [`10-team-conversation-workbench.md`](./10-team-conversation-workbench.md) 实现成员 Conversation Projector。
 - [ ] 用 `session/event` 驱动 text/reasoning/tool-call 流式 patch。
 - [ ] 用 `sessionPersistence.inspect/readFrom` 恢复历史和断点。
-- [ ] 实现三列独立对话、独立 Composer、停止和单列放大。
+- [x] 实现不限列数的独立对话、独立 Composer 和停止；空间不足时横向滚动。
 - [ ] 实现通用 ToolCard，未知工具不能丢失参数或结果。
 - [ ] 实现 Bash、Read、Edit/Diff、Search 等首批专用 ToolCard。
 - [ ] 实现共享 Workspace 文件树和变更面板。
 - [ ] 完成三 Session 并行、重连、冷恢复、响应式和可访问性测试。
 
-退出标准：三名成员可以同时流式输出并展示工具调用，刷新与重启后历史一致，任何一列操作都不串到其他成员。
+退出标准：任意数量成员可以同时流式输出并展示工具调用，刷新与重启后历史一致，任何一列操作都不串到其他成员。
 
 ## Phase 9：团队解散
 

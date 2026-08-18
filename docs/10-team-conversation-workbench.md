@@ -2,7 +2,7 @@
 
 ## 当前落地状态（首版）
 
-已完成 WB1/WB2 的可用纵向切片：Host 从成员真实 Session 事件构建隔离的 Conversation Snapshot，监听 `session/event` 并发布独立 Conversation SSE；Browser 最多并排显示三名成员，支持真实历史、流式文本/推理、通用 ToolCard、独立发送和停止。右侧 Workspace 面板已接入受限的逐层目录浏览，并展示任务板。团队入口现在通过公开 `shell.overlay` Slot 直接渲染全屏工作台，不再套用 Dialog；工作台左侧提供独立团队导航，能够切换团队并显示团队状态、已完成/总任务数、进行中数量和完成度。
+已完成 WB1/WB2 的可用纵向切片：Host 从成员真实 Session 事件构建隔离的 Conversation Snapshot，监听 `session/event` 并发布独立 Conversation SSE；Browser 最多并排显示三名成员，支持真实历史、流式文本/推理、通用 ToolCard、独立发送和停止。右侧 Workspace 面板已接入受限的逐层目录浏览，并展示任务板。团队入口现在通过公开 `shell.overlay` Slot 直接渲染全屏工作台，不再套用 Dialog；工作台左侧提供独立团队导航，能够切换团队，并仅在成员或任务实际运行时显示“任务执行中”，同时展示已完成/总任务数、进行中数量和完成度。
 
 当前流式刷新以 50ms 合并事件触发 `team.workbench.get` 权威快照重取，尚未实现按节点 upsert 的增量 Patch；专用工具卡、文件阅读/Diff、虚拟列表、标准 Session 跳转以及 Approval/Question 列内处理仍按后续阶段执行。消息正文已复用 Harness 公开的 `MarkdownText` 原语，支持 GFM、代码块、表格、公式、安全链接和流式增量解析。首版没有用团队业务消息冒充 Session 历史，也没有复制官方 Conversation 内部组件。
 
@@ -106,7 +106,7 @@ teamId + slotId + sessionId
 - 更换 Leader 只改变角色，不更换 Session。
 - 移除成员后，该列从活动区移入只读历史，不冒充 Session 已删除。
 
-工作台不依赖 Harness 全局“当前 Session”来驱动三列，因此三个成员可以同时更新。每列提供“在标准会话中打开”作为辅助入口，调用 `ctx.sessions.open(sessionId)`，但这不是多列展示的基础。
+工作台不依赖 Harness 全局“当前 Session”来驱动成员列，因此任意数量成员可以同时更新。每列提供“在标准会话中打开”作为辅助入口，调用 `ctx.sessions.open(sessionId)`，但这不是多列展示的基础。
 
 ## Host Conversation 投影
 
@@ -226,11 +226,10 @@ TeamWorkbench
 
 ### 响应式布局
 
-- 超宽屏：最多三列成员 + 右侧 Workspace 面板。
-- 宽屏：两到三列，Workspace 面板可折叠。
-- 中等窗口：两列，第三个成员通过顶部标签切换。
-- 窄窗口：单列成员，Workspace 和团队管理改为抽屉。
-- 超过三名成员时，用户选择最多三名固定展示；其他成员仍在顶部标签中显示状态和未读数。
+- 所有窗口默认打开全部成员列，不设置成员数量上限。
+- 每列保持可用的最小宽度，空间不足时在成员对话区域横向滚动。
+- 顶部标签可独立隐藏或恢复任意成员；新增成员默认自动加入可见列。
+- 窄窗口仍保留 Workspace 和团队管理的紧凑呈现。
 
 布局使用 Harness CSS Token 和 UI Primitives，不创建独立色系。
 
@@ -327,13 +326,13 @@ Browser 内所有 Agent Team 消费者共享一个 EventSource，由单例事件
 
 退出标准：三个测试 Agent 同时运行时，Host 可产生三个互不串线、可重放的 Conversation Snapshot。
 
-### WB2：三列工作台与通用工具卡
+### WB2：多列工作台与通用工具卡
 
 - 实现全屏 `TeamWorkbench`、成员标签、响应式列和独立 Composer。
 - 实现 Markdown、reasoning、通用 ToolCard、错误、停止和自动滚动。
 - 当前团队卡片页面收敛为团队管理悬浮窗/设置入口。
 
-退出标准：用户能在三列分别发送消息，同时看到流式回复和任意工具的完整通用卡片。
+退出标准：用户能在任意成员列分别发送消息，同时看到流式回复和任意工具的完整通用卡片。
 
 ### WB3：专用工具卡与 Workspace 面板
 
@@ -354,7 +353,7 @@ Browser 内所有 Agent Team 消费者共享一个 EventSource，由单例事件
 ## 验收清单
 
 - [ ] 三个平级根 Agent 使用三个独立 Session 和同一 Workspace。
-- [ ] 三列可同时接收并显示流式 text/reasoning。
+- [x] 任意数量成员列可同时接收并显示流式 text/reasoning。
 - [ ] 工具参数流、执行中、结果、错误完整展示。
 - [ ] 未知工具始终落入通用工具卡。
 - [ ] 刷新、SSE 重连和插件重启后历史一致。

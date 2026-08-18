@@ -12,9 +12,8 @@ export const assistantSnapshotSchema = z.object({
   model: nonEmpty,
   agentPresetId: nonEmpty,
   permissionPresetId: nonEmpty,
-  toolAllowlist: z.array(nonEmpty),
   skillAllowlist: z.array(nonEmpty),
-  mcpServers: z.array(nonEmpty).default([]),
+  mcpServers: z.array(nonEmpty),
 }).strict()
 
 export const assistantTemplateSchema = z.object({
@@ -28,9 +27,8 @@ export const assistantTemplateSchema = z.object({
   model: nonEmpty,
   agentPresetId: nonEmpty,
   permissionPresetId: nonEmpty,
-  toolAllowlist: z.array(nonEmpty),
   skillAllowlist: z.array(nonEmpty),
-  mcpServers: z.array(nonEmpty).default([]),
+  mcpServers: z.array(nonEmpty),
   revision: z.int().positive(),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -51,9 +49,7 @@ export const teamMemberSlotSchema = z.object({
   displayName: nonEmpty,
   role: z.enum(['leader', 'member']),
   assistantSnapshot: assistantSnapshotSchema,
-  // Current per-session permission. Older records fall back to the immutable
-  // assistant snapshot, which remains the member's creation-time default.
-  permissionPresetId: nonEmpty.optional(),
+  permissionPresetId: nonEmpty,
   sessionId: nonEmpty,
   desiredState: z.enum(['online', 'offline', 'removing']),
   lastRuntimeState: memberRuntimeStateSchema,
@@ -130,9 +126,6 @@ export const teamAggregateSchema = z.object({
     'draft',
     'starting',
     'active',
-    // Legacy persisted value. Plugin startup migrates it to active before the
-    // runtime and transport are initialized.
-    'paused',
     'ownership_conflict',
     'deleting',
     'delete_blocked',
@@ -143,9 +136,7 @@ export const teamAggregateSchema = z.object({
   retiredSessions: z.record(z.string(), retiredMemberSessionSchema),
   tasks: z.record(z.string(), teamTaskSchema),
   leases: z.record(z.string(), fileScopeLeaseSchema),
-  // Durable transactional outbox. The default allows records written by the
-  // first plugin version to load without a separate migration.
-  outbox: z.record(z.string(), teamMessageSchema).default({}),
+  outbox: z.record(z.string(), teamMessageSchema),
   revision: z.int().positive(),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -185,7 +176,6 @@ export const createAssistantInputSchema = assistantTemplateSchema.pick({
   model: true,
   agentPresetId: true,
   permissionPresetId: true,
-  toolAllowlist: true,
   skillAllowlist: true,
   mcpServers: true,
 })
@@ -194,7 +184,6 @@ export const updateAssistantInputSchema = createAssistantInputSchema.partial().s
 
 export const createTeamMemberInputSchema = z.object({
   assistantId: nonEmpty,
-  displayName: nonEmpty,
   role: z.enum(['leader', 'member']),
 }).strict()
 

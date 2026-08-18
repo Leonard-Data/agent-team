@@ -26,6 +26,42 @@ const config: Config = {
 }
 
 describe('AgentTeamService', () => {
+  it('lists the earliest created assistants first', async () => {
+    const { service, store } = createHarness()
+    const base = {
+      schemaVersion: 1 as const,
+      description: undefined,
+      icon: undefined,
+      instructions: 'Coordinate the team.',
+      provider: 'openai',
+      model: 'codex',
+      agentPresetId: 'default',
+      permissionPresetId: 'standard',
+      skillAllowlist: [],
+      mcpServers: [],
+      revision: 1,
+    }
+    await store.putAssistant({
+      ...base,
+      id: 'older-assistant',
+      name: 'Older assistant',
+      createdAt: '2026-08-17T08:00:00.000Z',
+      updatedAt: '2026-08-17T08:00:00.000Z',
+    })
+    await store.putAssistant({
+      ...base,
+      id: 'newer-assistant',
+      name: 'Newer assistant',
+      createdAt: '2026-08-18T08:00:00.000Z',
+      updatedAt: '2026-08-18T08:00:00.000Z',
+    })
+
+    expect(service.listAssistants().items.map(assistant => assistant.id)).toEqual([
+      'older-assistant',
+      'newer-assistant',
+    ])
+  })
+
   it('delegates the built-in assistant builder conversation without storing it as a template', async () => {
     const { service, store } = createHarness()
     const conversation = {
@@ -172,8 +208,8 @@ describe('AgentTeamService', () => {
       name: 'Compiler Team',
       workspaceId: 'workspace-1',
       members: [
-        { assistantId: assistant.id, displayName: 'Lead', role: 'leader' },
-        { assistantId: assistant.id, displayName: 'Coder', role: 'member' },
+        { assistantId: assistant.id, role: 'leader' },
+        { assistantId: assistant.id, role: 'member' },
       ],
     })
 
@@ -221,7 +257,7 @@ describe('AgentTeamService', () => {
     const team = await service.createTeamDraft({
       name: 'MCP Team',
       workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+      members: [{ assistantId: assistant.id, role: 'leader' }],
     })
 
     expect(assistant.mcpServers).toEqual(['github'])
@@ -236,56 +272,13 @@ describe('AgentTeamService', () => {
     } as never)).rejects.toThrow()
   })
 
-  it('discards legacy tool restrictions from assistant input', async () => {
-    const { service } = createHarness()
-    const assistant = await service.createAssistant({
-      ...assistantInput(),
-      toolAllowlist: ['bash', 'skill'],
-    })
-
-    expect(assistant.toolAllowlist).toEqual([])
-  })
-
-  it('migrates legacy team state and tool restrictions exactly once', async () => {
-    const { service, store } = createHarness()
-    const assistant = await service.createAssistant(assistantInput())
-    await store.updateAssistant(assistant.id, current => ({
-      ...current,
-      toolAllowlist: ['bash'],
-    }))
-    const draft = await service.createTeamDraft({
-      name: 'Legacy Paused Team',
-      workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
-    })
-    const legacy = await store.updateTeam(draft.id, team => ({
-      ...team,
-      state: 'paused',
-      members: Object.fromEntries(Object.entries(team.members).map(([slotId, member]) => [
-        slotId,
-        { ...member, displayName: 'Legacy Alias' },
-      ])),
-    }))
-
-    await service.migrateLegacyData()
-    const migrated = service.getTeam(draft.id)
-    await service.migrateLegacyData()
-
-    expect(migrated.state).toBe('active')
-    expect(Object.values(migrated.members).map(member => member.displayName)).toEqual(['Codex Lead'])
-    expect(Object.values(migrated.members).map(member => member.assistantSnapshot.toolAllowlist)).toEqual([[]])
-    expect(service.getAssistant(assistant.id).toolAllowlist).toEqual([])
-    expect(migrated.revision).toBe(legacy.revision + 1)
-    expect(service.getTeam(draft.id).revision).toBe(migrated.revision)
-  })
-
   it('dissolves a started team while preserving its assistant template', async () => {
     const { ctx, service, store } = createHarness()
     const assistant = await service.createAssistant(assistantInput())
     const draft = await service.createTeamDraft({
       name: 'Durable Team',
       workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+      members: [{ assistantId: assistant.id, role: 'leader' }],
     })
     await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
     const team = service.getTeam(draft.id)
@@ -310,7 +303,7 @@ describe('AgentTeamService', () => {
     const draft = await service.createTeamDraft({
       name: 'Retryable Team',
       workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+      members: [{ assistantId: assistant.id, role: 'leader' }],
     })
     await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
     const team = service.getTeam(draft.id)
@@ -339,11 +332,10 @@ describe('AgentTeamService', () => {
     const draft = await service.createTeamDraft({
       name: 'Mutable Draft',
       workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Original Lead', role: 'leader' }],
+      members: [{ assistantId: assistant.id, role: 'leader' }],
     })
     const added = await service.addMember(draft.id, {
       assistantId: assistant.id,
-      displayName: 'Second Instance',
     }, { expectedRevision: draft.revision })
     const second = Object.values(added.members).find(member => member.id !== draft.leaderSlotId)!
     const promoted = await service.changeLeader(added.id, second.id, { expectedRevision: added.revision })
@@ -354,6 +346,45 @@ describe('AgentTeamService', () => {
     expect(service.getAssistant(assistant.id).revision).toBe(1)
   })
 
+  it('notifies the leader after a new live member is ready', async () => {
+    const { ctx, service, store } = createHarness()
+    ctx.provide('sessionPersistence', { list: async () => [] } as never)
+    const assistant = await service.createAssistant(assistantInput())
+    const draft = await service.createTeamDraft({
+      name: 'Growing Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, role: 'leader' }],
+    })
+    await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
+    const team = service.getTeam(draft.id)
+    const leader = team.members[team.leaderSlotId]!
+    const runtime = new TeamRuntime(ctx, config, service)
+    service.attachRuntime(runtime)
+    const leaderAgent = fakeAgent()
+    const ensureMemberOnline = vi.fn(async () => {})
+    runtimeInternals(runtime).owned.set(leader.sessionId, fakeOwned(leaderAgent))
+    runtimeInternals(runtime).ensureMemberOnline = ensureMemberOnline
+
+    const added = await service.addMember(team.id, {
+      assistantId: assistant.id,
+    }, { expectedRevision: team.revision })
+    const member = Object.values(added.members).find(value => value.id !== leader.id)!
+
+    expect(ensureMemberOnline).toHaveBeenCalledOnce()
+    expect(leaderAgent.followup).toHaveBeenCalledOnce()
+    expect(leaderAgent.followup.mock.calls[0]?.[0]).toMatchObject({
+      source: { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
+      content: [{ type: 'text', text: expect.stringContaining(member.id) }],
+    })
+    expect(Object.keys(added.outbox)).toHaveLength(0)
+    expect(service.listMessages(team.id).items).toContainEqual(expect.objectContaining({
+      sender: { kind: 'system', id: 'dsh-agent-team' },
+      recipient: { kind: 'leader', slotId: leader.id },
+      type: 'system',
+      deliveryState: 'delivered',
+    }))
+  })
+
   it('atomically queues an assigned task and wakes its owner', async () => {
     const { ctx, service, store } = createHarness()
     const assistant = await service.createAssistant(assistantInput())
@@ -361,8 +392,8 @@ describe('AgentTeamService', () => {
       name: 'Dispatch Team',
       workspaceId: 'workspace-1',
       members: [
-        { assistantId: assistant.id, displayName: 'Lead', role: 'leader' },
-        { assistantId: assistant.id, displayName: 'Coder', role: 'member' },
+        { assistantId: assistant.id, role: 'leader' },
+        { assistantId: assistant.id, role: 'member' },
       ],
     })
     await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
@@ -399,6 +430,9 @@ describe('AgentTeamService', () => {
 
     expect(updated.deliveryState).toBe('delivered')
     expect(leaderAgent.followup).toHaveBeenCalledOnce()
+    expect(leaderAgent.followup.mock.calls[0]?.[0]).toMatchObject({
+      content: [{ type: 'text', text: expect.stringContaining(`slotId=${member.id}`) }],
+    })
     expect(service.listMessages(team.id).items[1]).toMatchObject({
       type: 'result',
       recipient: { kind: 'leader', slotId: team.leaderSlotId },
@@ -413,8 +447,8 @@ describe('AgentTeamService', () => {
       name: 'Recovery Team',
       workspaceId: 'workspace-1',
       members: [
-        { assistantId: assistant.id, displayName: 'Lead', role: 'leader' },
-        { assistantId: assistant.id, displayName: 'Coder', role: 'member' },
+        { assistantId: assistant.id, role: 'leader' },
+        { assistantId: assistant.id, role: 'member' },
       ],
     })
     await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
@@ -453,7 +487,7 @@ describe('AgentTeamService', () => {
     const draft = await service.createTeamDraft({
       name: 'Stop Team',
       workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+      members: [{ assistantId: assistant.id, role: 'leader' }],
     })
     await store.updateTeam(draft.id, team => ({
       ...team,
@@ -478,13 +512,55 @@ describe('AgentTeamService', () => {
     expect(service.getTeam(team.id).members[member.id]?.lastRuntimeState).toBe('idle')
   })
 
+  it('reliably notifies the leader after removing a live member', async () => {
+    const { ctx, service, store } = createHarness()
+    const assistant = await service.createAssistant(assistantInput())
+    const draft = await service.createTeamDraft({
+      name: 'Roster Team',
+      workspaceId: 'workspace-1',
+      members: [
+        { assistantId: assistant.id, role: 'leader' },
+        { assistantId: assistant.id, role: 'member' },
+      ],
+    })
+    await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
+    const team = service.getTeam(draft.id)
+    const leader = team.members[team.leaderSlotId]!
+    const member = Object.values(team.members).find(value => value.role === 'member')!
+    const runtime = new TeamRuntime(ctx, config, service)
+    service.attachRuntime(runtime)
+    const leaderAgent = fakeAgent()
+    const memberAgent = fakeAgent()
+    runtimeInternals(runtime).owned.set(leader.sessionId, fakeOwned(leaderAgent))
+    runtimeInternals(runtime).owned.set(member.sessionId, fakeOwned(memberAgent))
+
+    const removed = await service.removeMember(team.id, member.id, { expectedRevision: team.revision })
+
+    expect(removed.members[member.id]).toBeUndefined()
+    expect(removed.retiredSessions[member.sessionId]).toMatchObject({ displayName: member.displayName })
+    expect(memberAgent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: false })
+    expect(leaderAgent.followup).toHaveBeenCalledOnce()
+    expect(leaderAgent.followup.mock.calls[0]?.[0]).toMatchObject({
+      role: 'user',
+      source: { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
+      content: [{ type: 'text', text: expect.stringContaining(member.id) }],
+    })
+    expect(Object.keys(removed.outbox)).toHaveLength(0)
+    expect(service.listMessages(team.id).items).toContainEqual(expect.objectContaining({
+      sender: { kind: 'system', id: 'dsh-agent-team' },
+      recipient: { kind: 'leader', slotId: leader.id },
+      type: 'system',
+      deliveryState: 'delivered',
+    }))
+  })
+
   it('changes a live member permission without modifying the assistant default', async () => {
     const { ctx, service, store, permissionSet } = createHarness()
     const assistant = await service.createAssistant(assistantInput())
     const draft = await service.createTeamDraft({
       name: 'Permission Team',
       workspaceId: 'workspace-1',
-      members: [{ assistantId: assistant.id, displayName: 'Lead', role: 'leader' }],
+      members: [{ assistantId: assistant.id, role: 'leader' }],
     })
     await store.updateTeam(draft.id, team => ({ ...team, state: 'active' }))
     const team = service.getTeam(draft.id)
@@ -508,8 +584,8 @@ describe('AgentTeamService', () => {
       name: 'Fresh Context Team',
       workspaceId: 'workspace-1',
       members: [
-        { assistantId: assistant.id, displayName: 'Lead', role: 'leader' },
-        { assistantId: assistant.id, displayName: 'Coder', role: 'member' },
+        { assistantId: assistant.id, role: 'leader' },
+        { assistantId: assistant.id, role: 'member' },
       ],
     })
     const taskId = 'task-1'
@@ -640,6 +716,7 @@ interface FakeAgent {
 interface RuntimeInternals {
   owned: Map<string, unknown>
   ensureMembersOnline: (team: TeamAggregate) => Promise<void>
+  ensureMemberOnline: (team: TeamAggregate, member: TeamAggregate['members'][string], persisted: boolean) => Promise<void>
   createTask(
     teamId: string,
     creatorSlotId: string,
@@ -689,7 +766,6 @@ function assistantInput() {
     model: 'codex',
     agentPresetId: 'default',
     permissionPresetId: 'standard',
-    toolAllowlist: [],
     skillAllowlist: [],
     mcpServers: [],
   }

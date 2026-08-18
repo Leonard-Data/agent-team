@@ -48,6 +48,18 @@ export type ConversationNode =
   }
   | {
     id: string
+    kind: 'team-message'
+    seq: number
+    time: number
+    text: string
+    senderName: string
+    senderId: string
+    senderRole: 'leader' | 'member' | 'system'
+    messageType: 'instruction' | 'progress' | 'result' | 'question' | 'warning' | 'system'
+    relatedTaskId?: string
+  }
+  | {
+    id: string
     kind: 'tool'
     seq: number
     time: number

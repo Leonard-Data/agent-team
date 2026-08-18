@@ -22,6 +22,7 @@ import type {
 import type { AgentTeamService } from '../service/agent-team-service.js'
 import type { MemberConversationView, TeamWorkbenchView } from '../transport/contracts.js'
 import { projectConversation } from './conversation-projector.js'
+import { registerScopedSkillProvider } from './scoped-skills.js'
 
 interface OwnedAgent {
   teamId: string
@@ -130,7 +131,7 @@ export class TeamRuntime {
       const member = team.members[slotId]
       if (member === undefined) throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown member '${slotId}'`)
       const owned = this.requireOwned(member.sessionId)
-      const previous = member.permissionPresetId ?? member.assistantSnapshot.permissionPresetId
+      const previous = member.permissionPresetId
       this.ctx.permissionPresets.set(owned.handle.agent.session, permissionPresetId)
       try {
         return await this.service.updateRuntimeTeam(
@@ -162,7 +163,10 @@ export class TeamRuntime {
       slotId: member.id,
       sessionId: member.sessionId,
       status,
-      ...projectConversation(events),
+      ...projectConversation(events, 240, {
+        team,
+        messages: this.service.listMessages(team.id).items,
+      }),
     }
   }
 
@@ -178,6 +182,28 @@ export class TeamRuntime {
       const materialized = new Set((await this.ctx.sessionPersistence.list()).map(header => String(header.id)))
       try {
         await this.ensureMemberOnline(team, member, materialized.has(member.sessionId))
+        const current = this.service.getTeam(teamId)
+        const readyMember = current.members[slotId]
+        if (readyMember === undefined) {
+          throw new AgentTeamError('MEMBER_NOT_FOUND', `Member '${slotId}' disappeared during activation`)
+        }
+        const notice = systemTeamMessage({
+          team: current,
+          recipientSlotId: current.leaderSlotId,
+          content: [
+            `新成员「${readyMember.displayName}」已加入团队。`,
+            `成员 ID：${readyMember.id}`,
+            `模型：${readyMember.assistantSnapshot.provider} / ${readyMember.assistantSnapshot.model}`,
+            '状态：已就绪，可以分配任务。',
+          ].join('\n'),
+        })
+        await this.service.updateRuntimeTeam(
+          teamId,
+          latest => ({ ...latest, outbox: { ...latest.outbox, [notice.id]: notice } }),
+          'team.member_ready',
+          `Member ${readyMember.displayName} is ready`,
+        )
+        await this.tryDeliverOutboxMessage(teamId, notice.id)
         return this.service.getTeam(teamId)
       } catch (error) {
         await this.markTeamError(teamId, error)
@@ -223,7 +249,12 @@ export class TeamRuntime {
       const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
       if (workspace !== undefined) await workspace.detachSession(sessionId)
       const removedAt = new Date().toISOString()
-      return this.service.updateRuntimeTeam(
+      const notice = systemTeamMessage({
+        team,
+        recipientSlotId: team.leaderSlotId,
+        content: `团队成员「${member.displayName}」（成员 ID：${member.id}）已被移出团队，其 Session 已停止并归档。后续任务请重新分配给其他成员。`,
+      })
+      await this.service.updateRuntimeTeam(
         teamId,
         current => {
           const members = { ...current.members }
@@ -240,11 +271,14 @@ export class TeamRuntime {
                 removedAt,
               },
             },
+            outbox: { ...current.outbox, [notice.id]: notice },
           }
         },
         'team.member_removed',
         `Member ${member.displayName} removed; Session history retained`,
       )
+      await this.tryDeliverOutboxMessage(teamId, notice.id)
+      return this.service.getTeam(teamId)
     })
   }
 
@@ -659,7 +693,7 @@ export class TeamRuntime {
           member.assistantSnapshot.agentPresetId,
         )
         const skillSelectionProvider = `agent-team-selection-${member.id}`
-        agentCtx.skills.registerProvider(() => ({
+        await registerScopedSkillProvider(agentCtx, () => ({
           name: skillSelectionProvider,
           list: async options => {
             const inherited = await this.ctx.skills.list({
@@ -695,7 +729,7 @@ export class TeamRuntime {
         })
         this.ctx.permissionPresets.set(
           agent.session,
-          member.permissionPresetId ?? member.assistantSnapshot.permissionPresetId,
+          member.permissionPresetId,
         )
         const assembly = await agentCtx.systemPrompt.assemble(assembleContextFor(agent))
         const names = new Set(assembly.sections.map(section => section.name))
@@ -1019,7 +1053,7 @@ export class TeamRuntime {
     const content = requireContent(rawContent)
     const target = this.requireOwned(recipient.sessionId)
     const relay = createUserMessage({
-      content: [{ type: 'text', text: `[Team message from ${sender.displayName}]\n${content}` }],
+      content: [{ type: 'text', text: `${teamMessageHeader(sender.displayName, sender.id)}\n${content}` }],
       source: {
         kind: 'plugin',
         plugin: 'dsh-agent-team',
@@ -1247,6 +1281,25 @@ function taskDispatchMessage(input: {
   })
 }
 
+function systemTeamMessage(input: {
+  team: TeamAggregate
+  recipientSlotId: string
+  content: string
+}): TeamMessage {
+  const id = String(MessageId(`agent-team:${randomUUID()}`))
+  return teamMessage({
+    id,
+    teamId: input.team.id,
+    sender: { kind: 'system', id: 'dsh-agent-team' },
+    recipient: input.recipientSlotId === input.team.leaderSlotId
+      ? { kind: 'leader', slotId: input.recipientSlotId }
+      : { kind: 'member', slotId: input.recipientSlotId },
+    type: 'system',
+    content: input.content,
+    idempotencyKey: id,
+  })
+}
+
 function assignmentContent(title: string, description: string, fileScopes: readonly string[]): string {
   return [
     `A team task has been assigned to you: ${title}`,
@@ -1289,18 +1342,34 @@ function taskMessageType(
 }
 
 function messageFromRecord(team: TeamAggregate, record: TeamMessage): UserMessage {
+  if (record.sender.kind === 'system') {
+    return freezeMessage({
+      id: MessageId(record.id),
+      role: 'user',
+      content: [{ type: 'text', text: `[Team event]\n${record.content}` }],
+      source: { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
+    })
+  }
   const sender = record.sender.kind === 'member' ? team.members[record.sender.id] : undefined
-  const text = sender === undefined
-    ? record.content
-    : `[Team message from ${sender.displayName}]\n${record.content}`
+  const retiredSender = record.sender.kind === 'member'
+    ? Object.values(team.retiredSessions).find(session => session.formerSlotId === record.sender.id)
+    : undefined
+  const senderName = sender?.displayName ?? retiredSender?.displayName ?? '已移出成员'
+  const text = record.sender.kind === 'member'
+    ? `${teamMessageHeader(senderName, record.sender.id)}\n${record.content}`
+    : record.content
   return freezeMessage({
     id: MessageId(record.id),
     role: 'user',
     content: [{ type: 'text', text }],
-    source: sender === undefined
-      ? { kind: 'user' }
-      : { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
+    source: record.sender.kind === 'member'
+      ? { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' }
+      : { kind: 'user' },
   })
+}
+
+function teamMessageHeader(displayName: string, slotId: string): string {
+  return `[Team message from ${displayName}; slotId=${slotId}]`
 }
 
 function sessionHasMessage(agent: Agent, messageId: string): boolean {

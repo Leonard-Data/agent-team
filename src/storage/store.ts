@@ -57,7 +57,7 @@ export class DomainAgentTeamStore implements AgentTeamStore {
 
   listAssistants(): AssistantTemplate[] {
     return values(this.assistants)
-      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
   }
 
   putAssistant(value: AssistantTemplate): Promise<void> {
@@ -149,4 +149,3 @@ export class DomainAgentTeamStore implements AgentTeamStore {
 function values<K extends string, V>(table: KvTable<K, V>): V[] {
   return [...table.entries()].map(([, value]) => value)
 }
-

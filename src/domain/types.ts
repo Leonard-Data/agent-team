@@ -50,7 +50,6 @@ export function snapshotAssistant(assistant: AssistantTemplate): AssistantSnapsh
     model: assistant.model,
     agentPresetId: assistant.agentPresetId,
     permissionPresetId: assistant.permissionPresetId,
-    toolAllowlist: [...assistant.toolAllowlist],
     skillAllowlist: [...assistant.skillAllowlist],
     mcpServers: [...assistant.mcpServers],
   }

@@ -70,7 +70,7 @@ type AgentTeamRequest = {
 | `team.sendUserMessage` | 向 Leader 或允许的成员发送用户消息 |
 | `team.member.setPermissionPreset` | 切换单个成员当前 Session 权限，不修改助手模板默认值 |
 | `task.create/assign/cancel/retry` | 用户侧任务管理 |
-| `team.dissolve` | 精确名称确认后解散团队；停止成员、解除关联并删除团队领域数据 |
+| `team.dissolve` | 警示确认后携带当前团队名称解散团队；停止成员、解除关联并删除团队领域数据 |
 
 ## SSE 事件
 
@@ -142,6 +142,7 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 - 顶部固定显示不进入模板存储的“团队 Agent 小助手”。弹窗左侧列出独立 Session 历史，打开时恢复最近会话；点击“新对话”只进入客户端草稿，首次发送通过 `assistant.builder.start` 原子创建 Session 并投递消息。未发送草稿不进入历史、不能归档，历史列表同时过滤旧版本遗留的空 Session。用户可通过项目内确认弹窗调用 Harness 官方 `workspaceRegistry.archiveSession` 归档闲置历史；当前会话正在生成时必须先停止。归档会话依据 `archivedSessionIds` 从列表和恢复入口中排除，底层日志保留。会话间切换会先 flush 并释放当前 Agent Handle，再恢复目标 Session；正在生成时禁止切换。创建助手模板使用服务端强制两阶段工具：`assistant_builder_prepare` 只校验并按 Session 在内存暂存草稿；用户必须在后续新消息中用自然语言明确同意最终配置，`assistant_builder_commit` 才能落库。语义判断由小助手依照提示词完成，服务端继续强制校验消息时序与真实用户来源；同轮提交、非用户来源或已被新草稿替代的旧草稿都会被拒绝，进程重启后需重新准备。每个对话可选择 Provider/模型，选择持久化到独立偏好 Domain；历史会话恢复自己的模型，新对话草稿继承最近一次选择。同一会话可连续创建多个助手。
 - Provider/Model 由 Host Catalog API 返回。
 - Provider 和 Model 必填；模型只能从 Host 返回的真实候选项中选择。
+- 助手列表统一按创建时间正序展示，先创建的助手排在最前；设置页、团队组建器和添加成员入口共用 `assistant.list` 的顺序。
 - 设置页的助手卡片主体和“编辑”按钮都会打开编辑弹窗；编辑复用新建表单，并携带当前 Revision 调用 `assistant.update`，避免覆盖并发修改。模板更新只影响之后启动的成员，既有团队成员继续使用加入团队时的助手快照。
 - 选择 Agent Preset、Permission Preset，以及该 Preset 下这个助手可以使用的 Skills 和 MCP Servers；两者都可以不选。普通工具直接使用 Agent Preset 的能力集合，创建界面不提供二次限制。MCP 连接与凭据由 Harness Profile/Preset 管理，界面只保存 Server 选择。
 - 编辑后提示活动成员仍使用旧快照。
@@ -152,11 +153,13 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 2. 从助手库添加成员实例，可重复选择同一模板。
 3. 成员名称直接使用助手模板名称，只需指定唯一 Leader，不提供成员别名输入。
 4. 审核模型、权限、工具和模板 Revision。
-5. 保存 Draft 或启动。
+5. 确认组建后先保存 Draft，随后自动调用 `team.start`；启动成功后关闭组建器并直接进入该团队工作台。左侧顶部“团队”品牌按钮返回全部团队列表。
 
 ### 团队工作台
 
-团队主界面采用全屏多成员 Conversation 工作台，而不是任务板摘要卡：每个可见成员拥有独立的 Session 对话列，支持历史、Markdown、流式 text/reasoning、工具调用与结果、错误、停止和独立 Composer；右侧显示共享 Workspace 文件与变更。超过三名成员时由用户固定最多三列，其余成员通过顶部标签切换。
+团队主界面采用全屏多成员 Conversation 工作台，而不是任务板摘要卡：每个可见成员拥有独立的 Session 对话列，支持历史、Markdown、流式 text/reasoning、工具调用与结果、错误、停止和独立 Composer；右侧显示共享 Workspace 文件与变更。工作台默认打开全部成员，不设置成员列数量上限；列宽不足时横向滚动，顶部标签可独立隐藏或恢复任意成员。
+
+成员 Tab 在鼠标悬停或键盘聚焦时显示快捷操作：普通成员可通过“×”打开自定义移出确认弹窗；Leader 不显示移出操作。助手模板只在“设置 → Agent 团队”中编辑，避免让用户误以为模板修改会立即覆盖当前成员快照。
 
 工作台通过 `shell.overlay` 实现，不覆盖 `conversation` single Slot，也不复制官方内部组件。Host 监听公开 `session/event` 并用 `sessionPersistence.inspect/readFrom` 恢复历史，向 Browser 输出稳定 Conversation DTO。完整数据流、工具卡、响应式布局、Approval 边界和分阶段验收见[完整团队 Conversation 工作台设计](./10-team-conversation-workbench.md)。
 
@@ -164,8 +167,9 @@ Harness rc.6 不提供 `sidebar.workspaces` 内部扩展 Slot。当前确认使�
 
 - 更换 Leader：只提交 `team.changeLeader` 一个原子命令。
 - 同步模板：展示差异；选择等待/取消和保留/新建 Session。
-- 移除成员：当前 Leader 禁止移除；普通成员停止运行并进入只读历史，Session 索引保留到团队解散。UI 不把“移出活动成员列表”描述成删除历史。
-- 解散团队：输入完整团队名称；确认框明确列出“将停止所有成员并删除团队、任务、消息和配置；不会删除助手模板和 Workspace 文件”。底层 Session 日志可能由 Harness 保留，但不再归属团队。失败时显示 `delete_blocked` 并允许重试。
+- 移除成员：当前 Leader 禁止移除；普通成员通过插件自定义警示弹窗确认后停止运行并进入只读历史，Session 索引保留到团队解散。UI 不调用浏览器系统确认框，也不把“移出活动成员列表”描述成删除历史。
+- 清空任务与上下文：使用插件自定义警示弹窗确认，无需输入团队名称；停止所有成员、清空任务板与待处理消息并轮换全新 Session，同时保留 Workspace 文件、团队配置和旧 Session 日志。
+- 解散团队：使用插件自定义警示弹窗二次确认，无需输入团队名称；弹窗明确列出“将停止所有成员并删除团队、任务、消息和配置；不会删除助手模板和 Workspace 文件”。底层 Session 日志可能由 Harness 保留，但不再归属团队。失败时显示错误并允许重试。
 
 ## 错误与断线
 

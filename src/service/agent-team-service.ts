@@ -125,40 +125,6 @@ export class AgentTeamService extends Service {
     this.assistantBuilderRuntime = runtime
   }
 
-  async migrateLegacyData(): Promise<void> {
-    for (const assistant of this.store.listAssistants()) {
-      if (assistant.toolAllowlist.length === 0) continue
-      await this.store.updateAssistant(assistant.id, current => ({
-        ...current,
-        toolAllowlist: [],
-        revision: current.revision + 1,
-        updatedAt: new Date().toISOString(),
-      }))
-    }
-    for (const team of this.store.listTeams()) {
-      const hasLegacyState = team.state === 'paused'
-      const hasMemberAliases = Object.values(team.members)
-        .some(member => member.displayName !== member.assistantSnapshot.name)
-      const hasToolRestrictions = Object.values(team.members)
-        .some(member => member.assistantSnapshot.toolAllowlist.length > 0)
-      if (!hasLegacyState && !hasMemberAliases && !hasToolRestrictions) continue
-      await this.store.updateTeam(team.id, current => ({
-        ...current,
-        state: current.state === 'paused' ? 'active' : current.state,
-        members: Object.fromEntries(Object.entries(current.members).map(([slotId, member]) => [
-          slotId,
-          {
-            ...member,
-            displayName: member.assistantSnapshot.name,
-            assistantSnapshot: { ...member.assistantSnapshot, toolAllowlist: [] },
-          },
-        ])),
-        revision: current.revision + 1,
-        updatedAt: new Date().toISOString(),
-      }))
-    }
-  }
-
   async catalog(): Promise<CatalogSnapshot> {
     const providers = this.ctx.llm.listProviders()
     const modelEntries = await Promise.all(providers.map(async provider => [
@@ -259,6 +225,7 @@ export class AgentTeamService extends Service {
 
   listAssistants(): Page<AssistantTemplate> {
     const items = this.store.listAssistants()
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
     return { items, total: items.length }
   }
 
@@ -410,6 +377,7 @@ export class AgentTeamService extends Service {
         displayName: assistant.name,
         role: item.role,
         assistantSnapshot: snapshotAssistant(assistant),
+        permissionPresetId: assistant.permissionPresetId,
         sessionId: `agent-team:${randomUUID()}`,
         desiredState: 'offline',
         lastRuntimeState: 'offline',
@@ -582,7 +550,7 @@ export class AgentTeamService extends Service {
         `Unknown permission preset '${permissionPresetId}'`,
       )
     }
-    if ((member.permissionPresetId ?? member.assistantSnapshot.permissionPresetId) === permissionPresetId) return team
+    if (member.permissionPresetId === permissionPresetId) return team
     if (team.state === 'draft') {
       const next = await this.store.updateTeam(teamId, current => ({
         ...current,
@@ -862,7 +830,6 @@ function assistantInputOf(assistant: AssistantTemplate): CreateAssistantInput {
     model: assistant.model,
     agentPresetId: assistant.agentPresetId,
     permissionPresetId: assistant.permissionPresetId,
-    toolAllowlist: [...assistant.toolAllowlist],
     skillAllowlist: [...assistant.skillAllowlist],
     mcpServers: [...assistant.mcpServers],
   }
@@ -876,7 +843,6 @@ function normalizeAssistantInput(input: CreateAssistantInput): CreateAssistantIn
     model: input.model.trim(),
     agentPresetId: input.agentPresetId.trim(),
     permissionPresetId: input.permissionPresetId.trim(),
-    toolAllowlist: [],
     skillAllowlist: unique(input.skillAllowlist),
     mcpServers: unique(input.mcpServers),
   }

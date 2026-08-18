@@ -20,7 +20,6 @@ type AssistantTemplate = {
   model: string;
   agentPresetId: string;
   permissionPresetId: string;
-  toolAllowlist: string[];
   skillAllowlist: string[];
   mcpServers: string[];
   revision: number;
@@ -29,11 +28,9 @@ type AssistantTemplate = {
 };
 ```
 
-`skillAllowlist` 是为兼容首版持久化结构保留的内部字段名；产品语义是“这个助手已选择、可以使用的 Skills”，不是面向用户的白名单。空数组表示不使用任何 Skill。Skill 正文不进入模板，成员执行任务时由 Harness 根据名称按需加载当前 Workspace 中的胜出定义。
+`skillAllowlist` 的产品语义是“这个助手已选择、可以使用的 Skills”。空数组表示不使用任何 Skill。Skill 正文不进入模板，成员执行任务时由 Harness 根据名称按需加载当前 Workspace 中的胜出定义。
 
-`mcpServers` 保存用户从所选 Agent Preset 真实工具目录中选择的 MCP Server 名称；空数组表示不使用 MCP。连接方式、启动命令、URL 和凭据只存在于 Harness Profile/Preset 的官方 MCP Client 配置中，不进入助手模板。旧记录缺少该字段时按空数组读取。
-
-`toolAllowlist` 同样只作为首版记录的兼容字段保留。新建和更新时强制写为空数组，启动迁移会清除历史值，成员运行时不会读取它；工具能力完全由 Agent Preset 和权限预设决定。
+`mcpServers` 保存用户从所选 Agent Preset 真实工具目录中选择的 MCP Server 名称；空数组表示不使用 MCP。连接方式、启动命令、URL 和凭据只存在于 Harness Profile/Preset 的官方 MCP Client 配置中，不进入助手模板。工具能力完全由 Agent Preset、所选 MCP Server 和权限预设决定。
 
 Provider 和 Model 是可启动模板的必填字段。候选项来自 `ctx.llm.listProviders()` 和 `ctx.llm.listModels(provider)`；UI 使用 Provider 联动的模型下拉框完整展示真实候选项，不提供自定义模型 ID。后端仍用 `ctx.llm.resolveModelInfo()` 做最终校验。
 
@@ -69,7 +66,7 @@ type TeamMemberSlot = {
   displayName: string;
   role: "leader" | "member";
   assistantSnapshot: AssistantSnapshot;
-  permissionPresetId?: string;
+  permissionPresetId: string;
   sessionId: string;
   desiredState: "online" | "offline" | "removing";
   lastRuntimeState: MemberRuntimeState;
@@ -84,11 +81,9 @@ type RetiredMemberSession = {
 };
 ```
 
-`displayName` 是为消息、任务和历史记录保存的助手名称快照，固定取自 `assistantSnapshot.name`，不是用户可编辑的成员别名。同一助手模板可产生多个同名成员实例，成员身份始终由 `slotId` 区分。早期版本保存的自定义名称或自动编号会在插件启动时归一为助手快照名称。
+`displayName` 是为消息、任务和历史记录保存的助手名称快照，固定取自 `assistantSnapshot.name`，不是用户可编辑的成员别名。同一助手模板可产生多个同名成员实例，成员身份始终由 `slotId` 区分。
 
-早期版本持久化的 `paused` 只作为旧数据输入值保留在 Schema 编解码层；插件启动时会将其一次性迁移为 `active`，不会再向 Runtime、Host API 或 UI 暴露暂停状态。
-
-`AssistantTemplate.permissionPresetId` 是创建成员时的默认权限；`TeamMemberSlot.permissionPresetId` 是该成员当前 Session 的运行权限。聊天窗口切换权限只更新成员字段，不修改模板或不可变助手快照。早期成员记录缺少该字段时，运行时回退到 `assistantSnapshot.permissionPresetId`。
+`AssistantTemplate.permissionPresetId` 是创建成员时的默认权限；`TeamMemberSlot.permissionPresetId` 是该成员当前 Session 的运行权限。聊天窗口切换权限只更新成员字段，不修改模板或不可变助手快照。
 
 `MemberRuntimeState` 是插件投影，不等同于 Harness `AgentStatus`。Harness 公开状态只有 `idle | running`；插件额外的 `offline`、`starting`、`waiting_approval` 和 `error` 分别由 Handle 是否存在、启动流程、未闭合的 `approval/asked`/`approval/decided` 事件对及插件错误记录派生。
 
@@ -221,7 +216,7 @@ Host 插件启动时：
 ```mermaid
 stateDiagram-v2
     [*] --> Active
-    Active --> Deleting: exact name confirmation
+    Active --> Deleting: destructive action confirmation
     Deleting --> RuntimeStopped: cancel / idle / flush / dispose
     RuntimeStopped --> WorkspaceDetached: detach current + retired sessions
     WorkspaceDetached --> DomainDeleted: delete messages + activities + aggregate

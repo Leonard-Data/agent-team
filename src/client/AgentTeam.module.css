@@ -215,6 +215,11 @@
   border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.teamNavigatorTitle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .teamNavigatorAdd {
@@ -711,6 +716,190 @@
 
 .assistantBuilderArchiveDialog {
   width: min(440px, calc(100vw - 32px));
+}
+
+.assistantDeleteDialog {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.teamDissolveDialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.teamResetDialog {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.teamResetConfirm {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+.teamResetIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.teamResetConfirm strong {
+  display: block;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teamResetConfirm p {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.teamResetConfirm > .inlineError {
+  grid-column: 1 / -1;
+}
+
+.memberRemoveDialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.memberRemoveConfirm {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+.memberRemoveIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.memberRemoveConfirm strong {
+  display: block;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memberRemoveConfirm p {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.memberRemoveConfirm > .inlineError {
+  grid-column: 1 / -1;
+}
+
+.teamDissolveConfirm {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+.teamDissolveIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.teamDissolveConfirm strong {
+  display: block;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teamDissolveConfirm p {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.teamDissolveConfirm > .inlineError {
+  grid-column: 1 / -1;
+}
+
+.assistantDeleteConfirm {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+.assistantDeleteIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.assistantDeleteConfirm strong {
+  display: block;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistantDeleteConfirm p {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.assistantDeleteConfirm > .inlineError {
+  grid-column: 1 / -1;
+}
+
+.confirmDangerButton {
+  min-width: 88px;
 }
 
 .assistantBuilderArchiveConfirm {
@@ -1563,11 +1752,6 @@ textarea.input {
   font-size: 11px;
 }
 
-.addMemberPopover {
-  position: relative;
-  display: inline-flex;
-}
-
 .addMemberButton {
   height: 30px;
   display: inline-flex;
@@ -1710,51 +1894,39 @@ textarea.input {
   color: var(--dsw-alias-state-error-primary);
 }
 
-.addMemberMenu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
-  width: min(360px, calc(100vw - 72px));
-  max-height: 320px;
-  display: flex;
-  flex-direction: column;
-  padding: 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1);
-  box-shadow: var(--dsw-alias-shadow-l2, var(--dsw-alias-shadow-l1));
-}
-
-.addMemberMenuHeader {
+.addMemberDialogHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 3px 5px 8px;
+  padding: 2px 2px 10px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
-.addMemberMenuHeader strong {
+.addMemberDialogHeader strong {
   color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
 }
 
-.addMemberMenuHeader span {
+.addMemberDialogHeader span {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 10px;
-  line-height: 15px;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .addMemberMenuList {
   min-height: 0;
+  max-height: min(440px, 58vh);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   padding-top: 6px;
+  padding-right: 2px;
   overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .addMemberOption {
@@ -1823,6 +1995,15 @@ textarea.input {
   line-height: 15px;
 }
 
+.addMemberOptionAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .memberRow {
   display: flex;
   align-items: center;
@@ -1842,12 +2023,6 @@ textarea.input {
 
 .linkDanger:hover {
   background: var(--dsw-alias-interactive-bg-hover-danger);
-}
-
-.teamRuntimeActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .contextResetPanel {
@@ -1953,6 +2128,73 @@ textarea.input {
   cursor: pointer;
 }
 
+.memberTabWrap {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+
+.memberTabWithActions {
+  padding-right: 12px;
+  transition: padding-right 140ms ease;
+}
+
+.memberTabWrap:hover .memberTabWithActions,
+.memberTabWrap:focus-within .memberTabWithActions {
+  padding-right: 38px;
+}
+
+.memberTabName {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memberTabActions {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
+}
+
+.memberTabWrap:hover .memberTabActions,
+.memberTabWrap:focus-within .memberTabActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.memberTabRemoveAction {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.memberTabRemoveAction {
+  padding: 0;
+}
+
+.memberTabRemoveAction:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
 .memberTab:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -1988,7 +2230,9 @@ textarea.input {
 }
 
 .leaderCrown {
-  color: var(--dsw-alias-state-warn-label);
+  flex: none;
+  display: inline-block;
+  vertical-align: -2px;
 }
 
 .statusDot {
@@ -2007,6 +2251,9 @@ textarea.input {
 
 .manageButtonWrap {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   margin-left: auto;
 }
 
@@ -2056,6 +2303,50 @@ textarea.input {
   box-shadow: var(--dsw-alias-shadow-l1);
 }
 
+.conversationFocusBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  padding: 0;
+  border: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  cursor: zoom-out;
+  opacity: 0.82;
+}
+
+.conversationColumnExpanded {
+  position: fixed;
+  inset: clamp(22px, 5vh, 56px) clamp(22px, 6vw, 96px);
+  z-index: 91;
+  min-width: 0;
+  border-radius: 16px;
+  box-shadow: var(--dsw-alias-shadow-l2, var(--dsw-alias-shadow-l1));
+}
+
+.conversationColumnExpanded .columnHeader {
+  min-height: 64px;
+  padding-inline: 18px;
+  cursor: default;
+}
+
+.conversationColumnExpanded .timeline {
+  padding: 24px 28px 20px;
+}
+
+.conversationColumnExpanded .messageNode,
+.conversationColumnExpanded .teamMessageCard {
+  max-width: min(76%, 820px);
+}
+
+.conversationColumnExpanded .teamMessageCard {
+  width: min(76%, 820px);
+}
+
+.conversationColumnExpanded .toolCard {
+  width: min(76%, 820px);
+  align-self: flex-start;
+}
+
 .columnHeader {
   flex: none;
   min-height: 56px;
@@ -2066,6 +2357,33 @@ textarea.input {
   padding: 9px 13px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-2);
+  cursor: zoom-in;
+}
+
+.columnHeaderActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.columnExpandClose {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.columnExpandClose:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .columnIdentity {
@@ -2166,6 +2484,116 @@ textarea.input {
   background: transparent;
   font-size: 13px;
   line-height: 21px;
+}
+
+.teamMessageCard {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: min(88%, 560px);
+  align-self: flex-start;
+  overflow: hidden;
+  padding: 9px 11px 10px 13px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.teamMessageCard::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--team-message-accent, var(--dsw-alias-state-business-primary));
+  content: '';
+}
+
+.teamMessageHeader,
+.teamMessageIdentity {
+  display: flex;
+  align-items: center;
+}
+
+.teamMessageHeader {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.teamMessageIdentity {
+  min-width: 0;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.teamMessageIdentity strong {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.teamMessageIdentity span {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.teamMessageMemberId {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-tertiary);
+  font: 10px/14px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.teamMessageType {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--team-message-tag-bg, var(--dsw-alias-bg-module-platform));
+  color: var(--team-message-accent, var(--dsw-alias-label-secondary));
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.teamMessageText {
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.teamMessageInstruction {
+  --team-message-accent: var(--dsw-alias-brand-primary);
+  --team-message-tag-bg: var(--dsw-alias-interactive-bg-active);
+}
+
+.teamMessageProgress {
+  --team-message-accent: var(--dsw-alias-state-business-primary);
+  --team-message-tag-bg: var(--dsw-alias-state-business-tertiary, var(--dsw-alias-bg-module-platform));
+}
+
+.teamMessageResult {
+  --team-message-accent: var(--dsw-alias-state-success-primary);
+  --team-message-tag-bg: var(--dsw-alias-state-success-tertiary);
+}
+
+.teamMessageQuestion {
+  --team-message-accent: var(--dsw-alias-state-warn-label);
+  --team-message-tag-bg: var(--dsw-alias-state-warn-tertiary);
+}
+
+.teamMessageWarning {
+  --team-message-accent: var(--dsw-alias-state-error-primary);
+  --team-message-tag-bg: var(--dsw-alias-state-error-secondary);
+}
+
+.teamMessageSystem {
+  --team-message-accent: var(--dsw-alias-label-tertiary);
+  --team-message-tag-bg: var(--dsw-alias-bg-module-platform);
 }
 
 .messageText {
@@ -2406,7 +2834,7 @@ textarea.input {
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
-.workspaceHeader > div {
+.workspaceHeader > div:first-child {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2418,13 +2846,56 @@ textarea.input {
   line-height: 19px;
 }
 
-.workspaceHeader div > span,
-.workspaceHeader > span {
+.workspaceHeader > div:first-child > span,
+.workspaceHeaderActions > span {
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.workspaceHeaderActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.workspaceRefreshButton {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.workspaceRefreshButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.workspaceRefreshButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.workspaceRefreshButton:disabled {
+  cursor: default;
+}
+
+.workspaceRefreshButtonBusy svg {
+  animation: workspaceRefreshSpin 0.8s linear infinite;
+}
+
+@keyframes workspaceRefreshSpin {
+  to { transform: rotate(360deg); }
 }
 
 .fileTree {
@@ -2517,6 +2988,19 @@ textarea.input {
 .managementDialog {
   width: min(900px, calc(100vw - 48px));
   max-height: min(820px, calc(100vh - 48px));
+}
+
+.addMemberDialog {
+  width: min(520px, calc(100vw - 48px));
+  max-height: min(680px, calc(100vh - 48px));
+}
+
+.addMemberDialogContent {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .managementDialogContent {
@@ -2678,10 +3162,6 @@ textarea.input {
 
   .memberGrid {
     grid-template-columns: 1fr;
-  }
-
-  .addMemberMenu {
-    width: min(320px, calc(100vw - 40px));
   }
 
   .teamCreateContent {

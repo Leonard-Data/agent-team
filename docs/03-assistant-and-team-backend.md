@@ -103,12 +103,11 @@ interface TeamService {
 - 启动失败的团队进入 `error`，用户通过同一个 `team.start` 命令重试，不另设 Resume 生命周期。
 - 插件重启时校验 Workspace 和 Provider 可用性，再按原 Session 恢复所有成员 Handle。
 - 单成员恢复失败不会把其他成员的 Session 替换为新 Session。
-- 旧版本的 `paused` 团队在插件启动时迁移为 `active` 后参与正常冷恢复。
 - 如果 `ctx.agents.get(sessionId)` 存在但 Team Runtime 没有对应 Handle，团队进入 `ownership_conflict` 并阻止变更，不能越权销毁由其他 Fiber 拥有的 Agent。
 
 ## 解散
 
-`dissolve` 只接受团队名称精确确认，不能用普通布尔确认。运行团队先进入 `deleting`，UI 禁止其他变更；服务停止成员、清空待处理输入、等待空闲、尽力 flush、释放 AgentHandle、解除现任与已移除 Session 的 Workspace 活动关联，最后删除团队消息、活动和 TeamAggregate。任一清理步骤失败时进入 `delete_blocked`，UI 提供重试入口。
+`dissolve` 仍校验请求携带的团队名称是否与当前团队匹配，避免误删目标；UI 在用户点击自定义警示弹窗的“确认解散”后自动携带当前名称，不要求手动输入。运行团队先进入 `deleting`，UI 禁止其他变更；服务停止成员、清空待处理输入、等待空闲、尽力 flush、释放 AgentHandle、解除现任与已移除 Session 的 Workspace 活动关联，最后删除团队消息、活动和 TeamAggregate。任一清理步骤失败时进入 `delete_blocked`，UI 提供重试入口。
 
 团队一旦进入 `deleting`：
 

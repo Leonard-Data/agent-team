@@ -57,7 +57,6 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
       assistantBuilderPreferencesDomain,
     )
     const service = new AgentTeamService(ctx, config, store)
-    await service.migrateLegacyData()
     runtime = new TeamRuntime(ctx, config, service)
     assistantBuilderRuntime = new AssistantBuilderRuntime(
       ctx,

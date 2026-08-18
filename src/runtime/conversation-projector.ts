@@ -1,5 +1,6 @@
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { TeamAggregate, TeamMessage } from '../domain/types.js'
 import type { ConversationNode } from '../transport/contracts.js'
 
 interface PartialAssistant {
@@ -10,26 +11,44 @@ interface PartialAssistant {
   reasoning: string
 }
 
-export function projectConversation(events: readonly SessionEvent[], limit = 240): {
+interface TeamProjectionContext {
+  team: Pick<TeamAggregate, 'leaderSlotId' | 'members' | 'retiredSessions'>
+  messages: readonly TeamMessage[]
+}
+
+export function projectConversation(
+  events: readonly SessionEvent[],
+  limit = 240,
+  teamContext?: TeamProjectionContext,
+): {
   throughSeq: number
   nodes: ConversationNode[]
 } {
   const nodes: ConversationNode[] = []
   const tools = new Map<string, number>()
   const partials = new Map<string, PartialAssistant>()
+  const teamMessages = new Map(teamContext?.messages.map(message => [message.id, message]) ?? [])
 
   for (const event of events) {
     switch (event.type) {
       case 'user/message': {
         if (!isVisibleUserSource(event.data.source)) break
         const text = textOf(event.data.content)
-        if (text.length > 0) nodes.push({
-          id: String(event.data.id),
-          kind: 'user',
-          seq: event.seq,
-          time: event.time,
-          text,
-        })
+        if (text.length > 0) {
+          const messageId = String(event.data.id)
+          const teamMessage = teamMessages.get(messageId)
+          if (teamContext !== undefined && teamMessage !== undefined && teamMessage.sender.kind !== 'user') {
+            nodes.push(teamMessageNode(teamContext.team, teamMessage, event.seq, event.time))
+          } else {
+            nodes.push({
+              id: messageId,
+              kind: 'user',
+              seq: event.seq,
+              time: event.time,
+              text,
+            })
+          }
+        }
         break
       }
       case 'assistant/chunk': {
@@ -149,6 +168,43 @@ export function projectConversation(events: readonly SessionEvent[], limit = 240
   return {
     throughSeq: events.at(-1)?.seq ?? -1,
     nodes: nodes.slice(-limit),
+  }
+}
+
+function teamMessageNode(
+  team: TeamProjectionContext['team'],
+  message: TeamMessage,
+  seq: number,
+  time: number,
+): Extract<ConversationNode, { kind: 'team-message' }> {
+  if (message.sender.kind === 'system') {
+    return {
+      id: message.id,
+      kind: 'team-message',
+      seq,
+      time,
+      text: message.content,
+      senderName: '团队事件',
+      senderId: message.sender.id,
+      senderRole: 'system',
+      messageType: message.type,
+      ...(message.relatedTaskId === undefined ? {} : { relatedTaskId: message.relatedTaskId }),
+    }
+  }
+  const current = team.members[message.sender.id]
+  const retired = Object.values(team.retiredSessions)
+    .find(session => session.formerSlotId === message.sender.id)
+  return {
+    id: message.id,
+    kind: 'team-message',
+    seq,
+    time,
+    text: message.content,
+    senderName: current?.displayName ?? retired?.displayName ?? '已移出成员',
+    senderId: message.sender.id,
+    senderRole: message.sender.id === team.leaderSlotId ? 'leader' : 'member',
+    messageType: message.type,
+    ...(message.relatedTaskId === undefined ? {} : { relatedTaskId: message.relatedTaskId }),
   }
 }
 

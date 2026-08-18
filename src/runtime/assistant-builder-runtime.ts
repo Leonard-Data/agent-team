@@ -611,7 +611,6 @@ export class AssistantBuilderRuntime {
           model: args.model,
           agentPresetId: args.agentPresetId,
           permissionPresetId: args.permissionPresetId,
-          toolAllowlist: [],
           skillAllowlist: args.skills ?? [],
           mcpServers: args.mcpServers ?? [],
         })
