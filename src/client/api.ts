@@ -1,10 +1,12 @@
 import {
   AGENT_TEAM_API_PATH,
   AGENT_TEAM_EVENTS_PATH,
+  AGENT_TEAM_UPLOAD_PATH,
   type AgentTeamMethod,
   type AgentTeamResponse,
   type AssistantBuilderConversationView,
   type MemberConversationView,
+  type WorkspaceUploadView,
 } from '../transport/contracts.js'
 
 export async function callAgentTeam<T>(
@@ -36,6 +38,36 @@ export async function callAgentTeam<T>(
     return body.value as T
   } catch (error) {
     if (controller.signal.aborted) throw new Error(`请求超时：${method}`)
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function uploadAgentTeamFile(teamId: string, file: File): Promise<WorkspaceUploadView> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => { controller.abort() }, 120_000)
+  const requestId = crypto.randomUUID()
+  try {
+    const response = await fetch(`${AGENT_TEAM_UPLOAD_PATH}?teamId=${encodeURIComponent(teamId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Agent-Team-File-Name': encodeURIComponent(file.name),
+        'X-Agent-Team-Request-Id': requestId,
+      },
+      signal: controller.signal,
+      body: file,
+    })
+    const body = await response.json() as AgentTeamResponse
+    if (!body.ok) {
+      const error = new Error(body.error.message)
+      Object.assign(error, { code: body.error.code, details: body.error.details })
+      throw error
+    }
+    return body.value as WorkspaceUploadView
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`文件上传超时：${file.name}`)
     throw error
   } finally {
     clearTimeout(timeout)

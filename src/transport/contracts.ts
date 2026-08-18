@@ -1,5 +1,6 @@
 export const AGENT_TEAM_API_PATH = '/agent-team/api'
 export const AGENT_TEAM_EVENTS_PATH = '/agent-team/events'
+export const AGENT_TEAM_UPLOAD_PATH = '/agent-team/upload'
 
 export type AgentTeamMethod =
   | 'catalog.get'
@@ -130,6 +131,12 @@ export interface WorkspaceEntryView {
   name: string
   path: string
   kind: 'file' | 'directory' | 'symlink'
+}
+
+export interface WorkspaceUploadView {
+  name: string
+  path: string
+  bytes: number
 }
 
 export interface AgentTeamRequest {

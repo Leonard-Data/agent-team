@@ -7,9 +7,12 @@ import type { AgentTeamService, AgentTeamChange } from '../service/agent-team-se
 import {
   AGENT_TEAM_API_PATH,
   AGENT_TEAM_EVENTS_PATH,
+  AGENT_TEAM_UPLOAD_PATH,
   type AgentTeamRequest,
   type AgentTeamResponse,
 } from './contracts.js'
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 const requestSchema = z.object({
   requestId: z.string().trim().min(1).max(200),
@@ -84,9 +87,17 @@ export function registerWebTransport(
       handleEvents(request, response, clients)
     },
   })
+  const disposeUpload = ctx.webServer.register({
+    kind: 'exact',
+    path: AGENT_TEAM_UPLOAD_PATH,
+    handler: async (request, response) => {
+      await handleUpload(request, response, service, ctx)
+    },
+  })
 
   return {
     dispose() {
+      disposeUpload()
       disposeEvents()
       disposeApi()
       unsubscribe()
@@ -94,6 +105,45 @@ export function registerWebTransport(
       for (const response of clients) response.end()
       clients.clear()
     },
+  }
+}
+
+async function handleUpload(
+  request: IncomingMessage,
+  response: ServerResponse,
+  service: AgentTeamService,
+  ctx: Context,
+): Promise<void> {
+  const requestId = headerValue(request.headers['x-agent-team-request-id']) ?? 'unknown'
+  if (request.method !== 'POST') {
+    writeJson(response, 405, failure(requestId, 'METHOD_NOT_ALLOWED', 'Only POST is supported'))
+    return
+  }
+  if (!sameOrigin(request)) {
+    writeJson(response, 403, failure(requestId, 'ORIGIN_REJECTED', 'Cross-origin requests are not allowed'))
+    return
+  }
+  try {
+    const url = new URL(request.url ?? AGENT_TEAM_UPLOAD_PATH, `http://${request.headers.host ?? 'localhost'}`)
+    const teamId = url.searchParams.get('teamId')?.trim()
+    const encodedName = headerValue(request.headers['x-agent-team-file-name'])
+    if (!teamId || !encodedName) throw new AgentTeamError('INVALID_REQUEST', 'Team id and file name are required')
+    let fileName: string
+    try {
+      fileName = decodeURIComponent(encodedName)
+    } catch {
+      throw new AgentTeamError('INVALID_REQUEST', 'File name encoding is invalid')
+    }
+    const data = await readBytes(request, MAX_UPLOAD_BYTES)
+    const value = await service.uploadWorkspaceFile(teamId, fileName, data)
+    writeJson(response, 200, { requestId, ok: true, value })
+  } catch (error) {
+    if (!isAgentTeamError(error)) {
+      ctx.logger.error('agent-team: unhandled upload error', error)
+    }
+    const normalized = normalizeError(requestId, error)
+    const status = normalized.error.code.endsWith('_NOT_FOUND') ? 404 : 400
+    writeJson(response, status, normalized)
   }
 }
 
@@ -315,6 +365,28 @@ async function readJson(request: IncomingMessage, limit: number): Promise<unknow
   }
   if (chunks.length === 0) throw new AgentTeamError('INVALID_REQUEST', 'Request body is empty')
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+}
+
+async function readBytes(request: IncomingMessage, limit: number): Promise<Uint8Array> {
+  const declared = Number(request.headers['content-length'] ?? 0)
+  if (Number.isFinite(declared) && declared > limit) {
+    throw new AgentTeamError('INVALID_REQUEST', `File exceeds the ${Math.floor(limit / 1024 / 1024)} MB upload limit`)
+  }
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buffer.byteLength
+    if (size > limit) {
+      throw new AgentTeamError('INVALID_REQUEST', `File exceeds the ${Math.floor(limit / 1024 / 1024)} MB upload limit`)
+    }
+    chunks.push(buffer)
+  }
+  return Buffer.concat(chunks)
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
 }
 
 function sameOrigin(request: IncomingMessage): boolean {

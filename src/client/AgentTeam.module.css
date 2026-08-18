@@ -2735,6 +2735,14 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+
+.composerUtilities {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .permissionSelect {
@@ -2800,6 +2808,23 @@ textarea.input {
 .composerIconButton:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+.composerAttachButton {
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.composerAttachButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  transform: none;
+}
+
+.hiddenFileInput {
+  display: none;
 }
 
 .composerError {

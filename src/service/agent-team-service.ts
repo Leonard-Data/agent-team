@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { readdir, realpath } from 'node:fs/promises'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { isModelInvocable, isSkillName } from '@deepseek-ai/dsh-skill'
@@ -37,6 +37,7 @@ import type {
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
+  WorkspaceUploadView,
 } from '../transport/contracts.js'
 
 declare module '@deepseek-ai/cordis' {
@@ -626,6 +627,52 @@ export class AgentTeamService extends Service {
       .slice(0, 500)
   }
 
+  async uploadWorkspaceFile(
+    teamId: string,
+    rawName: string,
+    data: Uint8Array,
+  ): Promise<WorkspaceUploadView> {
+    const team = requireTeam(this.store, teamId)
+    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
+    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
+      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
+    }
+    const root = await realpath(team.workspacePath)
+    const uploadDirectory = resolve(root, '.agent-team', 'uploads')
+    await mkdir(uploadDirectory, { recursive: true })
+    const resolvedUploadDirectory = await realpath(uploadDirectory)
+    if (!resolvedUploadDirectory.startsWith(`${root}${sep}`)) {
+      throw new AgentTeamError('INVALID_REQUEST', 'Workspace upload directory resolves outside the team Workspace')
+    }
+    const name = safeUploadName(rawName)
+    for (let index = 0; index < 1_000; index += 1) {
+      const candidate = uploadCandidateName(name, index)
+      const target = resolve(resolvedUploadDirectory, candidate)
+      try {
+        await writeFile(target, data, { flag: 'wx' })
+        return {
+          name: candidate,
+          path: relative(root, target).split(sep).join('/'),
+          bytes: data.byteLength,
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+          const existing = await readFile(target)
+          if (existing.equals(data)) {
+            return {
+              name: candidate,
+              path: relative(root, target).split(sep).join('/'),
+              bytes: existing.byteLength,
+            }
+          }
+          continue
+        }
+        throw error
+      }
+    }
+    throw new AgentTeamError('INVALID_REQUEST', `Unable to allocate a unique upload name for '${name}'`)
+  }
+
   listMessages(teamId: string): Page<TeamMessage> {
     requireTeam(this.store, teamId)
     const items = this.store.listMessages(teamId)
@@ -850,6 +897,26 @@ function normalizeAssistantInput(input: CreateAssistantInput): CreateAssistantIn
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values.map(value => value.trim()).filter(Boolean))]
+}
+
+function safeUploadName(rawName: string): string {
+  const name = basename(rawName)
+    .normalize('NFC')
+    .replace(/[\u0000-\u001f\u007f]/g, '_')
+    .trim()
+  if (name.length === 0 || name === '.' || name === '..') {
+    throw new AgentTeamError('INVALID_REQUEST', 'Uploaded file name is invalid')
+  }
+  const extension = extname(name).slice(0, 40)
+  const stem = name.slice(0, name.length - extension.length).slice(0, 180) || 'file'
+  return `${stem}${extension}`
+}
+
+function uploadCandidateName(name: string, index: number): string {
+  if (index === 0) return name
+  const extension = extname(name)
+  const stem = name.slice(0, name.length - extension.length)
+  return `${stem} (${index})${extension}`
 }
 
 function createMemberSlot(

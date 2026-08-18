@@ -1,5 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Config } from '../src/config.js'
 import { AgentTeamError } from '../src/domain/errors.js'
 import type {
@@ -26,6 +29,36 @@ const config: Config = {
 }
 
 describe('AgentTeamService', () => {
+  it('reuses identical uploads and only renames same-name files with different content', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-team-upload-'))
+    try {
+      const { service } = createHarness(workspacePath)
+      const assistant = await service.createAssistant(assistantInput())
+      const team = await service.createTeamDraft({
+        name: 'Upload team',
+        workspaceId: 'workspace-1',
+        directMemberChat: true,
+        members: [{ assistantId: assistant.id, role: 'leader' }],
+      })
+      const bytes = new TextEncoder().encode('hello')
+      const changedBytes = new TextEncoder().encode('changed')
+
+      const first = await service.uploadWorkspaceFile(team.id, '../notes.txt', bytes)
+      const duplicate = await service.uploadWorkspaceFile(team.id, '../notes.txt', bytes)
+      const changed = await service.uploadWorkspaceFile(team.id, '../notes.txt', changedBytes)
+      const changedDuplicate = await service.uploadWorkspaceFile(team.id, '../notes.txt', changedBytes)
+
+      expect(first).toEqual({ name: 'notes.txt', path: '.agent-team/uploads/notes.txt', bytes: 5 })
+      expect(duplicate).toEqual(first)
+      expect(changed).toEqual({ name: 'notes (1).txt', path: '.agent-team/uploads/notes (1).txt', bytes: 7 })
+      expect(changedDuplicate).toEqual(changed)
+      await expect(readFile(join(workspacePath, first.path), 'utf8')).resolves.toBe('hello')
+      await expect(readFile(join(workspacePath, changed.path), 'utf8')).resolves.toBe('changed')
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true })
+    }
+  })
+
   it('lists the earliest created assistants first', async () => {
     const { service, store } = createHarness()
     const base = {
@@ -633,7 +666,7 @@ describe('AgentTeamService', () => {
   })
 })
 
-function createHarness(): {
+function createHarness(workspacePath = '/tmp/agent-team-workspace'): {
   ctx: Context
   service: AgentTeamService
   store: MemoryStore
@@ -691,7 +724,7 @@ function createHarness(): {
   } as never)
   const workspace = {
     id: 'workspace-1',
-    path: '/tmp/agent-team-workspace',
+    path: workspacePath,
     title: 'Workspace',
     status: async () => 'ok' as const,
     attachSession: async () => {},

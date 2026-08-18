@@ -2,7 +2,7 @@ import type { FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button, IconAgentPresetOutline16, IconArchiveOutline20, IconCloseOutline16, IconFolderOpenOutline16, IconPlusOutline16,
-  IconRefreshOutline16, IconSendOutline16, IconStopFill16, MarkdownText, MessageText, Modal, Tooltip,
+  IconPaperclipOutline16, IconRefreshOutline16, IconSendOutline16, IconStopFill16, MarkdownText, MessageText, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
@@ -10,9 +10,11 @@ import {
   subscribeAgentTeam,
   subscribeAgentTeamConversation,
   subscribeAssistantBuilderConversation,
+  uploadAgentTeamFile,
 } from './api.js'
 import { closeAgentTeam, openTeam, openTeamCreator, openTeams, useAgentTeamUi } from './store.js'
 import { mergeConversationNodes } from './conversation-nodes.js'
+import { insertWorkspaceFileMention } from './file-mentions.js'
 import { shouldSubmitComposer } from './keyboard.js'
 import { CrownIcon } from './icons/CrownIcon.js'
 import {
@@ -31,6 +33,7 @@ import type {
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
+  WorkspaceUploadView,
 } from '../transport/contracts.js'
 
 interface AssistantView {
@@ -1681,6 +1684,10 @@ function ConversationColumn({
   const [permissionPresetId, setPermissionPresetId] = useState(member.permissionPresetId)
   const [error, setError] = useState<string>()
   const [pendingMessages, setPendingMessages] = useState<ConversationNode[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInsertionPoint = useRef({ start: 0, end: 0 })
   const timelineRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const composing = useRef(false)
@@ -1781,6 +1788,40 @@ function ConversationColumn({
     }
   }
 
+  async function uploadFiles(files: FileList | null): Promise<void> {
+    const selected = Array.from(files ?? [])
+    if (selected.length === 0 || uploadingFiles) return
+    setUploadingFiles(true)
+    try {
+      const uploads: WorkspaceUploadView[] = []
+      for (const file of selected) uploads.push(await uploadAgentTeamFile(team.id, file))
+      let nextCursor = fileInsertionPoint.current.start
+      setContent(current => {
+        let nextValue = current
+        let selectionStart = Math.min(fileInsertionPoint.current.start, current.length)
+        let selectionEnd = Math.min(fileInsertionPoint.current.end, current.length)
+        for (const upload of uploads) {
+          const inserted = insertWorkspaceFileMention(nextValue, selectionStart, selectionEnd, upload.path)
+          nextValue = inserted.value
+          nextCursor = inserted.cursor
+          selectionStart = inserted.cursor
+          selectionEnd = inserted.cursor
+        }
+        return nextValue
+      })
+      setError(undefined)
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus()
+        textareaRef.current?.setSelectionRange(nextCursor, nextCursor)
+      })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      if (fileInputRef.current !== null) fileInputRef.current.value = ''
+      setUploadingFiles(false)
+    }
+  }
+
   return (
     <section
       className={`${css.conversationColumn} ${expanded ? css.conversationColumnExpanded : ''}`}
@@ -1835,6 +1876,7 @@ function ConversationColumn({
       </div>
       <form className={css.composer} onSubmit={(event) => { void send(event) }}>
         <textarea
+          ref={textareaRef}
           value={content}
           onChange={event => { setContent(event.target.value) }}
           onCompositionStart={() => { composing.current = true }}
@@ -1849,24 +1891,50 @@ function ConversationColumn({
             event.preventDefault()
             event.currentTarget.form?.requestSubmit()
           }}
-          disabled={!canChat}
+          disabled={!canChat || uploadingFiles}
           placeholder={!canChat ? '当前不可直接对话' : `发送消息到 ${member.displayName}…`}
           rows={2}
         />
         <div className={css.composerFooter}>
-          <select
-            className={css.permissionSelect}
-            aria-label={`${member.displayName} 权限`}
-            value={permissionPresetId}
-            disabled={changingPermission || permissionPresets.length === 0}
-            onChange={event => { void changePermission(event.target.value) }}
-          >
-            {permissionPresets.map(permission => (
-              <option key={permission.value} value={permission.value}>
-                权限 · {PERMISSION_LABELS[permission.value] ?? permission.name}
-              </option>
-            ))}
-          </select>
+          <div className={css.composerUtilities}>
+            <button
+              type="button"
+              className={`${css.composerIconButton} ${css.composerAttachButton}`}
+              disabled={!canChat || uploadingFiles}
+              aria-label={uploadingFiles ? '正在上传文件' : '选择文件'}
+              onClick={() => {
+                const textarea = textareaRef.current
+                fileInsertionPoint.current = {
+                  start: textarea?.selectionStart ?? content.length,
+                  end: textarea?.selectionEnd ?? content.length,
+                }
+                fileInputRef.current?.click()
+              }}
+            >
+              <IconPaperclipOutline16 size={16} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className={css.hiddenFileInput}
+              multiple
+              tabIndex={-1}
+              onChange={event => { void uploadFiles(event.currentTarget.files) }}
+            />
+            <select
+              className={css.permissionSelect}
+              aria-label={`${member.displayName} 权限`}
+              value={permissionPresetId}
+              disabled={changingPermission || permissionPresets.length === 0}
+              onChange={event => { void changePermission(event.target.value) }}
+            >
+              {permissionPresets.map(permission => (
+                <option key={permission.value} value={permission.value}>
+                  权限 · {PERMISSION_LABELS[permission.value] ?? permission.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className={css.composerActions}>
             {running && (
               <Tooltip label={stopping ? '停止中…' : '停止生成'} side="top" delayMs={400}>
@@ -1885,7 +1953,7 @@ function ConversationColumn({
               <button
                 type="submit"
                 className={css.composerIconButton}
-                disabled={!canChat || sending || !content.trim()}
+                disabled={!canChat || sending || uploadingFiles || !content.trim()}
                 aria-label={sending ? '发送中' : '发送消息'}
               >
                 <IconSendOutline16 size={16} />

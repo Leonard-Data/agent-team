@@ -116,6 +116,33 @@ describe('Agent Team client requests', () => {
     })
   })
 
+  it('uploads a system-selected file to the team Workspace upload route', async () => {
+    const fetch = vi.fn(async () => ({
+      json: async () => ({
+        requestId: 'request-1',
+        ok: true,
+        value: { name: 'notes.txt', path: '.agent-team/uploads/notes.txt', bytes: 5 },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
+    const { uploadAgentTeamFile } = await import('../src/client/api.js')
+    const file = { name: '会议 notes.txt' } as File
+
+    await expect(uploadAgentTeamFile('team-1', file)).resolves.toMatchObject({
+      path: '.agent-team/uploads/notes.txt',
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/agent-team/upload?teamId=team-1', expect.objectContaining({
+      method: 'POST',
+      body: file,
+      headers: expect.objectContaining({
+        'Content-Type': 'application/octet-stream',
+        'X-Agent-Team-File-Name': encodeURIComponent(file.name),
+      }),
+    }))
+  })
+
   it('requests the MCP catalog for one Agent Preset', async () => {
     const fetch = vi.fn(async (_url: string, init: RequestInit) => ({
       json: async () => ({ requestId: 'request-1', ok: true, value: { servers: [] } }),
