@@ -1,43 +1,89 @@
+import type {
+  AddTeamMemberInput,
+  AssistantTemplate,
+  CreateAssistantInput,
+  CreateTeamDraftInput,
+  TeamAggregate,
+  TeamMessage,
+  UpdateAssistantInput,
+} from '../domain/types.js'
+
 export const AGENT_TEAM_API_PATH = '/agent-team/api'
 export const AGENT_TEAM_EVENTS_PATH = '/agent-team/events'
 export const AGENT_TEAM_UPLOAD_PATH = '/agent-team/upload'
 
-export type AgentTeamMethod =
-  | 'catalog.get'
-  | 'skill.catalog'
-  | 'mcp.catalog'
-  | 'assistant.list'
-  | 'assistant.get'
-  | 'assistant.create'
-  | 'assistant.update'
-  | 'assistant.clone'
-  | 'assistant.delete'
-  | 'assistant.builder.list'
-  | 'assistant.builder.draft.get'
-  | 'assistant.builder.draft.configure'
-  | 'assistant.builder.start'
-  | 'assistant.builder.get'
-  | 'assistant.builder.configure'
-  | 'assistant.builder.send'
-  | 'assistant.builder.stop'
-  | 'assistant.builder.archive'
-  | 'team.list'
-  | 'team.get'
-  | 'team.createDraft'
-  | 'team.start'
-  | 'team.addMember'
-  | 'team.removeMember'
-  | 'team.changeLeader'
-  | 'team.reset'
-  | 'team.message.list'
-  | 'team.message.send'
-  | 'team.workbench.get'
-  | 'team.member.stop'
-  | 'team.member.setPermissionPreset'
-  | 'team.workspace.list'
-  | 'team.workspace.changes'
-  | 'team.workspace.diff'
-  | 'team.dissolve'
+export const AGENT_TEAM_METHODS = [
+  'catalog.get',
+  'skill.catalog',
+  'mcp.catalog',
+  'assistant.list',
+  'assistant.get',
+  'assistant.create',
+  'assistant.update',
+  'assistant.clone',
+  'assistant.delete',
+  'assistant.builder.list',
+  'assistant.builder.draft.get',
+  'assistant.builder.draft.configure',
+  'assistant.builder.start',
+  'assistant.builder.get',
+  'assistant.builder.configure',
+  'assistant.builder.send',
+  'assistant.builder.stop',
+  'assistant.builder.archive',
+  'team.list',
+  'team.get',
+  'team.createDraft',
+  'team.start',
+  'team.addMember',
+  'team.removeMember',
+  'team.changeLeader',
+  'team.reset',
+  'team.message.list',
+  'team.message.send',
+  'team.workbench.get',
+  'team.member.stop',
+  'team.member.setPermissionPreset',
+  'team.workspace.list',
+  'team.workspace.changes',
+  'team.workspace.diff',
+  'team.dissolve',
+] as const
+
+export type AgentTeamMethod = typeof AGENT_TEAM_METHODS[number]
+
+export type AssistantView = AssistantTemplate
+export type TeamView = TeamAggregate
+
+export interface PageView<T> {
+  items: T[]
+  total: number
+}
+
+export interface CatalogView {
+  providers: Array<{ id: string; name: string }>
+  models: Record<string, Array<{ id: string; name: string; description?: string }>>
+  agentPresets: Array<{ id: string; name: string; description?: string; broken?: string }>
+  permissionPresets: Array<{ value: string; name: string; description?: string }>
+  workspaces: Array<{ id: string; path: string; title: string; status: 'ok' | 'missing-dir' }>
+}
+
+export interface SkillCatalogView {
+  agentPresetId: string
+  skills: Array<{
+    name: string
+    description: string
+    source: string
+  }>
+}
+
+export interface McpCatalogView {
+  agentPresetId: string
+  servers: Array<{
+    name: string
+    tools: Array<{ name: string; description: string }>
+  }>
+}
 
 export type ConversationNode =
   | {
@@ -174,6 +220,77 @@ export interface WorkspaceUploadView {
   path: string
   bytes: number
 }
+
+export interface AgentTeamRequestMap {
+  'catalog.get': { payload: undefined; result: CatalogView }
+  'skill.catalog': { payload: { agentPresetId: string }; result: SkillCatalogView }
+  'mcp.catalog': { payload: { agentPresetId: string }; result: McpCatalogView }
+  'assistant.list': { payload: undefined; result: PageView<AssistantView> }
+  'assistant.get': { payload: { id: string }; result: AssistantView }
+  'assistant.create': { payload: CreateAssistantInput; result: AssistantView }
+  'assistant.update': { payload: { id: string; value: UpdateAssistantInput }; result: AssistantView }
+  'assistant.clone': { payload: { id: string; name?: string }; result: AssistantView }
+  'assistant.delete': { payload: { id: string }; result: null }
+  'assistant.builder.list': { payload: undefined; result: AssistantBuilderConversationListView }
+  'assistant.builder.draft.get': { payload: undefined; result: AssistantBuilderDraftView }
+  'assistant.builder.draft.configure': {
+    payload: { provider: string; model: string }
+    result: AssistantBuilderDraftView
+  }
+  'assistant.builder.start': {
+    payload: { provider: string; model: string; content: string }
+    result: AssistantBuilderConversationView
+  }
+  'assistant.builder.get': { payload: { sessionId: string }; result: AssistantBuilderConversationView }
+  'assistant.builder.configure': {
+    payload: { sessionId: string; provider: string; model: string }
+    result: AssistantBuilderConversationView
+  }
+  'assistant.builder.send': {
+    payload: { sessionId: string; content: string }
+    result: { messageId: string }
+  }
+  'assistant.builder.stop': { payload: { sessionId: string }; result: { accepted: boolean } }
+  'assistant.builder.archive': { payload: { sessionId: string }; result: { archived: boolean } }
+  'team.list': { payload: undefined; result: PageView<TeamView> }
+  'team.get': { payload: { id: string }; result: TeamView }
+  'team.createDraft': { payload: CreateTeamDraftInput; result: TeamView }
+  'team.start': { payload: { id: string }; result: TeamView }
+  'team.addMember': { payload: { teamId: string; value: AddTeamMemberInput }; result: TeamView }
+  'team.removeMember': { payload: { teamId: string; slotId: string }; result: TeamView }
+  'team.changeLeader': { payload: { teamId: string; successorSlotId: string }; result: TeamView }
+  'team.reset': { payload: { teamId: string; confirmation: string }; result: TeamView }
+  'team.message.list': { payload: { id: string }; result: PageView<TeamMessage> }
+  'team.message.send': {
+    payload: { teamId: string; content: string; targetSlotId?: string }
+    result: TeamMessage
+  }
+  'team.workbench.get': { payload: { id: string }; result: TeamWorkbenchView }
+  'team.member.stop': { payload: { teamId: string; slotId: string }; result: { accepted: boolean } }
+  'team.member.setPermissionPreset': {
+    payload: { teamId: string; slotId: string; permissionPresetId: string }
+    result: TeamView
+  }
+  'team.workspace.list': {
+    payload: { teamId: string; path?: string }
+    result: WorkspaceEntryView[]
+  }
+  'team.workspace.changes': { payload: { teamId: string }; result: WorkspaceGitStatusView }
+  'team.workspace.diff': {
+    payload: {
+      teamId: string
+      path: string
+      scope: 'staged' | 'unstaged'
+      layout: 'unified' | 'split'
+      theme: 'light' | 'dark'
+    }
+    result: WorkspaceGitDiffView
+  }
+  'team.dissolve': { payload: { teamId: string; confirmation: string }; result: null }
+}
+
+export type AgentTeamPayload<M extends AgentTeamMethod> = AgentTeamRequestMap[M]['payload']
+export type AgentTeamResult<M extends AgentTeamMethod> = AgentTeamRequestMap[M]['result']
 
 export interface AgentTeamRequest {
   requestId: string

@@ -3,17 +3,21 @@ import {
   AGENT_TEAM_EVENTS_PATH,
   AGENT_TEAM_UPLOAD_PATH,
   type AgentTeamMethod,
+  type AgentTeamPayload,
   type AgentTeamResponse,
+  type AgentTeamResult,
   type AssistantBuilderConversationView,
   type MemberConversationView,
   type WorkspaceUploadView,
 } from '../transport/contracts.js'
 
-export async function callAgentTeam<T>(
-  method: AgentTeamMethod,
-  payload: unknown = {},
-  expectedRevision?: number,
-): Promise<T> {
+export async function callAgentTeam<M extends AgentTeamMethod>(
+  method: M,
+  ...args: AgentTeamPayload<M> extends undefined
+    ? [payload?: undefined, expectedRevision?: number]
+    : [payload: AgentTeamPayload<M>, expectedRevision?: number]
+): Promise<AgentTeamResult<M>> {
+  const [payload, expectedRevision] = args
   const controller = new AbortController()
   const timeoutMs = method === 'team.reset' || method === 'team.dissolve' ? 60_000 : 10_000
   const timeout = setTimeout(() => { controller.abort() }, timeoutMs)
@@ -25,7 +29,7 @@ export async function callAgentTeam<T>(
       body: JSON.stringify({
         requestId: crypto.randomUUID(),
         method,
-        payload,
+        payload: payload ?? {},
         ...(expectedRevision === undefined ? {} : { expectedRevision }),
       }),
     })
@@ -35,7 +39,7 @@ export async function callAgentTeam<T>(
       Object.assign(error, { code: body.error.code, details: body.error.details })
       throw error
     }
-    return body.value as T
+    return body.value as AgentTeamResult<M>
   } catch (error) {
     if (controller.signal.aborted) throw new Error(`请求超时：${method}`)
     throw error

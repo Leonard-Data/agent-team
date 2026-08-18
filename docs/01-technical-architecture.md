@@ -48,15 +48,25 @@ dsh-agent-team/
     config.ts                # Schemastery Config
     domain/                  # 类型、状态机、错误码
     storage/                 # ctx.storageDomain 适配层
-    service/                 # 助手与团队应用服务
-    runtime/                 # AgentHandle、投递、恢复
+    service/
+      agent-team-service.ts  # 团队用例编排与领域状态变更
+      workspace-service.ts   # Workspace 文件、上传、Git 与 Diff
+    runtime/
+      team-runtime.ts        # AgentHandle 生命周期与运行时组合根
+      team-command-handler.ts # 任务和成员消息命令
+      team-message-dispatcher.ts # 耐久信箱投递与恢复
+      team-tools.ts          # Agent scope 团队工具注册
+      team-prompts.ts        # 身份和花名册 Prompt
     tools/                   # defineTool 团队工具
-    transport/               # WebServer HTTP/SSE
+    transport/               # 强类型 API 契约与 WebServer HTTP/SSE
     client/
-      index.ts               # Browser Cordis 插件入口
-      components/
-      stores/
-      locales/
+      index.tsx              # Browser Cordis 插件入口
+      components.tsx         # Slot/Overlay 组合根与共享数据加载
+      assistants/            # 助手库与助手创建器
+      teams/                 # 团队工作台组合与管理
+      workbench/             # 独立成员会话列、消息呈现与局部样式
+      workspace/             # 文件树、Git 变更、Diff 与局部样式
+      store.ts               # Overlay 导航状态
 ```
 
 只有某项能力确实需要独立替换提供方时，再按 Service Definition / Provider / Consumer 方式拆包。

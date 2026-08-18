@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
-import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { isModelInvocable, isSkillName } from '@deepseek-ai/dsh-skill'
@@ -30,8 +28,7 @@ import {
 import type { AgentTeamStore } from '../storage/store.js'
 import type { AssistantBuilderRuntime } from '../runtime/assistant-builder-runtime.js'
 import type { TeamRuntime } from '../runtime/team-runtime.js'
-import { readWorkspaceGitDiff, readWorkspaceGitStatus, WorkspaceTracker } from './workspace-tracker.js'
-import { renderWorkspaceGitDiff } from './workspace-diff-renderer.js'
+import { WorkspaceService } from './workspace-service.js'
 import type {
   AssistantBuilderConversationView,
   AssistantBuilderConversationListView,
@@ -106,7 +103,7 @@ export class AgentTeamService extends Service {
   private cursor = 0
   private runtime?: TeamRuntime
   private assistantBuilderRuntime?: AssistantBuilderRuntime
-  private readonly workspaceTracker: WorkspaceTracker
+  private readonly workspace: WorkspaceService
 
   constructor(
     ctx: Context,
@@ -114,7 +111,9 @@ export class AgentTeamService extends Service {
     private readonly store: AgentTeamStore,
   ) {
     super(ctx, 'agentTeam')
-    this.workspaceTracker = new WorkspaceTracker(
+    this.workspace = new WorkspaceService(
+      ctx,
+      store,
       teamId => {
         const team = this.store.getTeam(teamId)
         if (team !== undefined) this.publish('workspace', teamId, team.revision, 'workspace.changed')
@@ -141,11 +140,11 @@ export class AgentTeamService extends Service {
   }
 
   startWorkspaceTracking(): void {
-    for (const team of this.store.listTeams()) this.workspaceTracker.watch(team.id, team.workspacePath)
+    this.workspace.startTracking()
   }
 
   disposeWorkspaceTracking(): Promise<void> {
-    return this.workspaceTracker.dispose()
+    return this.workspace.dispose()
   }
 
   async catalog(): Promise<CatalogSnapshot> {
@@ -428,7 +427,7 @@ export class AgentTeamService extends Service {
       updatedAt: now,
     }
     await this.store.putTeam(team)
-    this.workspaceTracker.watch(team.id, team.workspacePath)
+    this.workspace.watch(team.id, team.workspacePath)
     await this.activity('team.created', team.id, team.revision, `Team ${team.name} draft created`)
     this.publish('team', team.id, team.revision, 'team.created')
     return team
@@ -614,60 +613,11 @@ export class AgentTeamService extends Service {
   }
 
   async listWorkspace(teamId: string, rawPath = ''): Promise<WorkspaceEntryView[]> {
-    const team = requireTeam(this.store, teamId)
-    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
-    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
-      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
-    }
-    this.workspaceTracker.watch(team.id, team.workspacePath)
-    if (isAbsolute(rawPath)) throw new AgentTeamError('INVALID_REQUEST', 'Workspace path must be relative')
-    const root = await realpath(team.workspacePath)
-    const requested = resolve(root, rawPath)
-    if (requested !== root && !requested.startsWith(`${root}${sep}`)) {
-      throw new AgentTeamError('INVALID_REQUEST', 'Workspace path escapes the team Workspace')
-    }
-    const target = await realpath(requested)
-    if (target !== root && !target.startsWith(`${root}${sep}`)) {
-      throw new AgentTeamError('INVALID_REQUEST', 'Workspace path resolves outside the team Workspace')
-    }
-    const entries = await readdir(target, { withFileTypes: true })
-    return entries
-      .filter(entry => entry.name !== '.git' && entry.name !== 'node_modules')
-      .map(entry => {
-        const path = relative(root, resolve(target, entry.name)).split(sep).join('/')
-        return {
-          name: entry.name,
-          path,
-          kind: entry.isSymbolicLink() ? 'symlink' as const
-            : entry.isDirectory() ? 'directory' as const
-              : 'file' as const,
-        }
-      })
-      .sort((left, right) => {
-        if (left.kind === 'directory' && right.kind !== 'directory') return -1
-        if (left.kind !== 'directory' && right.kind === 'directory') return 1
-        return left.name.localeCompare(right.name)
-      })
-      .slice(0, 500)
+    return this.workspace.list(teamId, rawPath)
   }
 
   async getWorkspaceChanges(teamId: string): Promise<WorkspaceGitStatusView> {
-    const team = requireTeam(this.store, teamId)
-    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
-    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
-      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
-    }
-    this.workspaceTracker.watch(team.id, team.workspacePath)
-    try {
-      return await readWorkspaceGitStatus(team.workspacePath)
-    } catch (error) {
-      throw new AgentTeamError(
-        'WORKSPACE_GIT_UNAVAILABLE',
-        'Unable to read Git changes for this Workspace',
-        undefined,
-        { cause: error },
-      )
-    }
+    return this.workspace.changes(teamId)
   }
 
   async getWorkspaceDiff(
@@ -677,32 +627,7 @@ export class AgentTeamService extends Service {
     layout: 'unified' | 'split',
     theme: 'light' | 'dark',
   ): Promise<WorkspaceGitDiffView> {
-    const team = requireTeam(this.store, teamId)
-    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
-    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
-      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
-    }
-    this.workspaceTracker.watch(team.id, team.workspacePath)
-    try {
-      const diff = await readWorkspaceGitDiff(team.workspacePath, path, scope)
-      return {
-        path: diff.path,
-        scope: diff.scope,
-        layout,
-        theme,
-        binary: diff.binary,
-        html: diff.binary || !diff.patch.includes('@@')
-          ? ''
-          : await renderWorkspaceGitDiff(diff.patch, layout, theme),
-      }
-    } catch (error) {
-      throw new AgentTeamError(
-        'WORKSPACE_GIT_UNAVAILABLE',
-        error instanceof Error ? error.message : 'Unable to read the Git diff for this Workspace',
-        undefined,
-        { cause: error },
-      )
-    }
+    return this.workspace.diff(teamId, path, scope, layout, theme)
   }
 
   async uploadWorkspaceFile(
@@ -710,45 +635,7 @@ export class AgentTeamService extends Service {
     rawName: string,
     data: Uint8Array,
   ): Promise<WorkspaceUploadView> {
-    const team = requireTeam(this.store, teamId)
-    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
-    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
-      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
-    }
-    const root = await realpath(team.workspacePath)
-    const uploadDirectory = resolve(root, '.agent-team', 'uploads')
-    await mkdir(uploadDirectory, { recursive: true })
-    const resolvedUploadDirectory = await realpath(uploadDirectory)
-    if (!resolvedUploadDirectory.startsWith(`${root}${sep}`)) {
-      throw new AgentTeamError('INVALID_REQUEST', 'Workspace upload directory resolves outside the team Workspace')
-    }
-    const name = safeUploadName(rawName)
-    for (let index = 0; index < 1_000; index += 1) {
-      const candidate = uploadCandidateName(name, index)
-      const target = resolve(resolvedUploadDirectory, candidate)
-      try {
-        await writeFile(target, data, { flag: 'wx' })
-        return {
-          name: candidate,
-          path: relative(root, target).split(sep).join('/'),
-          bytes: data.byteLength,
-        }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-          const existing = await readFile(target)
-          if (existing.equals(data)) {
-            return {
-              name: candidate,
-              path: relative(root, target).split(sep).join('/'),
-              bytes: existing.byteLength,
-            }
-          }
-          continue
-        }
-        throw error
-      }
-    }
-    throw new AgentTeamError('INVALID_REQUEST', `Unable to allocate a unique upload name for '${name}'`)
+    return this.workspace.upload(teamId, rawName, data)
   }
 
   listMessages(teamId: string): Page<TeamMessage> {
@@ -807,7 +694,7 @@ export class AgentTeamService extends Service {
     await Promise.all(this.store.listMessages(teamId).map(message => this.store.deleteMessage(message.id)))
     await Promise.all(this.store.listActivities(teamId).map(activity => this.store.deleteActivity(activity.id)))
     await this.store.deleteTeam(teamId)
-    await this.workspaceTracker.unwatch(teamId)
+    await this.workspace.unwatch(teamId)
     this.publish('team', teamId, team.revision + 1, 'team.deleted')
   }
 
@@ -976,26 +863,6 @@ function normalizeAssistantInput(input: CreateAssistantInput): CreateAssistantIn
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values.map(value => value.trim()).filter(Boolean))]
-}
-
-function safeUploadName(rawName: string): string {
-  const name = basename(rawName)
-    .normalize('NFC')
-    .replace(/[\u0000-\u001f\u007f]/g, '_')
-    .trim()
-  if (name.length === 0 || name === '.' || name === '..') {
-    throw new AgentTeamError('INVALID_REQUEST', 'Uploaded file name is invalid')
-  }
-  const extension = extname(name).slice(0, 40)
-  const stem = name.slice(0, name.length - extension.length).slice(0, 180) || 'file'
-  return `${stem}${extension}`
-}
-
-function uploadCandidateName(name: string, index: number): string {
-  if (index === 0) return name
-  const extension = extname(name)
-  const stem = name.slice(0, name.length - extension.length)
-  return `${stem} (${index})${extension}`
 }
 
 function createMemberSlot(

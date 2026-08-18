@@ -5,11 +5,10 @@ import {
   type Agent,
   type AgentHandle,
 } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, freezeMessage, MessageId, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { isModelInvocable } from '@deepseek-ai/dsh-skill'
-import { defineTool } from '@deepseek-ai/dsh-tools'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
@@ -23,6 +22,15 @@ import type { AgentTeamService } from '../service/agent-team-service.js'
 import type { MemberConversationView, TeamWorkbenchView } from '../transport/contracts.js'
 import { projectContextUsage, projectConversation } from './conversation-projector.js'
 import { registerScopedSkillProvider } from './scoped-skills.js'
+import { TeamCommandHandler } from './team-command-handler.js'
+import { TeamMessageDispatcher } from './team-message-dispatcher.js'
+import {
+  createSystemTeamMessage as systemTeamMessage,
+  createTeamMessage as teamMessage,
+  requireMessageContent as requireContent,
+} from './team-messages.js'
+import { memberPrompt, rosterPrompt } from './team-prompts.js'
+import { registerTeamTools } from './team-tools.js'
 
 interface OwnedAgent {
   teamId: string
@@ -37,6 +45,8 @@ export class TeamRuntime {
   private readonly disposeStatusListener: () => void
   private readonly disposeConversationListener: () => void
   private readonly conversationPublishes = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly messages: TeamMessageDispatcher
+  private readonly commands: TeamCommandHandler
   private closing = false
 
   constructor(
@@ -44,6 +54,14 @@ export class TeamRuntime {
     private readonly config: Config,
     private readonly service: AgentTeamService,
   ) {
+    this.messages = new TeamMessageDispatcher(service, {
+      resolveAgent: sessionId => this.requireOwned(sessionId).handle.agent,
+      warn: (message, error) => { ctx.logger.warn(message, error) },
+    })
+    this.commands = new TeamCommandHandler(service, {
+      deliverMessage: (teamId, messageId) => this.messages.deliver(teamId, messageId),
+      followup: (sessionId, message) => { this.requireOwned(sessionId).handle.agent.followup(message) },
+    })
     this.disposeStatusListener = ctx.on('agent/status', ({ agent, status }) => {
       const owned = this.owned.get(String(agent.id))
       if (owned === undefined) return
@@ -205,7 +223,7 @@ export class TeamRuntime {
           'team.member_ready',
           `Member ${readyMember.displayName} is ready`,
         )
-        await this.tryDeliverOutboxMessage(teamId, notice.id)
+        await this.messages.deliver(teamId, notice.id)
         return this.service.getTeam(teamId)
       } catch (error) {
         await this.markTeamError(teamId, error)
@@ -279,7 +297,7 @@ export class TeamRuntime {
         'team.member_removed',
         `Member ${member.displayName} removed; Session history retained`,
       )
-      await this.tryDeliverOutboxMessage(teamId, notice.id)
+        await this.messages.deliver(teamId, notice.id)
       return this.service.getTeam(teamId)
     })
   }
@@ -515,7 +533,7 @@ export class TeamRuntime {
       try {
         await this.exclusive(team.id, async () => {
           await this.ensureMembersOnline(team)
-          await this.recoverPendingMessages(this.service.getTeam(team.id))
+      await this.messages.recover(this.service.getTeam(team.id))
           await this.service.updateRuntimeTeam(
             team.id,
             current => ({ ...current, state: 'active' }),
@@ -573,7 +591,7 @@ export class TeamRuntime {
     )
     try {
       await this.ensureMembersOnline(this.service.getTeam(teamId))
-      await this.recoverPendingMessages(this.service.getTeam(teamId))
+      await this.messages.recover(this.service.getTeam(teamId))
       return await this.service.updateRuntimeTeam(
         teamId,
         current => ({ ...current, state: 'active' }),
@@ -642,7 +660,19 @@ export class TeamRuntime {
           order: 11,
           text: () => rosterPrompt(this.service.getTeam(team.id)),
         })
-        this.registerTeamTools(agentCtx, team, member)
+        registerTeamTools(agentCtx, {
+          assertIdentity: agent => { this.assertToolIdentity(agent, team.id, member.id) },
+          getTaskBoard: () => {
+            const latest = this.service.getTeam(team.id)
+            const tasks = JSON.parse(JSON.stringify(Object.values(latest.tasks))) as Array<Record<string, string | number | string[]>>
+            return { teamId: latest.id, revision: latest.revision, tasks }
+          },
+          createTask: input => this.commands.createTask(team.id, member.id, input),
+          updateTask: input => this.commands.updateTask(team.id, member.id, input),
+          sendMessage: (recipientSlotId, content, type) => (
+            this.commands.sendMemberMessage(team.id, member.id, recipientSlotId, content, type)
+          ),
+        })
         const agent = agentCtx.agent
         if (agent === undefined) throw new Error('Harness did not bind the unpublished agent context')
         const selectedMcpServers = new Set(member.assistantSnapshot.mcpServers)
@@ -786,303 +816,7 @@ export class TeamRuntime {
     }
   }
 
-  private registerTeamTools(agentCtx: Context, team: TeamAggregate, member: TeamMemberSlot): void {
-    agentCtx.tools.register(defineTool({
-      name: 'team_get_task_board',
-      description: 'Read the current shared task board for this Agent Team.',
-      parameters: {},
-      output: {
-        schema: { type: 'object', additionalProperties: true },
-        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
-      },
-      execute: async (_args, exec) => {
-        this.assertToolIdentity(exec.agent, team.id, member.id)
-        const latest = this.service.getTeam(team.id)
-        const tasks = JSON.parse(JSON.stringify(Object.values(latest.tasks))) as Array<Record<string, string | number | string[]>>
-        return { teamId: latest.id, revision: latest.revision, tasks }
-      },
-    }))
-    agentCtx.tools.register(defineTool({
-      name: 'team_create_task',
-      description: 'Create and optionally assign a task on the shared team task board. Only the current leader may call this.',
-      parameters: {
-        title: { type: 'string', required: true },
-        description: { type: 'string' },
-        ownerSlotId: { type: 'string', description: 'Current member slot id to assign.' },
-        fileScopes: { type: 'array', items: { type: 'string' }, description: 'Workspace-relative file scopes.' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            taskId: { type: 'string', required: true },
-            status: { type: 'string', required: true },
-            deliveryState: { type: 'string', enum: ['queued', 'delivered'] },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [{
-          type: 'text',
-          text: `Created team task ${value.taskId} (${value.status})${value.deliveryState === undefined ? '' : `; assignment ${value.deliveryState}`}`,
-        }],
-      },
-      execute: async (args, exec) => {
-        this.assertToolIdentity(exec.agent, team.id, member.id)
-        return this.createTask(team.id, member.id, args)
-      },
-    }))
-    agentCtx.tools.register(defineTool({
-      name: 'team_update_task',
-      description: 'Update a task you own; the team leader may update any task.',
-      parameters: {
-        taskId: { type: 'string', required: true },
-        status: {
-          type: 'string',
-          required: true,
-          enum: ['pending', 'assigned', 'running', 'blocked', 'completed', 'failed', 'cancelled'],
-        },
-        result: { type: 'string' },
-        error: { type: 'string' },
-        ownerSlotId: { type: 'string', description: 'Leader-only reassignment target.' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            taskId: { type: 'string', required: true },
-            status: { type: 'string', required: true },
-            deliveryState: { type: 'string', enum: ['queued', 'delivered'] },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [{
-          type: 'text',
-          text: `Updated team task ${value.taskId} (${value.status})${value.deliveryState === undefined ? '' : `; notification ${value.deliveryState}`}`,
-        }],
-      },
-      execute: async (args, exec) => {
-        this.assertToolIdentity(exec.agent, team.id, member.id)
-        return this.updateTask(team.id, member.id, args)
-      },
-    }))
-    agentCtx.tools.register(defineTool({
-      name: 'team_send_message',
-      description: 'Send a message to another member in this Agent Team and wake that member.',
-      parameters: {
-        recipientSlotId: { type: 'string', required: true, description: 'Recipient member slot id.' },
-        content: { type: 'string', required: true, description: 'Message content.' },
-        type: {
-          type: 'string',
-          enum: ['instruction', 'progress', 'result', 'question', 'warning'],
-          description: 'Message purpose.',
-        },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            messageId: { type: 'string', required: true },
-            deliveryState: { type: 'string', const: 'delivered', required: true },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [{ type: 'text', text: `Delivered team message ${value.messageId}` }],
-      },
-      execute: async (args, exec) => {
-        this.assertToolIdentity(exec.agent, team.id, member.id)
-        return this.sendMemberMessage(team.id, member.id, args.recipientSlotId, args.content, args.type)
-      },
-    }))
-  }
 
-  private async createTask(
-    teamId: string,
-    creatorSlotId: string,
-    input: { title: string; description?: string; ownerSlotId?: string; fileScopes?: string[] },
-  ): Promise<{ taskId: string; status: string; deliveryState?: 'queued' | 'delivered' }> {
-    const team = this.service.getTeam(teamId)
-    if (team.leaderSlotId !== creatorSlotId) {
-      throw new AgentTeamError('INVALID_REQUEST', 'Only the current team leader may create tasks')
-    }
-    if (input.ownerSlotId !== undefined && team.members[input.ownerSlotId] === undefined) {
-      throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown task owner '${input.ownerSlotId}'`)
-    }
-    const title = requireShortText(input.title, 'Task title', 500)
-    const now = new Date().toISOString()
-    const taskId = randomUUID()
-    const status = input.ownerSlotId === undefined ? 'pending' as const : 'assigned' as const
-    const owner = input.ownerSlotId === undefined ? undefined : team.members[input.ownerSlotId]
-    const assignment = owner === undefined || owner.id === creatorSlotId
-      ? undefined
-      : taskDispatchMessage({
-        team,
-        senderSlotId: creatorSlotId,
-        recipientSlotId: owner.id,
-        taskId,
-        type: 'instruction',
-        content: assignmentContent(title, input.description?.trim() ?? '', uniqueStrings(input.fileScopes ?? [])),
-      })
-    await this.service.updateRuntimeTeam(
-      teamId,
-      current => ({
-        ...current,
-        tasks: {
-          ...current.tasks,
-          [taskId]: {
-            id: taskId,
-            title,
-            description: input.description?.trim() ?? '',
-            status,
-            ...(input.ownerSlotId === undefined ? {} : { ownerSlotId: input.ownerSlotId }),
-            createdBySlotId: creatorSlotId,
-            dependencyIds: [],
-            fileScopes: uniqueStrings(input.fileScopes ?? []),
-            revision: 1,
-            createdAt: now,
-            updatedAt: now,
-          },
-        },
-        outbox: assignment === undefined
-          ? current.outbox
-          : { ...current.outbox, [assignment.id]: assignment },
-      }),
-      'team.task_created',
-      `Task ${title} created`,
-    )
-    if (assignment === undefined) return { taskId, status }
-    const delivered = await this.tryDeliverOutboxMessage(teamId, assignment.id)
-    return { taskId, status, deliveryState: delivered ? 'delivered' : 'queued' }
-  }
-
-  private async updateTask(
-    teamId: string,
-    callerSlotId: string,
-    input: {
-      taskId: string
-      status: 'pending' | 'assigned' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled'
-      result?: string
-      error?: string
-      ownerSlotId?: string
-    },
-  ): Promise<{ taskId: string; status: string; deliveryState?: 'queued' | 'delivered' }> {
-    const team = this.service.getTeam(teamId)
-    const task = team.tasks[input.taskId]
-    if (task === undefined) throw new AgentTeamError('INVALID_REQUEST', `Unknown task '${input.taskId}'`)
-    if (callerSlotId !== team.leaderSlotId && task.ownerSlotId !== callerSlotId) {
-      throw new AgentTeamError('INVALID_REQUEST', 'A member may update only its own task')
-    }
-    if (input.ownerSlotId !== undefined) {
-      if (callerSlotId !== team.leaderSlotId) {
-        throw new AgentTeamError('INVALID_REQUEST', 'Only the team leader may reassign tasks')
-      }
-      if (team.members[input.ownerSlotId] === undefined) {
-        throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown task owner '${input.ownerSlotId}'`)
-      }
-    }
-    const nextOwnerSlotId = input.ownerSlotId ?? task.ownerSlotId
-    const ownerChanged = input.ownerSlotId !== undefined && input.ownerSlotId !== task.ownerSlotId
-    const shouldDispatchAssignment = ownerChanged
-      && nextOwnerSlotId !== undefined
-      && nextOwnerSlotId !== callerSlotId
-    const shouldNotifyLeader = callerSlotId !== team.leaderSlotId
-    const notification = shouldDispatchAssignment
-      ? taskDispatchMessage({
-        team,
-        senderSlotId: callerSlotId,
-        recipientSlotId: nextOwnerSlotId!,
-        taskId: task.id,
-        type: 'instruction',
-        content: reassignmentContent(task.title, input.result, input.error),
-      })
-      : shouldNotifyLeader
-        ? taskDispatchMessage({
-          team,
-          senderSlotId: callerSlotId,
-          recipientSlotId: team.leaderSlotId,
-          taskId: task.id,
-          type: taskMessageType(input.status),
-          content: taskUpdateContent(task.title, input.status, input.result, input.error),
-        })
-        : undefined
-    await this.service.updateRuntimeTeam(
-      teamId,
-      current => ({
-        ...current,
-        tasks: {
-          ...current.tasks,
-          [input.taskId]: {
-            ...current.tasks[input.taskId]!,
-            status: input.status,
-            ...(input.result === undefined ? {} : { result: input.result }),
-            ...(input.error === undefined ? {} : { error: input.error }),
-            ...(input.ownerSlotId === undefined ? {} : { ownerSlotId: input.ownerSlotId }),
-            revision: current.tasks[input.taskId]!.revision + 1,
-            updatedAt: new Date().toISOString(),
-          },
-        },
-        outbox: notification === undefined
-          ? current.outbox
-          : { ...current.outbox, [notification.id]: notification },
-      }),
-      'team.task_updated',
-      `Task ${task.title} entered ${input.status}`,
-    )
-    if (notification === undefined) return { taskId: input.taskId, status: input.status }
-    const delivered = await this.tryDeliverOutboxMessage(teamId, notification.id)
-    return {
-      taskId: input.taskId,
-      status: input.status,
-      deliveryState: delivered ? 'delivered' : 'queued',
-    }
-  }
-
-  private async sendMemberMessage(
-    teamId: string,
-    senderSlotId: string,
-    recipientSlotId: string,
-    rawContent: string,
-    type: 'instruction' | 'progress' | 'result' | 'question' | 'warning' = 'progress',
-  ): Promise<{ messageId: string; deliveryState: 'delivered' }> {
-    const team = this.service.getTeam(teamId)
-    const sender = team.members[senderSlotId]
-    const recipient = team.members[recipientSlotId]
-    if (sender === undefined || recipient === undefined) {
-      throw new AgentTeamError('MEMBER_NOT_FOUND', 'Sender or recipient is not a current team member')
-    }
-    if (senderSlotId !== team.leaderSlotId && recipientSlotId !== team.leaderSlotId && !team.directMemberChat) {
-      throw new AgentTeamError('INVALID_REQUEST', 'Direct member-to-member messages are disabled')
-    }
-    const content = requireContent(rawContent)
-    const target = this.requireOwned(recipient.sessionId)
-    const relay = createUserMessage({
-      content: [{ type: 'text', text: `${teamMessageHeader(sender.displayName, sender.id)}\n${content}` }],
-      source: {
-        kind: 'plugin',
-        plugin: 'dsh-agent-team',
-        form: 'relay',
-      },
-    })
-    const record = teamMessage({
-      id: String(relay.id),
-      teamId,
-      sender: { kind: 'member', id: senderSlotId },
-      recipient: recipientSlotId === team.leaderSlotId
-        ? { kind: 'leader', slotId: recipientSlotId }
-        : { kind: 'member', slotId: recipientSlotId },
-      type,
-      content,
-      idempotencyKey: String(relay.id),
-    })
-    await this.service.putRuntimeMessage(record)
-    try {
-      target.handle.agent.followup(relay)
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'delivered' })
-      return { messageId: record.id, deliveryState: 'delivered' }
-    } catch (error) {
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'failed' })
-      throw error
-    }
-  }
 
   private assertToolIdentity(agent: Agent | undefined, teamId: string, slotId: string): void {
     if (agent === undefined) throw new AgentTeamError('INVALID_REQUEST', 'Team tool requires an Agent caller')
@@ -1131,65 +865,6 @@ export class TeamRuntime {
     )
   }
 
-  private async recoverPendingMessages(team: TeamAggregate): Promise<void> {
-    for (const messageId of Object.keys(team.outbox)) {
-      await this.tryDeliverOutboxMessage(team.id, messageId)
-    }
-    team = this.service.getTeam(team.id)
-    const pending = this.service.listMessages(team.id).items.filter(message => message.deliveryState === 'queued')
-    for (const record of pending) {
-      const slotId = record.recipient.slotId
-      if (slotId === undefined) continue
-      const recipient = team.members[slotId]
-      if (recipient === undefined) {
-        await this.service.putRuntimeMessage({ ...record, deliveryState: 'failed' })
-        continue
-      }
-      const owned = this.requireOwned(recipient.sessionId)
-      if (!sessionHasMessage(owned.handle.agent, record.id)) {
-        owned.handle.agent.followup(messageFromRecord(team, record))
-      }
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'delivered' })
-    }
-  }
-
-  private async tryDeliverOutboxMessage(teamId: string, messageId: string): Promise<boolean> {
-    const current = this.service.getTeam(teamId)
-    const record = current.outbox[messageId]
-    if (record === undefined) return true
-    const slotId = record.recipient.slotId
-    const recipient = slotId === undefined ? undefined : current.members[slotId]
-    if (recipient === undefined) {
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'failed' })
-      return false
-    }
-    try {
-      // Re-write queued before every retry so the durable message table reflects
-      // that the aggregate outbox still owns delivery.
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'queued' })
-      const owned = this.requireOwned(recipient.sessionId)
-      if (!sessionHasMessage(owned.handle.agent, record.id)) {
-        owned.handle.agent.followup(messageFromRecord(current, record))
-      }
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'delivered' })
-      await this.service.updateRuntimeTeam(
-        teamId,
-        team => {
-          if (team.outbox[messageId] === undefined) return team
-          const outbox = { ...team.outbox }
-          delete outbox[messageId]
-          return { ...team, outbox }
-        },
-        'team.message_delivered',
-        `Team message ${messageId} delivered`,
-      )
-      return true
-    } catch (error) {
-      await this.service.putRuntimeMessage({ ...record, deliveryState: 'failed' })
-      this.ctx.logger.warn(`agent-team: queued message ${messageId} delivery failed`, error)
-      return false
-    }
-  }
 
   private exclusive<T>(teamId: string, operation: () => Promise<T>): Promise<T> {
     if (this.closing) return Promise.reject(new Error('Agent Team runtime is closing'))
@@ -1203,182 +878,11 @@ export class TeamRuntime {
   }
 }
 
-function memberPrompt(team: TeamAggregate, member: TeamMemberSlot): string {
-  return [
-    `You are ${member.displayName}, an independent Agent in the team “${team.name}”.`,
-    `Your role is ${member.role}. The leader coordinates work but does not own other Agents.`,
-    'All team members operate in the same Workspace. Coordinate before editing overlapping files.',
-    member.assistantSnapshot.instructions,
-  ].filter(Boolean).join('\n\n')
-}
-
-function rosterPrompt(team: TeamAggregate): string {
-  const roster = Object.values(team.members)
-    .map(member => `- ${member.displayName} (${member.role}), slotId=${member.id}`)
-    .join('\n')
-  return [
-    `Team roster:\n${roster}`,
-    'The shared task board and durable team mailbox are the coordination protocol.',
-    'Leaders assign work with team_create_task; assigning an owner automatically queues and delivers the task to that member.',
-    'Members must use team_update_task for status and results; member updates automatically notify the Leader.',
-    'Use team_send_message for questions and other explicit member communication.',
-  ].join('\n')
-}
-
 function mapMembers(
   team: TeamAggregate,
   map: (member: TeamMemberSlot) => TeamMemberSlot,
 ): TeamAggregate['members'] {
   return Object.fromEntries(Object.entries(team.members).map(([id, member]) => [id, map(member)]))
-}
-
-function requireContent(value: string): string {
-  const content = value.trim()
-  if (content.length === 0) throw new AgentTeamError('INVALID_REQUEST', 'Message content cannot be empty')
-  if (content.length > 100_000) throw new AgentTeamError('INVALID_REQUEST', 'Message content is too large')
-  return content
-}
-
-function requireShortText(value: string, label: string, maxLength: number): string {
-  const normalized = value.trim()
-  if (normalized.length === 0) throw new AgentTeamError('INVALID_REQUEST', `${label} cannot be empty`)
-  if (normalized.length > maxLength) throw new AgentTeamError('INVALID_REQUEST', `${label} is too long`)
-  return normalized
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values.map(value => value.trim()).filter(Boolean))]
-}
-
-function teamMessage(input: Omit<TeamMessage, 'schemaVersion' | 'attachments' | 'deliveryState' | 'createdAt'>): TeamMessage {
-  return {
-    schemaVersion: 1,
-    ...input,
-    attachments: [],
-    deliveryState: 'queued',
-    createdAt: new Date().toISOString(),
-  }
-}
-
-function taskDispatchMessage(input: {
-  team: TeamAggregate
-  senderSlotId: string
-  recipientSlotId: string
-  taskId: string
-  type: 'instruction' | 'progress' | 'result' | 'question' | 'warning'
-  content: string
-}): TeamMessage {
-  const id = String(MessageId(`agent-team:${randomUUID()}`))
-  return teamMessage({
-    id,
-    teamId: input.team.id,
-    sender: { kind: 'member', id: input.senderSlotId },
-    recipient: input.recipientSlotId === input.team.leaderSlotId
-      ? { kind: 'leader', slotId: input.recipientSlotId }
-      : { kind: 'member', slotId: input.recipientSlotId },
-    type: input.type,
-    content: input.content,
-    relatedTaskId: input.taskId,
-    idempotencyKey: id,
-  })
-}
-
-function systemTeamMessage(input: {
-  team: TeamAggregate
-  recipientSlotId: string
-  content: string
-}): TeamMessage {
-  const id = String(MessageId(`agent-team:${randomUUID()}`))
-  return teamMessage({
-    id,
-    teamId: input.team.id,
-    sender: { kind: 'system', id: 'dsh-agent-team' },
-    recipient: input.recipientSlotId === input.team.leaderSlotId
-      ? { kind: 'leader', slotId: input.recipientSlotId }
-      : { kind: 'member', slotId: input.recipientSlotId },
-    type: 'system',
-    content: input.content,
-    idempotencyKey: id,
-  })
-}
-
-function assignmentContent(title: string, description: string, fileScopes: readonly string[]): string {
-  return [
-    `A team task has been assigned to you: ${title}`,
-    description.length === 0 ? undefined : `Description: ${description}`,
-    fileScopes.length === 0 ? undefined : `File scopes: ${fileScopes.join(', ')}`,
-    'Read the task board for the task id, mark it running when you begin, and report progress or the final result with team_update_task.',
-  ].filter((line): line is string => line !== undefined).join('\n')
-}
-
-function reassignmentContent(title: string, result?: string, error?: string): string {
-  return [
-    `A team task has been reassigned to you: ${title}`,
-    result === undefined ? undefined : `Prior result: ${result}`,
-    error === undefined ? undefined : `Prior error: ${error}`,
-    'Read the task board for details and update the task with team_update_task.',
-  ].filter((line): line is string => line !== undefined).join('\n')
-}
-
-function taskUpdateContent(
-  title: string,
-  status: 'pending' | 'assigned' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled',
-  result?: string,
-  error?: string,
-): string {
-  return [
-    `Task update: ${title}`,
-    `Status: ${status}`,
-    result === undefined ? undefined : `Result: ${result}`,
-    error === undefined ? undefined : `Error: ${error}`,
-  ].filter((line): line is string => line !== undefined).join('\n')
-}
-
-function taskMessageType(
-  status: 'pending' | 'assigned' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled',
-): 'progress' | 'result' | 'question' | 'warning' {
-  if (status === 'completed') return 'result'
-  if (status === 'blocked') return 'question'
-  if (status === 'failed' || status === 'cancelled') return 'warning'
-  return 'progress'
-}
-
-function messageFromRecord(team: TeamAggregate, record: TeamMessage): UserMessage {
-  if (record.sender.kind === 'system') {
-    return freezeMessage({
-      id: MessageId(record.id),
-      role: 'user',
-      content: [{ type: 'text', text: `[Team event]\n${record.content}` }],
-      source: { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
-    })
-  }
-  const sender = record.sender.kind === 'member' ? team.members[record.sender.id] : undefined
-  const retiredSender = record.sender.kind === 'member'
-    ? Object.values(team.retiredSessions).find(session => session.formerSlotId === record.sender.id)
-    : undefined
-  const senderName = sender?.displayName ?? retiredSender?.displayName ?? '已移出成员'
-  const text = record.sender.kind === 'member'
-    ? `${teamMessageHeader(senderName, record.sender.id)}\n${record.content}`
-    : record.content
-  return freezeMessage({
-    id: MessageId(record.id),
-    role: 'user',
-    content: [{ type: 'text', text }],
-    source: record.sender.kind === 'member'
-      ? { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' }
-      : { kind: 'user' },
-  })
-}
-
-function teamMessageHeader(displayName: string, slotId: string): string {
-  return `[Team message from ${displayName}; slotId=${slotId}]`
-}
-
-function sessionHasMessage(agent: Agent, messageId: string): boolean {
-  return agent.session.events.some(event => {
-    if (event.type !== 'agent/inbox/spliced') return false
-    return event.data.inserted.some(message => String(message.id) === messageId)
-  })
 }
 
 function skillNameFromArguments(value: unknown): string | undefined {

@@ -15,6 +15,8 @@ import type {
 import { AgentTeamService } from '../src/service/agent-team-service.js'
 import type { AgentTeamStore } from '../src/storage/store.js'
 import { TeamRuntime } from '../src/runtime/team-runtime.js'
+import type { TeamCommandHandler } from '../src/runtime/team-command-handler.js'
+import type { TeamMessageDispatcher } from '../src/runtime/team-message-dispatcher.js'
 import { ASSISTANT_BUILDER_PROMPT } from '../src/runtime/assistant-builder-runtime.js'
 
 const config: Config = {
@@ -438,7 +440,7 @@ describe('AgentTeamService', () => {
     runtime.owned.set(team.members[team.leaderSlotId]!.sessionId, fakeOwned(leaderAgent))
     runtime.owned.set(member.sessionId, fakeOwned(memberAgent))
 
-    const created = await runtime.createTask(team.id, team.leaderSlotId, {
+    const created = await runtime.commands.createTask(team.id, team.leaderSlotId, {
       title: 'Implement parser',
       description: 'Add the parser implementation.',
       ownerSlotId: member.id,
@@ -455,7 +457,7 @@ describe('AgentTeamService', () => {
       relatedTaskId: created.taskId,
     })
 
-    const updated = await runtime.updateTask(team.id, member.id, {
+    const updated = await runtime.commands.updateTask(team.id, member.id, {
       taskId: created.taskId,
       status: 'completed',
       result: 'Parser implemented and tested.',
@@ -492,7 +494,7 @@ describe('AgentTeamService', () => {
     memberAgent.followup.mockImplementationOnce(() => { throw new Error('temporary inbox failure') })
     runtime.owned.set(member.sessionId, fakeOwned(memberAgent))
 
-    const created = await runtime.createTask(team.id, team.leaderSlotId, {
+    const created = await runtime.commands.createTask(team.id, team.leaderSlotId, {
       title: 'Recoverable assignment',
       ownerSlotId: member.id,
     })
@@ -507,7 +509,7 @@ describe('AgentTeamService', () => {
         data: { inserted: [message] },
       })
     })
-    await runtime.recoverPendingMessages(service.getTeam(team.id))
+    await runtime.messages.recover(service.getTeam(team.id))
 
     expect(memberAgent.followup).toHaveBeenCalledTimes(2)
     expect(Object.keys(service.getTeam(team.id).outbox)).toHaveLength(0)
@@ -748,25 +750,10 @@ interface FakeAgent {
 
 interface RuntimeInternals {
   owned: Map<string, unknown>
+  commands: TeamCommandHandler
+  messages: TeamMessageDispatcher
   ensureMembersOnline: (team: TeamAggregate) => Promise<void>
   ensureMemberOnline: (team: TeamAggregate, member: TeamAggregate['members'][string], persisted: boolean) => Promise<void>
-  createTask(
-    teamId: string,
-    creatorSlotId: string,
-    input: { title: string; description?: string; ownerSlotId?: string; fileScopes?: string[] },
-  ): Promise<{ taskId: string; status: string; deliveryState?: 'queued' | 'delivered' }>
-  updateTask(
-    teamId: string,
-    callerSlotId: string,
-    input: {
-      taskId: string
-      status: 'pending' | 'assigned' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled'
-      result?: string
-      error?: string
-      ownerSlotId?: string
-    },
-  ): Promise<{ taskId: string; status: string; deliveryState?: 'queued' | 'delivered' }>
-  recoverPendingMessages(team: TeamAggregate): Promise<void>
   stopMember(teamId: string, slotId: string): Promise<void>
 }
 
