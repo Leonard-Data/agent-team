@@ -95,6 +95,8 @@ export type ConversationNode =
     time: number
     text: string
     reasoning?: string
+    reasoningStartedAt?: number
+    reasoningCompletedAt?: number
     streaming?: boolean
   }
   | {

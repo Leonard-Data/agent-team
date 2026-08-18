@@ -73,6 +73,38 @@ describe('projectConversation', () => {
     ])
   })
 
+  it('projects the persisted reasoning start and completion times', () => {
+    const projected = projectConversation([
+      timedEvent(0, 1_000, 'assistant/chunk', {
+        turn: 3, step: 1,
+        chunk: { type: 'reasoning-delta', index: 0, text: '分析中' },
+      }),
+      timedEvent(1, 3_400, 'assistant/chunk', {
+        turn: 3, step: 1,
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '分析完成' } },
+      }),
+      timedEvent(2, 3_500, 'assistant/message', {
+        turn: 3,
+        step: 1,
+        message: {
+          id: 'assistant-3', role: 'assistant', source: { kind: 'model', provider: 'deepseek', model: 'deepseek-chat' },
+          content: [
+            { type: 'reasoning', text: '分析完成' },
+            { type: 'text', text: '最终回答' },
+          ],
+        },
+      }),
+    ])
+
+    expect(projected.nodes).toEqual([
+      expect.objectContaining({
+        kind: 'assistant',
+        reasoningStartedAt: 1_000,
+        reasoningCompletedAt: 3_400,
+      }),
+    ])
+  })
+
   it('keeps model-facing context out of the visible conversation', () => {
     const projected = projectConversation([
       event(0, 'user/message', {
@@ -213,4 +245,8 @@ describe('projectContextUsage', () => {
 
 function event(seq: number, type: SessionEvent['type'], data: unknown): SessionEvent {
   return { seq, time: 1_700_000_000_000 + seq, type, data } as SessionEvent
+}
+
+function timedEvent(seq: number, time: number, type: SessionEvent['type'], data: unknown): SessionEvent {
+  return { seq, time, type, data } as SessionEvent
 }

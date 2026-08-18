@@ -1948,7 +1948,7 @@ textarea.input {
 
 .addMemberMenuList {
   min-height: 0;
-  max-height: min(440px, 58vh);
+  max-height: 70vh;
   display: flex;
   flex-direction: column;
   gap: 6px;

@@ -9,6 +9,8 @@ interface PartialAssistant {
   time: number
   text: string
   reasoning: string
+  reasoningStartedAt?: number
+  reasoningCompletedAt?: number
 }
 
 interface TeamProjectionContext {
@@ -100,15 +102,36 @@ export function projectConversation(
           reasoning: '',
         }
         const chunk = event.data.chunk
-        if (chunk.type === 'text-delta') current.text += chunk.text
-        if (chunk.type === 'reasoning-delta') current.reasoning += chunk.text
-        if (chunk.type === 'block-end' && chunk.block.type === 'text') current.text = chunk.block.text
-        if (chunk.type === 'block-end' && chunk.block.type === 'reasoning') current.reasoning = chunk.block.text
+        if (chunk.type === 'text-delta') {
+          current.text += chunk.text
+          if (chunk.text.length > 0 && current.reasoningStartedAt !== undefined) {
+            current.reasoningCompletedAt ??= event.time
+          }
+        }
+        if (chunk.type === 'reasoning-delta') {
+          current.reasoning += chunk.text
+          if (chunk.text.length > 0) {
+            current.reasoningStartedAt ??= event.time
+            if (current.text.length > 0) current.reasoningCompletedAt ??= event.time
+          }
+        }
+        if (chunk.type === 'block-end' && chunk.block.type === 'text') {
+          current.text = chunk.block.text
+          if (current.reasoningStartedAt !== undefined) current.reasoningCompletedAt ??= event.time
+        }
+        if (chunk.type === 'block-end' && chunk.block.type === 'reasoning') {
+          current.reasoning = chunk.block.text
+          if (chunk.block.text.length > 0) {
+            current.reasoningStartedAt ??= current.time
+            current.reasoningCompletedAt ??= event.time
+          }
+        }
         current.seq = event.seq
         partials.set(key, current)
         break
       }
       case 'assistant/message': {
+        const partial = partials.get(`${event.data.turn}:${event.data.step}`)
         partials.delete(`${event.data.turn}:${event.data.step}`)
         const text = textOf(event.data.message.content)
         const reasoning = reasoningOf(event.data.message.content)
@@ -119,6 +142,10 @@ export function projectConversation(
           time: event.time,
           text,
           ...(reasoning.length === 0 ? {} : { reasoning }),
+          ...(partial?.reasoningStartedAt === undefined ? {} : {
+            reasoningStartedAt: partial.reasoningStartedAt,
+            reasoningCompletedAt: partial.reasoningCompletedAt ?? event.time,
+          }),
         })
         break
       }
@@ -200,6 +227,12 @@ export function projectConversation(
       time: partial.time,
       text: partial.text,
       ...(partial.reasoning.length === 0 ? {} : { reasoning: partial.reasoning }),
+      ...(partial.reasoningStartedAt === undefined ? {} : {
+        reasoningStartedAt: partial.reasoningStartedAt,
+        ...(partial.reasoningCompletedAt === undefined ? {} : {
+          reasoningCompletedAt: partial.reasoningCompletedAt,
+        }),
+      }),
       streaming: true,
     })
   }

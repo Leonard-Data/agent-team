@@ -351,6 +351,12 @@
   cursor: pointer;
 }
 
+.reasoningTime {
+  margin-left: 7px;
+  color: var(--dsw-alias-label-quaternary, var(--dsw-alias-label-tertiary));
+  font-variant-numeric: tabular-nums;
+}
+
 .reasoningBlock pre,
 .toolSection pre {
   max-height: 220px;
