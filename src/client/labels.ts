@@ -24,3 +24,7 @@ export function memberStatusLabel(status: string): string {
   }
   return labels[status] ?? status
 }
+
+export function taskStatusLabel(status: string): string {
+  return TASK_STATE_LABELS[status] ?? status
+}
