@@ -51,12 +51,13 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
   let runtime: TeamRuntime | undefined
   let assistantBuilderRuntime: AssistantBuilderRuntime | undefined
   let transport: ReturnType<typeof registerWebTransport> | undefined
+  let service: AgentTeamService | undefined
   try {
     const store = new DomainAgentTeamStore(domain)
     const assistantBuilderModelPreferences = new DomainAssistantBuilderModelPreferenceStore(
       assistantBuilderPreferencesDomain,
     )
-    const service = new AgentTeamService(ctx, config, store)
+    service = new AgentTeamService(ctx, config, store)
     runtime = new TeamRuntime(ctx, config, service)
     assistantBuilderRuntime = new AssistantBuilderRuntime(
       ctx,
@@ -69,14 +70,17 @@ export async function apply(ctx: Context, config: AgentTeamConfig): Promise<void
     transport = registerWebTransport(ctx, config, service)
     ctx.effect(() => async () => {
       transport?.dispose()
+      await service?.disposeWorkspaceTracking()
       await assistantBuilderRuntime?.dispose()
       await runtime?.dispose()
       await assistantBuilderPreferencesDomain.close()
       await domain.close()
     }, 'agent-team: ordered shutdown')
     await runtime.recoverTeams()
+    service.startWorkspaceTracking()
   } catch (error) {
     transport?.dispose()
+    await service?.disposeWorkspaceTracking()
     await assistantBuilderRuntime?.dispose()
     await runtime?.dispose()
     await assistantBuilderPreferencesDomain.close()

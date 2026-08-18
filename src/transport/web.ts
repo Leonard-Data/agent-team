@@ -49,6 +49,8 @@ const requestSchema = z.object({
     'team.member.stop',
     'team.member.setPermissionPreset',
     'team.workspace.list',
+    'team.workspace.changes',
+    'team.workspace.diff',
     'team.dissolve',
   ]),
   expectedRevision: z.int().positive().optional(),
@@ -346,6 +348,20 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
       }).strict().parse(request.payload)
       return service.listWorkspace(payload.teamId, payload.path)
     }
+    case 'team.workspace.changes': {
+      const payload = z.object({ teamId: z.string().min(1) }).strict().parse(request.payload)
+      return service.getWorkspaceChanges(payload.teamId)
+    }
+    case 'team.workspace.diff': {
+      const payload = z.object({
+        teamId: z.string().min(1),
+        path: z.string().min(1).max(4096),
+        scope: z.enum(['staged', 'unstaged']),
+        layout: z.enum(['unified', 'split']),
+        theme: z.enum(['light', 'dark']),
+      }).strict().parse(request.payload)
+      return service.getWorkspaceDiff(payload.teamId, payload.path, payload.scope, payload.layout, payload.theme)
+    }
     case 'team.dissolve': {
       const payload = z.object({ teamId: z.string().min(1), confirmation: z.string() }).strict().parse(request.payload)
       await service.dissolveTeam(payload.teamId, payload.confirmation, options)
@@ -404,6 +420,7 @@ function sameOrigin(request: IncomingMessage): boolean {
 function broadcast(clients: Set<ServerResponse>, change: AgentTeamChange): void {
   const event = change.entityType === 'conversation' ? 'conversation'
     : change.entityType === 'assistant-builder' ? 'assistant-builder-conversation'
+      : change.entityType === 'workspace' ? 'workspace'
       : 'change'
   const frame = `id: ${change.cursor}\nevent: ${event}\ndata: ${JSON.stringify(change)}\n\n`
   for (const response of clients) response.write(frame)

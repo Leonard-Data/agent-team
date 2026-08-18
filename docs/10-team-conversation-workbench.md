@@ -2,9 +2,9 @@
 
 ## 当前落地状态（首版）
 
-已完成 WB1/WB2 的可用纵向切片：Host 从成员真实 Session 事件构建隔离的 Conversation Snapshot，监听 `session/event` 并发布独立 Conversation SSE；Browser 最多并排显示三名成员，支持真实历史、流式文本/推理、通用 ToolCard、独立发送和停止。右侧 Workspace 面板已接入受限的逐层目录浏览，并展示任务板。团队入口现在通过公开 `shell.overlay` Slot 直接渲染全屏工作台，不再套用 Dialog；工作台左侧提供独立团队导航，能够切换团队，并仅在成员或任务实际运行时显示“任务执行中”，同时展示已完成/总任务数、进行中数量和完成度。
+已完成 WB1/WB2 的可用纵向切片：Host 从成员真实 Session 事件构建隔离的 Conversation Snapshot，监听 `session/event` 并发布独立 Conversation SSE；Browser 最多并排显示三名成员，支持真实历史、流式文本/推理、通用 ToolCard、独立发送和停止。右侧 Workspace 面板提供逐层目录浏览、“文件 / 变更”页签、实时刷新和 Git Diff 预览。团队入口通过公开 `shell.overlay` Slot 直接渲染全屏工作台；工作台左侧能够切换团队，并仅在成员或任务实际运行时显示“任务执行中”。
 
-当前流式刷新以 50ms 合并事件触发 `team.workbench.get` 权威快照重取，尚未实现按节点 upsert 的增量 Patch；专用工具卡、文件阅读/Diff、虚拟列表、标准 Session 跳转以及 Approval/Question 列内处理仍按后续阶段执行。消息正文已复用 Harness 公开的 `MarkdownText` 原语，支持 GFM、代码块、表格、公式、安全链接和流式增量解析。首版没有用团队业务消息冒充 Session 历史，也没有复制官方 Conversation 内部组件。
+当前流式刷新以 50ms 合并事件触发 `team.workbench.get` 权威快照重取，尚未实现按节点 upsert 的增量 Patch；专用工具卡、普通文件阅读、Conversation 虚拟列表、标准 Session 跳转以及 Approval/Question 列内处理仍按后续阶段执行。消息正文已复用 Harness 公开的 `MarkdownText` 原语。Git Diff 使用 `@pierre/diffs` 在 Host 端生成隔离 HTML，避免 Harness 客户端模块表加载第三方 Shiki 分块。首版没有用团队业务消息冒充 Session 历史，也没有复制官方 Conversation 内部组件。
 
 ## 目标
 
@@ -196,8 +196,7 @@ DTO 只使用 JSON 安全字段。任何新节点都带稳定 `id`，Browser 端
 TeamWorkbench
 ├─ TeamNavigator
 │  ├─ 团队列表 / 组建团队
-│  ├─ 团队运行状态
-│  └─ 任务完成数 / 进行中数 / 进度条
+│  └─ 团队任务执行状态
 └─ WorkbenchMain
    ├─ WorkbenchHeader
    │  └─ 团队名称 / Workspace / 关闭
@@ -260,7 +259,8 @@ Approval 和 Question 属于 Harness Connection 的临时交互，不只存在�
 | `team.member.steer` | 可选的显式运行中引导 |
 | `team.workspace.list` | 列出 Workspace 目录层级 |
 | `team.workspace.read` | 受限读取工作区文件 |
-| `team.workspace.changes` | 返回共享工作区变更摘要和 Diff |
+| `team.workspace.changes` | 检测 Git 根目录并返回共享工作区变更摘要 |
+| `team.workspace.diff` | 按已暂存或工作区范围生成单文件 Diff 预览 |
 
 所有请求使用严格 Schema、Body 上限和成员归属校验；历史与文件内容必须分页或限长。
 
@@ -286,7 +286,10 @@ Browser 内所有 Agent Team 消费者共享一个 EventSource，由单例事件
 - 文件树基于规范 `workspacePath`，所有请求都重新验证真实路径仍位于 Workspace 内。
 - 拒绝 `..`、符号链接逃逸和未经授权的绝对路径。
 - 文件内容按大小、文本类型和行数限制读取；二进制文件只显示元数据或使用明确支持的预览。
-- “变更”视图显示状态和 Diff，不自动执行 reset、checkout、commit 等 Git 写操作。
+- “文件 / 变更”页签共享一个 Workspace 面板；非 Git 根目录显示明确空状态，第一版不向上查找父仓库，也不猜测多个子仓库。
+- Host 使用 Chokidar 监听普通文件以及 `.git/index`、`.git/HEAD`、`.git/refs`，合并连续事件后通过既有单例 SSE 发布 `workspace.changed`；Browser 收到失效通知后重新请求权威目录与 Git 状态。
+- “变更”视图基于 `git status --porcelain=v1 -z`，按冲突、已暂存、已修改和未跟踪分组；点击文件打开自定义预览弹窗，支持统一/分栏布局和 Harness 亮暗主题。预览通过 `@pierre/diffs/ssr` 生成，并挂载到 Shadow Root 隔离样式。
+- Git 能力只执行 status/diff 等只读命令，不自动执行 reset、checkout、commit 等写操作。
 - 点击聊天中的 Workspace 相对路径可以定位文件，但不能把模型输出的路径直接当成已授权路径。
 
 ## 状态、重连和一致性

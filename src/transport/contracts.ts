@@ -35,6 +35,8 @@ export type AgentTeamMethod =
   | 'team.member.stop'
   | 'team.member.setPermissionPreset'
   | 'team.workspace.list'
+  | 'team.workspace.changes'
+  | 'team.workspace.diff'
   | 'team.dissolve'
 
 export type ConversationNode =
@@ -140,6 +142,31 @@ export interface WorkspaceEntryView {
   name: string
   path: string
   kind: 'file' | 'directory' | 'symlink'
+}
+
+export interface WorkspaceGitChangeView {
+  path: string
+  originalPath?: string
+  kind: 'added' | 'copied' | 'deleted' | 'modified' | 'renamed' | 'type-changed' | 'unmerged' | 'untracked'
+  staged: boolean
+  unstaged: boolean
+  indexCode: string
+  workTreeCode: string
+}
+
+export interface WorkspaceGitStatusView {
+  state: 'repository' | 'not-repository'
+  changes: WorkspaceGitChangeView[]
+  truncated: boolean
+}
+
+export interface WorkspaceGitDiffView {
+  path: string
+  scope: 'staged' | 'unstaged'
+  layout: 'unified' | 'split'
+  theme: 'light' | 'dark'
+  html: string
+  binary: boolean
 }
 
 export interface WorkspaceUploadView {

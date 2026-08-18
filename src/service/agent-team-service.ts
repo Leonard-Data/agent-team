@@ -30,6 +30,8 @@ import {
 import type { AgentTeamStore } from '../storage/store.js'
 import type { AssistantBuilderRuntime } from '../runtime/assistant-builder-runtime.js'
 import type { TeamRuntime } from '../runtime/team-runtime.js'
+import { readWorkspaceGitDiff, readWorkspaceGitStatus, WorkspaceTracker } from './workspace-tracker.js'
+import { renderWorkspaceGitDiff } from './workspace-diff-renderer.js'
 import type {
   AssistantBuilderConversationView,
   AssistantBuilderConversationListView,
@@ -37,6 +39,8 @@ import type {
   MemberConversationView,
   TeamWorkbenchView,
   WorkspaceEntryView,
+  WorkspaceGitStatusView,
+  WorkspaceGitDiffView,
   WorkspaceUploadView,
 } from '../transport/contracts.js'
 
@@ -52,7 +56,7 @@ export interface MutationOptions {
 
 export interface AgentTeamChange {
   cursor: number
-  entityType: 'assistant' | 'assistant-builder' | 'team' | 'operation' | 'conversation'
+  entityType: 'assistant' | 'assistant-builder' | 'team' | 'operation' | 'conversation' | 'workspace'
   entityId: string
   revision: number
   kind: string
@@ -102,6 +106,7 @@ export class AgentTeamService extends Service {
   private cursor = 0
   private runtime?: TeamRuntime
   private assistantBuilderRuntime?: AssistantBuilderRuntime
+  private readonly workspaceTracker: WorkspaceTracker
 
   constructor(
     ctx: Context,
@@ -109,6 +114,15 @@ export class AgentTeamService extends Service {
     private readonly store: AgentTeamStore,
   ) {
     super(ctx, 'agentTeam')
+    this.workspaceTracker = new WorkspaceTracker(
+      teamId => {
+        const team = this.store.getTeam(teamId)
+        if (team !== undefined) this.publish('workspace', teamId, team.revision, 'workspace.changed')
+      },
+      (teamId, error) => {
+        this.ctx.logger.warn(`agent-team: Workspace watcher failed for team '${teamId}'`, error)
+      },
+    )
   }
 
   subscribe(listener: (change: AgentTeamChange) => void): () => void {
@@ -124,6 +138,14 @@ export class AgentTeamService extends Service {
   attachAssistantBuilderRuntime(runtime: AssistantBuilderRuntime): void {
     if (this.assistantBuilderRuntime !== undefined) throw new Error('Assistant Builder runtime is already attached')
     this.assistantBuilderRuntime = runtime
+  }
+
+  startWorkspaceTracking(): void {
+    for (const team of this.store.listTeams()) this.workspaceTracker.watch(team.id, team.workspacePath)
+  }
+
+  disposeWorkspaceTracking(): Promise<void> {
+    return this.workspaceTracker.dispose()
   }
 
   async catalog(): Promise<CatalogSnapshot> {
@@ -406,6 +428,7 @@ export class AgentTeamService extends Service {
       updatedAt: now,
     }
     await this.store.putTeam(team)
+    this.workspaceTracker.watch(team.id, team.workspacePath)
     await this.activity('team.created', team.id, team.revision, `Team ${team.name} draft created`)
     this.publish('team', team.id, team.revision, 'team.created')
     return team
@@ -596,6 +619,7 @@ export class AgentTeamService extends Service {
     if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
       throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
     }
+    this.workspaceTracker.watch(team.id, team.workspacePath)
     if (isAbsolute(rawPath)) throw new AgentTeamError('INVALID_REQUEST', 'Workspace path must be relative')
     const root = await realpath(team.workspacePath)
     const requested = resolve(root, rawPath)
@@ -625,6 +649,60 @@ export class AgentTeamService extends Service {
         return left.name.localeCompare(right.name)
       })
       .slice(0, 500)
+  }
+
+  async getWorkspaceChanges(teamId: string): Promise<WorkspaceGitStatusView> {
+    const team = requireTeam(this.store, teamId)
+    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
+    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
+      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
+    }
+    this.workspaceTracker.watch(team.id, team.workspacePath)
+    try {
+      return await readWorkspaceGitStatus(team.workspacePath)
+    } catch (error) {
+      throw new AgentTeamError(
+        'WORKSPACE_GIT_UNAVAILABLE',
+        'Unable to read Git changes for this Workspace',
+        undefined,
+        { cause: error },
+      )
+    }
+  }
+
+  async getWorkspaceDiff(
+    teamId: string,
+    path: string,
+    scope: 'staged' | 'unstaged',
+    layout: 'unified' | 'split',
+    theme: 'light' | 'dark',
+  ): Promise<WorkspaceGitDiffView> {
+    const team = requireTeam(this.store, teamId)
+    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(team.workspaceId))
+    if (workspace === undefined || await workspace.status() !== 'ok' || workspace.path !== team.workspacePath) {
+      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${team.workspaceId}' is unavailable or changed`)
+    }
+    this.workspaceTracker.watch(team.id, team.workspacePath)
+    try {
+      const diff = await readWorkspaceGitDiff(team.workspacePath, path, scope)
+      return {
+        path: diff.path,
+        scope: diff.scope,
+        layout,
+        theme,
+        binary: diff.binary,
+        html: diff.binary || !diff.patch.includes('@@')
+          ? ''
+          : await renderWorkspaceGitDiff(diff.patch, layout, theme),
+      }
+    } catch (error) {
+      throw new AgentTeamError(
+        'WORKSPACE_GIT_UNAVAILABLE',
+        error instanceof Error ? error.message : 'Unable to read the Git diff for this Workspace',
+        undefined,
+        { cause: error },
+      )
+    }
   }
 
   async uploadWorkspaceFile(
@@ -729,6 +807,7 @@ export class AgentTeamService extends Service {
     await Promise.all(this.store.listMessages(teamId).map(message => this.store.deleteMessage(message.id)))
     await Promise.all(this.store.listActivities(teamId).map(activity => this.store.deleteActivity(activity.id)))
     await this.store.deleteTeam(teamId)
+    await this.workspaceTracker.unwatch(teamId)
     this.publish('team', teamId, team.revision + 1, 'team.deleted')
   }
 

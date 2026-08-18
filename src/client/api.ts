@@ -92,9 +92,16 @@ interface AssistantBuilderSubscription {
   onOpen?: () => void
 }
 
+interface WorkspaceSubscription {
+  teamId: string
+  onChange: () => void
+  onError: () => void
+}
+
 const changeSubscriptions = new Set<ChangeSubscription>()
 const conversationSubscriptions = new Set<ConversationSubscription>()
 const assistantBuilderSubscriptions = new Set<AssistantBuilderSubscription>()
+const workspaceSubscriptions = new Set<WorkspaceSubscription>()
 let sharedEventSource: EventSource | undefined
 
 function eventSource(): EventSource {
@@ -128,10 +135,21 @@ function eventSource(): EventSource {
       for (const subscription of assistantBuilderSubscriptions) subscription.onChange()
     }
   }) as EventListener)
+  source.addEventListener('workspace', ((event: MessageEvent<string>) => {
+    try {
+      const change = JSON.parse(event.data) as { entityId?: string }
+      for (const subscription of workspaceSubscriptions) {
+        if (subscription.teamId === change.entityId) subscription.onChange()
+      }
+    } catch {
+      for (const subscription of workspaceSubscriptions) subscription.onChange()
+    }
+  }) as EventListener)
   source.onerror = () => {
     for (const subscription of changeSubscriptions) subscription.onError()
     for (const subscription of conversationSubscriptions) subscription.onError()
     for (const subscription of assistantBuilderSubscriptions) subscription.onError()
+    for (const subscription of workspaceSubscriptions) subscription.onError()
   }
   source.onopen = () => {
     for (const subscription of conversationSubscriptions) subscription.onOpen?.()
@@ -146,9 +164,24 @@ function releaseEventSourceIfUnused(): void {
     changeSubscriptions.size > 0
     || conversationSubscriptions.size > 0
     || assistantBuilderSubscriptions.size > 0
+    || workspaceSubscriptions.size > 0
   ) return
   sharedEventSource?.close()
   sharedEventSource = undefined
+}
+
+export function subscribeAgentTeamWorkspace(
+  teamId: string,
+  onChange: () => void,
+  onError: () => void,
+): () => void {
+  const subscription: WorkspaceSubscription = { teamId, onChange, onError }
+  workspaceSubscriptions.add(subscription)
+  eventSource()
+  return () => {
+    workspaceSubscriptions.delete(subscription)
+    releaseEventSourceIfUnused()
+  }
 }
 
 export function subscribeAgentTeam(onChange: () => void, onError: () => void): () => void {
