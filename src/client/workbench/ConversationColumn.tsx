@@ -21,6 +21,7 @@ import css from './ConversationColumn.module.css'
 import { mergeConversationNodes } from '../conversation-nodes.js'
 import { insertWorkspaceFileMention } from '../file-mentions.js'
 import { CrownIcon } from '../icons/CrownIcon.js'
+import { DeepThinkIcon } from '../icons/DeepThinkIcon.js'
 import { shouldSubmitComposer } from '../keyboard.js'
 import { memberStatusLabel, PERMISSION_LABELS } from '../labels.js'
 import {
@@ -579,8 +580,14 @@ function ReasoningBlock({
   return (
     <details className={css.reasoningBlock}>
       <summary>
-        <span>思考过程</span>
-        {timing !== undefined && <span className={css.reasoningTime}>{timing}</span>}
+        <DeepThinkIcon size={14} className={css.reasoningIcon} />
+        <span>Think</span>
+        {timing !== undefined && (
+          <>
+            <span className={css.reasoningSeparator} aria-hidden="true">·</span>
+            <span className={css.reasoningTime}>{timing}</span>
+          </>
+        )}
       </summary>
       <pre>{node.reasoning}</pre>
     </details>

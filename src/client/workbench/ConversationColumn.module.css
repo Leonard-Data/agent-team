@@ -242,14 +242,13 @@
   align-self: flex-end;
   background: var(--dsw-alias-bg-module-platform);
   border-bottom-right-radius: 5px;
+  font: var(--dsw-font-s-14);
 }
 
 .assistantMessage {
   align-self: flex-start;
   padding-left: 0;
   background: transparent;
-  font-size: 13px;
-  line-height: 21px;
 }
 
 .teamMessageCard {
@@ -289,14 +288,13 @@
 .teamMessageIdentity {
   min-width: 0;
   gap: 6px;
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .teamMessageIdentity strong {
   flex: none;
   color: var(--dsw-alias-label-primary);
-  font-weight: 600;
+  font: var(--dsw-font-xxxs-strong-11);
 }
 
 .teamMessageIdentity span {
@@ -312,7 +310,7 @@
   border-radius: 5px;
   background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-tertiary);
-  font: 10px/14px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: var(--dsw-font-markdown-code-block-small);
 }
 
 .teamMessageType {
@@ -321,15 +319,13 @@
   border-radius: 8px;
   background: var(--team-message-tag-bg, var(--dsw-alias-bg-module-platform));
   color: var(--team-message-accent, var(--dsw-alias-label-secondary));
-  font-size: 10px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .teamMessageText {
   overflow-wrap: anywhere;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xs-13);
 }
 
 .teamMessageInstruction {
@@ -370,7 +366,7 @@
 .reasoningBlock {
   margin-bottom: 7px;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
+  font: var(--dsw-font-xxs-12);
 }
 
 .reasoningBlock summary,
@@ -378,10 +374,30 @@
   cursor: pointer;
 }
 
+.reasoningBlock summary {
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  list-style: none;
+}
+
+.reasoningBlock summary::-webkit-details-marker {
+  display: none;
+}
+
+.reasoningIcon {
+  flex: none;
+  color: inherit;
+}
+
 .reasoningTime {
-  margin-left: 7px;
   color: var(--dsw-alias-label-quaternary, var(--dsw-alias-label-tertiary));
   font-variant-numeric: tabular-nums;
+}
+
+.reasoningSeparator {
+  color: var(--dsw-alias-label-quaternary, var(--dsw-alias-label-tertiary));
 }
 
 .reasoningBlock pre,
@@ -391,14 +407,14 @@
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: 11px/17px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: var(--dsw-font-markdown-code-block-small);
 }
 
 .streamingMark {
   display: inline-block;
   margin-top: 5px;
   color: var(--dsw-alias-brand-primary);
-  font-size: 10px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .toolCard {
@@ -408,7 +424,7 @@
   border-radius: 12px;
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font: var(--dsw-font-xxs-12);
 }
 
 .toolCard > summary {
@@ -468,8 +484,7 @@
   border-radius: 8px;
   background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 17px;
+  font: var(--dsw-font-xxs-12);
 }
 
 .interactionCard {
@@ -505,13 +520,12 @@
 }
 
 .interactionHeader strong {
-  font-size: 13px;
-  line-height: 19px;
+  font: var(--dsw-font-xs-strong-13);
 }
 
 .interactionHeader span {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .approvalToolName {
@@ -519,14 +533,13 @@
   padding: 3px 7px;
   border-radius: 6px;
   background: var(--dsw-alias-bg-module-platform);
-  font: 11px/17px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: var(--dsw-font-markdown-code-block-small);
 }
 
 .interactionDescription {
   margin: 9px 0 0;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   overflow-wrap: anywhere;
 }
 
@@ -553,14 +566,12 @@
 
 .questionFieldset legend > span {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 10px;
-  line-height: 15px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .questionFieldset legend > strong {
   color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-strong-12);
 }
 
 .questionDetail {
@@ -571,8 +582,7 @@
   border-radius: 8px;
   background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
 }
 
 .questionOptions {
@@ -610,14 +620,12 @@
 }
 
 .questionOption strong {
-  font-size: 12px;
-  line-height: 17px;
+  font: var(--dsw-font-xxs-strong-12);
 }
 
 .questionOption small {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .questionCustomInput {
@@ -633,7 +641,7 @@
   outline: 0;
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
-  font: 12px/18px inherit;
+  font: var(--dsw-font-s-14);
 }
 
 .questionCustomInput:focus {
@@ -651,8 +659,7 @@
   min-height: 30px;
   padding: 5px 12px;
   border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  font: var(--dsw-font-xxs-strong-12);
   cursor: pointer;
 }
 
@@ -687,8 +694,7 @@
   display: block;
   margin-top: 8px;
   color: var(--dsw-alias-state-error-primary);
-  font-size: 11px;
-  line-height: 16px;
+  font: var(--dsw-font-xxxs-11);
 }
 
 .composer {
@@ -715,7 +721,7 @@
   outline: 0;
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font: 13px/20px inherit;
+  font: var(--dsw-font-s-14);
 }
 
 .composer textarea::placeholder {
@@ -796,8 +802,7 @@
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-alias-shadow-l2, var(--dsw-alias-shadow-l1));
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   opacity: 0;
   pointer-events: none;
   transform: translateY(4px);
@@ -819,8 +824,7 @@
 
 .contextUsagePopover strong {
   color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  line-height: 20px;
+  font: var(--dsw-font-s-strong-14);
 }
 
 .contextUsage:hover .contextUsagePopover,
@@ -854,9 +858,7 @@
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 20px;
+  font: var(--dsw-font-xxs-strong-12);
 }
 
 .permissionSelect:hover:not(:disabled) {
@@ -883,9 +885,7 @@
   border-radius: 8px;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 20px;
+  font: var(--dsw-font-xxs-strong-12);
 }
 
 .reasoningModeControl:hover {
@@ -1047,15 +1047,13 @@
 
 .skillsInfoHeading strong {
   color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  line-height: 20px;
+  font: var(--dsw-font-s-strong-14);
 }
 
 .skillsInfoHeading span,
 .skillsInfoEmpty {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
 }
 
 .skillsInfoList {
@@ -1074,8 +1072,7 @@
   border-radius: 7px;
   background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 18px;
+  font: var(--dsw-font-xxs-12);
   overflow-wrap: anywhere;
 }
 
