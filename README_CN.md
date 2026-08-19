@@ -122,11 +122,47 @@ npx @deepseek-ai/dsh web
 
 打开终端输出的地址，通常是 <http://127.0.0.1:3080/>。安装或替换插件后，请重启 Harness。
 
+## 卸载
+
+先在运行 Harness 的终端按 `Ctrl+C` 停止服务，再从 `web` Profile 中移除 Agent Team：
+
+```bash
+npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
+```
+
+命令完成后重新启动 Harness。卸载插件不会修改 DeepSeek Harness 源码，也不会删除团队 Workspace 中的文件。
+
 ## 快速开始
 
 ### 1. 在 Harness 中准备模型
 
 先配置需要使用的 Provider、模型和凭据。Agent Team 读取当前 Profile 的模型目录，不保存 Provider API Key。
+
+> **Tips：为 GLM-5.3 开启思考模式**
+>
+> 将下面的配置加入 `~/.dsh/settings.yaml`。它会为 GLM-5.3 声明可选的思考档位，并把 Provider 默认档位设为 `high`：
+>
+> ```yaml
+> llm-pi-ai:
+>   providers:
+>     zai-coding-cn:
+>       reasoning: high
+>       modelOverrides:
+>         glm-5.3:
+>           reasoningEfforts:
+>             off:
+>             minimal: minimal
+>             low: low
+>             medium: medium
+>             high: high
+>             xhigh: xhigh
+>             max: max
+>           compat:
+>             thinkingFormat: zai
+>             supportsReasoningEffort: true
+> ```
+>
+> 如果文件中已经存在 `llm-pi-ai`，请合并配置，不要重复添加同名顶层节点。如果你的 ZAI Provider ID 不是 `zai-coding-cn`，请替换为实际 ID。重启 Harness 后，可在助手对话工具栏的 **思考模式** 中选择档位；对话中的选择会覆盖 Provider 默认值。
 
 ### 2. 创建助手
 

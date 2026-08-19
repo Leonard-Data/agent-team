@@ -29,6 +29,7 @@
     "lib/client.js",
     "lib/*.d.ts",
     "cordis.patch.yml",
+    "LICENSE",
     "README.md",
     "README_CN.md",
     "demo/*.png",

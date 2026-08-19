@@ -122,11 +122,47 @@ npx @deepseek-ai/dsh web
 
 Open the URL printed by Harness, normally <http://127.0.0.1:3080/>. Restart Harness after installing or replacing the plugin.
 
+## Uninstallation
+
+Stop Harness with `Ctrl+C`, then remove Agent Team from the `web` Profile:
+
+```bash
+npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
+```
+
+Restart Harness after the command completes. Removing the plugin does not modify DeepSeek Harness source code or delete files from your team Workspaces.
+
 ## Quick Start
 
 ### 1. Configure Models in Harness
 
 Configure the providers, models, and credentials you want to use in Harness first. Agent Team reads the model catalog from the active Profile and never stores provider API keys.
+
+> **Tip: enable Thinking Mode for GLM-5.3**
+>
+> Add the following configuration to `~/.dsh/settings.yaml`. It exposes the available reasoning levels for GLM-5.3 and sets `high` as the Provider default:
+>
+> ```yaml
+> llm-pi-ai:
+>   providers:
+>     zai-coding-cn:
+>       reasoning: high
+>       modelOverrides:
+>         glm-5.3:
+>           reasoningEfforts:
+>             off:
+>             minimal: minimal
+>             low: low
+>             medium: medium
+>             high: high
+>             xhigh: xhigh
+>             max: max
+>           compat:
+>             thinkingFormat: zai
+>             supportsReasoningEffort: true
+> ```
+>
+> Merge this block into an existing `llm-pi-ai` section instead of adding a second one. If your ZAI Provider uses a different ID, replace `zai-coding-cn`. Restart Harness, then select the desired **Thinking Mode** from the assistant conversation toolbar; that runtime selection overrides the Provider default for the conversation.
 
 ### 2. Create Assistants
 
