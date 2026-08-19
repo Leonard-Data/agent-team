@@ -156,6 +156,10 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
   const { visible, createTeamRequest, selectedTeamId } = useAgentTeamUi()
   const { catalog, assistants, teams, error, load } = useAgentTeamData(true, visible)
   const selectedTeam = teams.find(team => team.id === selectedTeamId)
+  const headerTitle = selectedTeam?.name ?? 'Agent 团队'
+  const headerSubtitle = selectedTeam === undefined
+    ? '多个平级 Agent，共享一个 Workspace'
+    : `${Object.keys(selectedTeam.members).length} 名成员 · ${selectedTeam.workspacePath}`
 
   if (!visible) return null
 
@@ -210,18 +214,14 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
         <header className={css.shellHeader}>
           <div className={css.headerCopy}>
             <div className={css.shellTitleRow}>
-              <h1 className={css.title}>{selectedTeam?.name ?? 'Agent 团队'}</h1>
+              <h1 className={css.title} title={headerTitle}>{headerTitle}</h1>
               {selectedTeam !== undefined && isTeamExecuting(selectedTeam) && (
                 <span className={`${css.badge} ${css.badgeSuccess ?? ''}`}>
                   任务执行中
                 </span>
               )}
             </div>
-            <p className={css.subtitle}>
-              {selectedTeam === undefined
-                ? '多个平级 Agent，共享一个 Workspace'
-                : `${Object.keys(selectedTeam.members).length} 名成员 · ${selectedTeam.workspacePath}`}
-            </p>
+            <p className={css.subtitle} title={headerSubtitle}>{headerSubtitle}</p>
           </div>
           <button type="button" className={css.iconButton} onClick={closeAgentTeam} aria-label="关闭工作台">
             <IconCloseOutline16 size={16} />

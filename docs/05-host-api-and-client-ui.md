@@ -44,6 +44,8 @@ type AgentTeamRequest = {
 
 助手表单中的 Provider 与模型选择联动：模型控件是原生下拉框，只展示所选 Provider 由 `listModels()` 返回的真实候选项及数量，不接受自定义模型 ID。
 
+选定精确 Provider/模型后，客户端通过 `catalog.model.get` 按需调用 `resolveModelInfo()`。仅当返回非空 `reasoning.efforts` 时展示“思考模式”；选项使用 Adapter 返回的 ID、名称和顺序，并提供“模型默认”。不对整个模型目录批量解析能力。
+
 内置权限预设在中文界面显示为“只读”“工作区可写”“完全访问”，提交与持久化仍使用 Harness 原始 ID：`read-only`、`workspace-write`、`danger-full-access`。
 
 “助手规则”是模板级长期指令，会在成员 Agent 启动时加入其系统提示词；它用于定义职责、约束、代码规范和汇报方式，不承载某次团队任务。插件不持有 `maxTokens` 字段，输出上限完全交由所选模型和 Harness 配置决定。
@@ -70,6 +72,7 @@ type AgentTeamRequest = {
 | `team.syncMember` | 同步模板快照 |
 | `team.sendUserMessage` | 向 Leader 或允许的成员发送用户消息 |
 | `team.member.setPermissionPreset` | 切换单个成员当前 Session 权限，不修改助手模板默认值 |
+| `team.member.setReasoningEffort` | 切换成员下一轮请求的思考模式，不修改助手模板默认值 |
 | `task.create/assign/cancel/retry` | 用户侧任务管理 |
 | `team.dissolve` | 警示确认后携带当前团队名称解散团队；停止成员、解除关联并删除团队领域数据 |
 

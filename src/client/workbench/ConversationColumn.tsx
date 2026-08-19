@@ -23,6 +23,11 @@ import { insertWorkspaceFileMention } from '../file-mentions.js'
 import { CrownIcon } from '../icons/CrownIcon.js'
 import { shouldSubmitComposer } from '../keyboard.js'
 import { memberStatusLabel, PERMISSION_LABELS } from '../labels.js'
+import {
+  defaultReasoningLabel,
+  reasoningEffortLabel,
+  useModelCapabilities,
+} from '../model-reasoning.js'
 import { PendingInteractionCard } from './PendingInteractionCard.js'
 
 export function ConversationColumn({
@@ -48,7 +53,9 @@ export function ConversationColumn({
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [changingPermission, setChangingPermission] = useState(false)
+  const [changingReasoning, setChangingReasoning] = useState(false)
   const [permissionPresetId, setPermissionPresetId] = useState(member.permissionPresetId)
+  const [reasoningEffort, setReasoningEffort] = useState(member.reasoningEffort ?? '')
   const [error, setError] = useState<string>()
   const [pendingMessages, setPendingMessages] = useState<ConversationNode[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
@@ -68,10 +75,24 @@ export function ConversationColumn({
     : pendingInteractions.length > 0
       ? '等待回答'
       : memberStatusLabel(conversation?.status ?? member.lastRuntimeState)
+  const modelCapabilities = useModelCapabilities(
+    member.assistantSnapshot.provider,
+    member.assistantSnapshot.model,
+  )
+  const defaultReasoningEffort = modelCapabilities.value?.reasoning?.defaultEffort
+  const reasoningModeLabel = reasoningEffort
+    ? reasoningEffortLabel(modelCapabilities.value, reasoningEffort)
+    : defaultReasoningEffort
+      ? reasoningEffortLabel(modelCapabilities.value, defaultReasoningEffort)
+      : '默认'
 
   useEffect(() => {
     setPermissionPresetId(member.permissionPresetId)
   }, [member.permissionPresetId])
+
+  useEffect(() => {
+    setReasoningEffort(member.reasoningEffort ?? '')
+  }, [member.reasoningEffort])
 
   useEffect(() => {
     const committedIds = new Set(conversation?.nodes.map(node => node.id) ?? [])
@@ -161,6 +182,27 @@ export function ConversationColumn({
     }
   }
 
+  async function changeReasoning(nextReasoningEffort: string): Promise<void> {
+    if (changingReasoning || nextReasoningEffort === reasoningEffort) return
+    const previous = reasoningEffort
+    setReasoningEffort(nextReasoningEffort)
+    setChangingReasoning(true)
+    try {
+      await callAgentTeam('team.member.setReasoningEffort', {
+        teamId: team.id,
+        slotId: member.id,
+        ...(nextReasoningEffort ? { reasoningEffort: nextReasoningEffort } : {}),
+      })
+      setError(undefined)
+      await onTeamChanged()
+    } catch (cause) {
+      setReasoningEffort(previous)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setChangingReasoning(false)
+    }
+  }
+
   async function uploadFiles(files: FileList | null): Promise<void> {
     const selected = Array.from(files ?? [])
     if (selected.length === 0 || uploadingFiles) return
@@ -211,7 +253,15 @@ export function ConversationColumn({
           <span className={css.memberAvatar}>{member.displayName.slice(0, 1).toUpperCase()}</span>
           <div>
             <strong>{member.displayName} {member.role === 'leader' && <CrownIcon size={15} className={css.leaderCrown} title="Leader" />}</strong>
-            <span>{member.assistantSnapshot.provider} / {member.assistantSnapshot.model}</span>
+            <div
+              className={css.columnModelMeta}
+              title={`${member.assistantSnapshot.provider} / ${member.assistantSnapshot.model} · 思考模式：${reasoningModeLabel}`}
+            >
+              <span className={css.columnModelName}>
+                {member.assistantSnapshot.provider} / {member.assistantSnapshot.model}
+              </span>
+              <span className={css.reasoningModeBadge}>{reasoningModeLabel}</span>
+            </div>
           </div>
         </div>
         <div className={css.columnHeaderActions}>
@@ -324,6 +374,28 @@ export function ConversationColumn({
                 </option>
               ))}
             </select>
+            {modelCapabilities.value?.reasoning !== undefined
+              && modelCapabilities.value.reasoning.efforts.length > 0 && (
+                <label
+                  className={`${css.reasoningModeControl} ${changingReasoning ? css.reasoningModeControlDisabled : ''}`}
+                  title={`思考模式：${reasoningModeLabel}；切换后下一轮生效`}
+                >
+                  <span>思考模式</span>
+                  <select
+                    aria-label={`${member.displayName} 思考模式；当前为 ${reasoningModeLabel}；切换后下一轮生效`}
+                    value={reasoningEffort}
+                    disabled={changingReasoning}
+                    onChange={event => { void changeReasoning(event.target.value) }}
+                  >
+                    <option value="">{defaultReasoningLabel(modelCapabilities.value)}</option>
+                    {modelCapabilities.value.reasoning.efforts.map(effort => (
+                      <option key={effort.id} value={effort.id}>
+                        {reasoningEffortLabel(modelCapabilities.value, effort.id)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
           </div>
           <div className={css.composerActions}>
             <AssistantSkillsInfo skills={member.assistantSnapshot.skillAllowlist} />

@@ -14,6 +14,7 @@ export const AGENT_TEAM_UPLOAD_PATH = '/agent-team/upload'
 
 export const AGENT_TEAM_METHODS = [
   'catalog.get',
+  'catalog.model.get',
   'skill.catalog',
   'mcp.catalog',
   'assistant.list',
@@ -46,6 +47,7 @@ export const AGENT_TEAM_METHODS = [
   'team.member.stop',
   'team.interaction.respond',
   'team.member.setPermissionPreset',
+  'team.member.setReasoningEffort',
   'team.workspace.list',
   'team.workspace.changes',
   'team.workspace.diff',
@@ -68,6 +70,15 @@ export interface CatalogView {
   agentPresets: Array<{ id: string; name: string; description?: string; broken?: string }>
   permissionPresets: Array<{ value: string; name: string; description?: string }>
   workspaces: Array<{ id: string; path: string; title: string; status: 'ok' | 'missing-dir' }>
+}
+
+export interface ModelCapabilitiesView {
+  provider: string
+  model: string
+  reasoning?: {
+    efforts: Array<{ id: string; name: string; description?: string }>
+    defaultEffort?: string
+  }
 }
 
 export interface SkillCatalogView {
@@ -278,6 +289,10 @@ export interface WorkspaceUploadView {
 
 export interface AgentTeamRequestMap {
   'catalog.get': { payload: undefined; result: CatalogView }
+  'catalog.model.get': {
+    payload: { provider: string; model: string }
+    result: ModelCapabilitiesView
+  }
   'skill.catalog': { payload: { agentPresetId: string }; result: SkillCatalogView }
   'mcp.catalog': { payload: { agentPresetId: string }; result: McpCatalogView }
   'assistant.list': { payload: undefined; result: PageView<AssistantView> }
@@ -341,6 +356,10 @@ export interface AgentTeamRequestMap {
   }
   'team.member.setPermissionPreset': {
     payload: { teamId: string; slotId: string; permissionPresetId: string }
+    result: TeamView
+  }
+  'team.member.setReasoningEffort': {
+    payload: { teamId: string; slotId: string; reasoningEffort?: string }
     result: TeamView
   }
   'team.workspace.list': {

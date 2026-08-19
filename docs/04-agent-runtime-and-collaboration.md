@@ -41,9 +41,10 @@ Team Runtime 维护内存 Handle Registry，但真相来源是领域存储和 Ha
 - 在启动时校验助手选择的 Skills；对其他目录项注册 Agent 最近层的不可调用同名定义，使原生 Skill Catalog、模型 loader 和用户直接调用都只看到已选择项，再用 Agent-scope `tools.guard()` 作为执行兜底。所选 Skill 的完整正文不预加载，由 Harness 在任务需要时通过 `skill(name)` 加载。
 - 从 Agent scope 的 `mcp__<server>__<tool>` 工具名反查真实 MCP Server。选中项不存在时拒绝启动；未选 Server 的现有工具通过 `tools.restrict()` 从模型目录移除，`tools.guard()` 对未来动态注册的同类工具继续兜底拒绝。
 - Agent 创建完成、首次投递前，用 `ctx.permissionPresets.set(session, id)` 应用成员当前权限；新成员以助手模板权限为默认值，聊天窗口可独立切换，恢复 Session 时优先使用成员持久化的当前权限。
+- 通过 `installModelSelection(agentCtx, selectionRef)` 为每个成员安装模型选择。助手模板可保存默认思考模式，团队成员可在工作台独立覆盖；切换只影响下一次进入 Prompt Assembly 的步骤，不拆分当前正在生成的请求。
 - 明确告知 Agent：它是独立团队成员，不是 Subagent；不能假设共享其他成员对话。
 
-模型和 Provider 通过 `agentOptions` 引用 Harness 配置。Codex、GLM 或其他模型是否可用，取决于 Harness 当前 Provider 路由与用户已配置凭据；插件不自行保存 Token。
+模型和 Provider 通过 Harness 模型选择能力引用现有配置。思考模式 ID 来自 `resolveModelInfo(provider, model).reasoning`，按精确模型路由校验，插件不硬编码 `low/high/max` 等档位。Codex、GLM 或其他模型是否可用，取决于 Harness 当前 Provider 路由与用户已配置凭据；插件不自行保存 Token。
 
 ## 团队协作工具
 

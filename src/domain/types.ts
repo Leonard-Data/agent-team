@@ -48,6 +48,7 @@ export function snapshotAssistant(assistant: AssistantTemplate): AssistantSnapsh
     instructions: assistant.instructions,
     provider: assistant.provider,
     model: assistant.model,
+    ...(assistant.reasoningEffort === undefined ? {} : { reasoningEffort: assistant.reasoningEffort }),
     agentPresetId: assistant.agentPresetId,
     permissionPresetId: assistant.permissionPresetId,
     skillAllowlist: [...assistant.skillAllowlist],

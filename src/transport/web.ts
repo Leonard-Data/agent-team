@@ -206,6 +206,13 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
     : { expectedRevision: request.expectedRevision }
   switch (request.method) {
     case 'catalog.get': return service.catalog()
+    case 'catalog.model.get': {
+      const payload = z.object({
+        provider: z.string().trim().min(1).max(200),
+        model: z.string().trim().min(1).max(500),
+      }).strict().parse(request.payload)
+      return service.modelCapabilities(payload.provider, payload.model)
+    }
     case 'skill.catalog': {
       const payload = z.object({ agentPresetId: z.string().trim().min(1).max(200) }).strict().parse(request.payload)
       return service.skillCatalog(payload.agentPresetId)
@@ -363,6 +370,19 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
         payload.teamId,
         payload.slotId,
         payload.permissionPresetId,
+        options,
+      )
+    }
+    case 'team.member.setReasoningEffort': {
+      const payload = z.object({
+        teamId: z.string().min(1),
+        slotId: z.string().min(1),
+        reasoningEffort: z.string().trim().min(1).max(200).optional(),
+      }).strict().parse(request.payload)
+      return service.setMemberReasoningEffort(
+        payload.teamId,
+        payload.slotId,
+        payload.reasoningEffort,
         options,
       )
     }

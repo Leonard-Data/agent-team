@@ -33,7 +33,7 @@ export const ASSISTANT_BUILDER_PROMPT = `
 工作规则：
 1. 先理解用户希望这个助手承担的职责、工作边界、输出方式和协作习惯。
 2. 创建前必须收集名称、Provider、模型、Agent Preset、权限预设和长期提示词。说明按需要收集；可用 Skills 和 MCP Servers 由用户从真实目录中选择，都可以不选。
-3. 必须先调用 assistant_builder_get_catalog 获取当前真实可选项；Provider、模型、Preset 和权限只能使用目录中存在的标识，不能编造。确定 Agent Preset 后，再携带 agentPresetId 调用一次目录工具，取得该 Preset 可用的 Skills 和 MCP Servers。
+3. 必须先调用 assistant_builder_get_catalog 获取当前真实可选项；Provider、模型、Preset 和权限只能使用目录中存在的标识，不能编造。确定模型后，再携带 provider 和 model 调用一次目录工具读取该模型真实支持的思考模式；未返回思考能力时不得配置。确定 Agent Preset 后，再携带 agentPresetId 调用一次目录工具，取得该 Preset 可用的 Skills 和 MCP Servers。
 4. 参数不完整或意图含糊时，优先调用 ask_user_question，一次询问一至三个最关键的问题，并给出基于真实目录的简短选项和建议。问题较开放、需要用户详细描述，或只是普通解释时，可以直接输出中文文本。
 5. 长期提示词应描述稳定职责、约束、工作流程和验收要求，不要写入用户眼前的一次性任务。
 6. 只保存用户明确选择的 Skills 和 MCP Servers；未选择就表示不使用，不能猜测名称。不要询问或限制普通工具，工具能力由 Agent Preset 提供。
@@ -556,8 +556,10 @@ export class AssistantBuilderRuntime {
   private registerTools(agentCtx: Context, sessionId: string): void {
     agentCtx.tools.register(defineTool({
       name: 'assistant_builder_get_catalog',
-      description: 'Read exact creation options. Pass agentPresetId after choosing a preset to also return its available Skills and MCP Servers.',
+      description: 'Read exact creation options. Pass provider and model after choosing a model to read its reasoning efforts. Pass agentPresetId to read its Skills and MCP Servers.',
       parameters: {
+        provider: { type: 'string', description: 'Chosen Provider id; pass together with model.' },
+        model: { type: 'string', description: 'Chosen model id; pass together with provider.' },
         agentPresetId: { type: 'string', description: 'Chosen Agent Preset id used to discover available Skills and MCP Servers.' },
       },
       output: {
@@ -573,6 +575,12 @@ export class AssistantBuilderRuntime {
         const mcpCatalog = args.agentPresetId === undefined
           ? undefined
           : await this.service.mcpCatalog(args.agentPresetId)
+        if ((args.provider === undefined) !== (args.model === undefined)) {
+          throw new AgentTeamError('INVALID_REQUEST', 'Provider and model must be supplied together')
+        }
+        const modelCapabilities = args.provider === undefined || args.model === undefined
+          ? undefined
+          : await this.service.modelCapabilities(args.provider, args.model)
         return {
           providers: catalog.providers.map(provider => ({ id: provider.id, name: provider.name })),
           models: catalog.models,
@@ -583,6 +591,20 @@ export class AssistantBuilderRuntime {
             ...(preset.description === undefined ? {} : { description: preset.description }),
           })),
           existingAssistants: this.service.listAssistants().items.map(assistant => assistant.name),
+          ...(modelCapabilities === undefined ? {} : {
+            modelCapabilities: {
+              provider: modelCapabilities.provider,
+              model: modelCapabilities.model,
+              ...(modelCapabilities.reasoning === undefined ? {} : {
+                reasoning: {
+                  efforts: modelCapabilities.reasoning.efforts.map(effort => ({ ...effort })),
+                  ...(modelCapabilities.reasoning.defaultEffort === undefined
+                    ? {}
+                    : { defaultEffort: modelCapabilities.reasoning.defaultEffort }),
+                },
+              }),
+            },
+          }),
           ...(skillCatalog === undefined ? {} : { skills: skillCatalog.skills }),
           ...(mcpCatalog === undefined ? {} : {
             mcpServers: mcpCatalog.servers.map(server => ({
@@ -603,6 +625,10 @@ export class AssistantBuilderRuntime {
         instructions: { type: 'string', required: true, description: 'Stable responsibilities, constraints, workflow, and acceptance rules.' },
         provider: { type: 'string', required: true },
         model: { type: 'string', required: true },
+        reasoningEffort: {
+          type: 'string',
+          description: 'Optional exact reasoning effort id returned by modelCapabilities. Omit to use the model default.',
+        },
         agentPresetId: { type: 'string', required: true },
         permissionPresetId: { type: 'string', required: true },
         skills: {
@@ -634,6 +660,7 @@ export class AssistantBuilderRuntime {
           instructions: args.instructions,
           provider: args.provider,
           model: args.model,
+          ...(args.reasoningEffort === undefined ? {} : { reasoningEffort: args.reasoningEffort }),
           agentPresetId: args.agentPresetId,
           permissionPresetId: args.permissionPresetId,
           skillAllowlist: args.skills ?? [],

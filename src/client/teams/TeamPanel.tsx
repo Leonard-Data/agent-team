@@ -85,9 +85,10 @@ export function TeamPanel({
       {selectedTeam === undefined
         ? visibleTeams.length === 0
           ? <Empty text="还没有团队" hint="先通过右上角“管理助手”创建助手，再选择 Leader 和团队成员。" />
-          : <div className={css.cardList}>{visibleTeams.map(team => <TeamCard key={team.id} team={team} assistants={assistants} onChanged={onChanged} />)}</div>
+          : <div className={css.cardList}>{visibleTeams.map(team => <TeamCard key={team.id} team={team} catalog={catalog} assistants={assistants} onChanged={onChanged} />)}</div>
         : <TeamWorkbench
           team={selectedTeam}
+          catalog={catalog}
           assistants={assistants}
           permissionPresets={catalog?.permissionPresets ?? []}
           onChanged={onChanged}
@@ -136,11 +137,13 @@ export function TeamPanel({
 
 function TeamWorkbench({
   team,
+  catalog,
   assistants,
   permissionPresets,
   onChanged,
 }: {
   team: TeamView
+  catalog: CatalogView | undefined
   assistants: AssistantView[]
   permissionPresets: CatalogView['permissionPresets']
   onChanged: () => Promise<void>
@@ -297,7 +300,6 @@ function TeamWorkbench({
             variant="ghost"
             size="sm"
             className={css.manageButton}
-            disabled={assistants.length === 0}
             onClick={() => {
               setAddMemberOpen(true)
             }}
@@ -357,12 +359,13 @@ function TeamWorkbench({
         contentClassName={css.managementDialogContent ?? ''}
       >
         <div className={css.managementDialogBody}>
-          <TeamCard team={team} assistants={assistants} onChanged={async () => { await onChanged(); await load() }} compact />
+          <TeamCard team={team} catalog={catalog} assistants={assistants} onChanged={async () => { await onChanged(); await load() }} compact />
         </div>
       </AnimatedModal>
       <AddTeamMemberDialog
         open={addMemberOpen}
         team={team}
+        catalog={catalog}
         assistants={assistants}
         onClose={() => { setAddMemberOpen(false) }}
         onChanged={async () => { await onChanged(); await load() }}
@@ -418,17 +421,20 @@ function TeamWorkbench({
 function AddTeamMemberDialog({
   open,
   team,
+  catalog,
   assistants,
   onClose,
   onChanged,
 }: {
   open: boolean
   team: TeamView
+  catalog: CatalogView | undefined
   assistants: AssistantView[]
   onClose: () => void
   onChanged: () => Promise<void>
 }): JSX.Element {
   const [addingAssistantId, setAddingAssistantId] = useState<string>()
+  const [configuringAssistants, setConfiguringAssistants] = useState(false)
   const [error, setError] = useState<string>()
 
   async function addMember(assistant: AssistantView): Promise<void> {
@@ -450,57 +456,89 @@ function AddTeamMemberDialog({
 
   function close(): void {
     if (addingAssistantId !== undefined) return
+    setConfiguringAssistants(false)
     setError(undefined)
     onClose()
   }
 
   return (
-    <AnimatedModal
-      open={open}
-      onClose={close}
-      title="添加助手"
-      description={`选择一个助手加入团队“${team.name}”。同一个助手可以多次加入。`}
-      closeLabel="关闭"
-      className={css.addMemberDialog ?? ''}
-      contentClassName={css.addMemberDialogContent ?? ''}
-    >
-      <div className={css.addMemberDialogHeader}>
-        <strong>助手列表</strong>
-        <span>{assistants.length} 个助手</span>
-      </div>
-      <div className={css.addMemberMenuList}>
-        {assistants.map(assistant => (
-          <button
-            key={assistant.id}
-            type="button"
-            className={css.addMemberOption}
-            disabled={addingAssistantId !== undefined}
-            onClick={() => { void addMember(assistant) }}
-          >
-            <span className={css.addMemberAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
-            <span className={css.addMemberCopy}>
-              <strong>{assistant.name}</strong>
-              <span>{assistant.provider} / {assistant.model}</span>
-            </span>
-            <span className={css.addMemberOptionAction}>
-              {addingAssistantId === assistant.id ? '添加中…' : <IconPlusOutline16 size={14} />}
-            </span>
-          </button>
-        ))}
-        {assistants.length === 0 && <span className={css.addMemberEmpty}>还没有可添加的助手模板</span>}
-      </div>
-      {error && <div role="alert" className={css.inlineError}>{error}</div>}
-    </AnimatedModal>
+    <>
+      <AnimatedModal
+        open={open}
+        onClose={close}
+        title="添加助手"
+        description={`选择一个助手加入团队“${team.name}”。同一个助手可以多次加入。`}
+        closeLabel="关闭"
+        className={css.addMemberDialog ?? ''}
+        contentClassName={css.addMemberDialogContent ?? ''}
+      >
+        <div className={css.addMemberDialogHeader}>
+          <strong>助手列表</strong>
+          <div className={css.addMemberDialogHeaderActions}>
+            <span>{assistants.length} 个助手</span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={addingAssistantId !== undefined}
+              onClick={() => { setConfiguringAssistants(true) }}
+            >
+              助手配置
+            </Button>
+          </div>
+        </div>
+        <div className={css.addMemberMenuList}>
+          {assistants.map(assistant => (
+            <button
+              key={assistant.id}
+              type="button"
+              className={css.addMemberOption}
+              disabled={addingAssistantId !== undefined}
+              onClick={() => { void addMember(assistant) }}
+            >
+              <span className={css.addMemberAvatar}>{assistant.name.slice(0, 1).toUpperCase()}</span>
+              <span className={css.addMemberCopy}>
+                <strong>{assistant.name}</strong>
+                <span>{assistant.provider} / {assistant.model}</span>
+              </span>
+              <span className={css.addMemberOptionAction}>
+                {addingAssistantId === assistant.id ? '添加中…' : <IconPlusOutline16 size={14} />}
+              </span>
+            </button>
+          ))}
+          {assistants.length === 0 && <span className={css.addMemberEmpty}>还没有可添加的助手模板</span>}
+        </div>
+        {error && <div role="alert" className={css.inlineError}>{error}</div>}
+      </AnimatedModal>
+      <AnimatedModal
+        open={configuringAssistants}
+        onClose={() => { setConfiguringAssistants(false) }}
+        title="助手配置"
+        closeLabel="关闭"
+        description="创建和维护可在不同团队间复用的助手模板。"
+        className={css.assistantManagementDialog ?? ''}
+        contentClassName={css.assistantManagementDialogContent ?? ''}
+      >
+        <div className={css.assistantManagementBody}>
+          <AssistantPanel
+            catalog={catalog}
+            assistants={assistants}
+            onChanged={onChanged}
+          />
+        </div>
+      </AnimatedModal>
+    </>
   )
 }
 
 function TeamCard({
   team,
+  catalog,
   assistants,
   onChanged,
   compact = false,
 }: {
   team: TeamView
+  catalog: CatalogView | undefined
   assistants: AssistantView[]
   onChanged: () => Promise<void>
   compact?: boolean
@@ -597,7 +635,7 @@ function TeamCard({
             <button
               type="button"
               className={css.addMemberButton}
-              disabled={busy || assistants.length === 0}
+              disabled={busy}
               onClick={() => { setAddingMember(true) }}
             >
               <IconPlusOutline16 size={14} />
@@ -697,6 +735,7 @@ function TeamCard({
       <AddTeamMemberDialog
         open={addingMember}
         team={team}
+        catalog={catalog}
         assistants={assistants}
         onClose={() => { setAddingMember(false) }}
         onChanged={onChanged}

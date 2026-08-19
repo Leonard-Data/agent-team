@@ -84,6 +84,15 @@ export interface SkillCatalogSnapshot {
   }>
 }
 
+export interface ModelCapabilitiesSnapshot {
+  provider: string
+  model: string
+  reasoning?: {
+    efforts: Array<{ id: string; name: string; description?: string }>
+    defaultEffort?: string
+  }
+}
+
 export interface McpCatalogSnapshot {
   agentPresetId: string
   servers: Array<{
@@ -182,6 +191,40 @@ export class AgentTeamService extends Service {
         }
       }),
       workspaces,
+    }
+  }
+
+  async modelCapabilities(providerValue: string, modelValue: string): Promise<ModelCapabilitiesSnapshot> {
+    const provider = providerValue.trim()
+    const model = modelValue.trim()
+    let info: Awaited<ReturnType<Context['llm']['resolveModelInfo']>>
+    try {
+      info = await this.ctx.llm.resolveModelInfo(provider, model)
+    } catch (error) {
+      throw new AgentTeamError(
+        'MODEL_REFERENCE_INVALID',
+        `Cannot resolve model '${provider}/${model}'`,
+        undefined,
+        { cause: error },
+      )
+    }
+    return {
+      provider,
+      model,
+      ...(info.reasoning === undefined
+        ? {}
+        : {
+            reasoning: {
+              efforts: info.reasoning.efforts.map(effort => ({
+                id: String(effort.id),
+                name: effort.name,
+                ...(effort.description === undefined ? {} : { description: effort.description }),
+              })),
+              ...(info.reasoning.defaultEffort === undefined
+                ? {}
+                : { defaultEffort: String(info.reasoning.defaultEffort) }),
+            },
+          }),
     }
   }
 
@@ -409,6 +452,7 @@ export class AgentTeamService extends Service {
         role: item.role,
         assistantSnapshot: snapshotAssistant(assistant),
         permissionPresetId: assistant.permissionPresetId,
+        ...(assistant.reasoningEffort === undefined ? {} : { reasoningEffort: assistant.reasoningEffort }),
         sessionId: `agent-team:${randomUUID()}`,
         desiredState: 'offline',
         lastRuntimeState: 'offline',
@@ -618,6 +662,46 @@ export class AgentTeamService extends Service {
     return this.requireRuntime().setMemberPermissionPreset(teamId, slotId, permissionPresetId)
   }
 
+  async setMemberReasoningEffort(
+    teamId: string,
+    slotId: string,
+    rawReasoningEffort: string | undefined,
+    options: MutationOptions = {},
+  ): Promise<TeamAggregate> {
+    const reasoningEffort = rawReasoningEffort?.trim() || undefined
+    const team = requireTeam(this.store, teamId)
+    assertTeamMutable(team)
+    assertRevision('team', team.revision, options.expectedRevision)
+    const member = team.members[slotId]
+    if (member === undefined) throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown member '${slotId}'`)
+    await this.validateReasoningEffort(
+      member.assistantSnapshot.provider,
+      member.assistantSnapshot.model,
+      reasoningEffort,
+    )
+    if (member.reasoningEffort === reasoningEffort) return team
+    if (team.state === 'draft') {
+      const next = await this.store.updateTeam(teamId, current => ({
+        ...current,
+        members: Object.fromEntries(Object.entries(current.members).map(([id, currentMember]) => [
+          id,
+          id === slotId ? withReasoningEffort(currentMember, reasoningEffort) : currentMember,
+        ])),
+        revision: current.revision + 1,
+        updatedAt: new Date().toISOString(),
+      }))
+      await this.activity(
+        'team.member_reasoning_changed',
+        teamId,
+        next.revision,
+        `Member ${member.displayName} reasoning changed to ${reasoningEffort ?? 'model default'}`,
+      )
+      this.publish('team', teamId, next.revision, 'team.member_reasoning_changed')
+      return next
+    }
+    return this.requireRuntime().setMemberReasoningEffort(teamId, slotId, reasoningEffort)
+  }
+
   publishConversation(teamId: string, revision: number, conversation?: MemberConversationView): void {
     this.publish('conversation', teamId, revision, 'member.conversation', conversation)
   }
@@ -737,16 +821,7 @@ export class AgentTeamService extends Service {
     if (invalidMcpServer !== undefined) {
       throw new AgentTeamError('MCP_REFERENCE_INVALID', `Invalid MCP Server name '${invalidMcpServer}'`)
     }
-    try {
-      await this.ctx.llm.resolveModelInfo(input.provider, input.model)
-    } catch (error) {
-      throw new AgentTeamError(
-        'MODEL_REFERENCE_INVALID',
-        `Cannot resolve model '${input.provider}/${input.model}'`,
-        undefined,
-        { cause: error },
-      )
-    }
+    await this.validateReasoningEffort(input.provider, input.model, input.reasoningEffort)
     try {
       await this.ctx.agentPresets.resolve(input.agentPresetId)
     } catch (error) {
@@ -774,6 +849,26 @@ export class AgentTeamService extends Service {
           { missing },
         )
       }
+    }
+  }
+
+  private async validateReasoningEffort(
+    provider: string,
+    model: string,
+    reasoningEffort: string | undefined,
+  ): Promise<void> {
+    const capabilities = await this.modelCapabilities(provider, model)
+    if (reasoningEffort === undefined) return
+    const supported = capabilities.reasoning?.efforts.some(effort => effort.id === reasoningEffort) ?? false
+    if (!supported) {
+      throw new AgentTeamError(
+        'MODEL_REFERENCE_INVALID',
+        `Model '${provider}/${model}' does not support reasoning effort '${reasoningEffort}'`,
+        {
+          reasoningEffort,
+          supportedEfforts: capabilities.reasoning?.efforts.map(effort => effort.id) ?? [],
+        },
+      )
     }
   }
 
@@ -863,6 +958,7 @@ function assistantInputOf(assistant: AssistantTemplate): CreateAssistantInput {
     instructions: assistant.instructions,
     provider: assistant.provider,
     model: assistant.model,
+    ...(assistant.reasoningEffort === undefined ? {} : { reasoningEffort: assistant.reasoningEffort }),
     agentPresetId: assistant.agentPresetId,
     permissionPresetId: assistant.permissionPresetId,
     skillAllowlist: [...assistant.skillAllowlist],
@@ -876,6 +972,7 @@ function normalizeAssistantInput(input: CreateAssistantInput): CreateAssistantIn
     name: input.name.trim(),
     provider: input.provider.trim(),
     model: input.model.trim(),
+    ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort.trim() }),
     agentPresetId: input.agentPresetId.trim(),
     permissionPresetId: input.permissionPresetId.trim(),
     skillAllowlist: unique(input.skillAllowlist),
@@ -902,11 +999,20 @@ function createMemberSlot(
     role,
     assistantSnapshot: snapshotAssistant(assistant),
     permissionPresetId: assistant.permissionPresetId,
+    ...(assistant.reasoningEffort === undefined ? {} : { reasoningEffort: assistant.reasoningEffort }),
     sessionId: `agent-team:${randomUUID()}`,
     desiredState,
     lastRuntimeState: desiredState === 'online' ? 'starting' : 'offline',
     joinedAt: now,
   }
+}
+
+function withReasoningEffort(
+  member: TeamMemberSlot,
+  reasoningEffort: string | undefined,
+): TeamMemberSlot {
+  const { reasoningEffort: _current, ...rest } = member
+  return reasoningEffort === undefined ? rest : { ...rest, reasoningEffort }
 }
 
 function assertMemberHasNoOpenTasks(team: TeamAggregate, slotId: string): void {

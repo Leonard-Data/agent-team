@@ -236,6 +236,62 @@ describe('AgentTeamService', () => {
     })
   })
 
+  it('reads and validates exact-model reasoning efforts without hard-coded ids', async () => {
+    const { service } = createHarness()
+
+    await expect(service.modelCapabilities('openai', 'codex')).resolves.toEqual({
+      provider: 'openai',
+      model: 'codex',
+      reasoning: {
+        efforts: [
+          { id: 'low', name: 'Low', description: 'Faster reasoning.' },
+          { id: 'high', name: 'High' },
+        ],
+        defaultEffort: 'low',
+      },
+    })
+
+    const assistant = await service.createAssistant({
+      ...assistantInput(),
+      reasoningEffort: 'high',
+    })
+    const team = await service.createTeamDraft({
+      name: 'Reasoning Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, role: 'leader' }],
+    })
+    const member = team.members[team.leaderSlotId]!
+
+    expect(assistant.reasoningEffort).toBe('high')
+    expect(member.reasoningEffort).toBe('high')
+    expect(member.assistantSnapshot.reasoningEffort).toBe('high')
+    await expect(service.createAssistant({
+      ...assistantInput(),
+      reasoningEffort: 'invented',
+    })).rejects.toMatchObject({ code: 'MODEL_REFERENCE_INVALID' })
+  })
+
+  it('changes a draft member reasoning effort without modifying the assistant default', async () => {
+    const { service } = createHarness()
+    const assistant = await service.createAssistant({
+      ...assistantInput(),
+      reasoningEffort: 'low',
+    })
+    const team = await service.createTeamDraft({
+      name: 'Reasoning Override Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, role: 'leader' }],
+    })
+    const member = team.members[team.leaderSlotId]!
+
+    const changed = await service.setMemberReasoningEffort(team.id, member.id, 'high')
+    const restoredDefault = await service.setMemberReasoningEffort(changed.id, member.id, undefined)
+
+    expect(changed.members[member.id]?.reasoningEffort).toBe('high')
+    expect(restoredDefault.members[member.id]?.reasoningEffort).toBeUndefined()
+    expect(service.getAssistant(assistant.id).reasoningEffort).toBe('low')
+  })
+
   it('validates an assistant draft without storing it', async () => {
     const { service, store } = createHarness()
 
@@ -689,7 +745,17 @@ function createHarness(workspacePath = '/tmp/agent-team-workspace'): {
   ctx.provide('llm', {
     listProviders: () => [{ id: 'openai', name: 'OpenAI' }],
     listModels: async () => [{ id: 'codex', name: 'Codex' }],
-    resolveModelInfo: async (provider: string, model: string) => ({ provider, model }),
+    resolveModelInfo: async (provider: string, model: string) => ({
+      provider,
+      model,
+      reasoning: {
+        efforts: [
+          { id: 'low', name: 'Low', description: 'Faster reasoning.' },
+          { id: 'high', name: 'High' },
+        ],
+        defaultEffort: 'low',
+      },
+    }),
   } as never)
   ctx.provide('agentPresets', {
     list: async () => [{ id: 'default', name: 'Default' }],
@@ -786,7 +852,12 @@ function fakeAgent(): FakeAgent {
 }
 
 function fakeOwned(agent: FakeAgent): unknown {
-  return { teamId: 'test-team', slotId: 'test-slot', handle: { agent, dispose: vi.fn(async () => {}) } }
+  return {
+    teamId: 'test-team',
+    slotId: 'test-slot',
+    handle: { agent, dispose: vi.fn(async () => {}) },
+    modelSelection: { current: undefined, assembled: undefined },
+  }
 }
 
 function assistantInput() {

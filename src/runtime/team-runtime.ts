@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   assembleContextFor,
+  installModelSelection,
   type Agent,
   type AgentHandle,
+  type ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { isModelInvocable } from '@deepseek-ai/dsh-skill'
@@ -41,6 +43,7 @@ interface OwnedAgent {
   teamId: string
   slotId: string
   handle: AgentHandle
+  modelSelection: ModelSelectionRef
 }
 
 export class TeamRuntime {
@@ -191,6 +194,47 @@ export class TeamRuntime {
         )
       } catch (error) {
         this.ctx.permissionPresets.set(owned.handle.agent.session, previous)
+        throw error
+      }
+    })
+  }
+
+  setMemberReasoningEffort(
+    teamId: string,
+    slotId: string,
+    reasoningEffort: string | undefined,
+  ): Promise<TeamAggregate> {
+    return this.exclusive(teamId, async () => {
+      const team = this.service.getTeam(teamId)
+      if (team.state !== 'active' && team.state !== 'error') {
+        throw new AgentTeamError(
+          'TEAM_NOT_ACTIVE',
+          `Cannot change member reasoning while team is '${team.state}'`,
+        )
+      }
+      const member = team.members[slotId]
+      if (member === undefined) throw new AgentTeamError('MEMBER_NOT_FOUND', `Unknown member '${slotId}'`)
+      const owned = this.requireOwned(member.sessionId)
+      const previous = owned.modelSelection.current
+      owned.modelSelection.current = {
+        provider: member.assistantSnapshot.provider,
+        model: member.assistantSnapshot.model,
+        ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
+      }
+      try {
+        return await this.service.updateRuntimeTeam(
+          teamId,
+          current => ({
+            ...current,
+            members: mapMembers(current, currentMember => currentMember.id === slotId
+              ? withReasoningEffort(currentMember, reasoningEffort)
+              : currentMember),
+          }),
+          'team.member_reasoning_changed',
+          `Member ${member.displayName} reasoning changed to ${reasoningEffort ?? 'model default'}`,
+        )
+      } catch (error) {
+        owned.modelSelection.current = previous
         throw error
       }
     })
@@ -688,8 +732,19 @@ export class TeamRuntime {
 
     try {
       this.activating.set(member.sessionId, { teamId: team.id, slotId: member.id })
+      const modelSelection: ModelSelectionRef = {
+        current: {
+          provider: member.assistantSnapshot.provider,
+          model: member.assistantSnapshot.model,
+          ...(member.reasoningEffort === undefined
+            ? {}
+            : { reasoningEffort: ReasoningEffortId(member.reasoningEffort) }),
+        },
+        assembled: undefined,
+      }
       const setup = async (agentCtx: Context): Promise<void> => {
         await this.ctx.agentPresets.mount(agentCtx, member.assistantSnapshot.agentPresetId)
+        installModelSelection(agentCtx, modelSelection)
         const identitySection = `agent-team:identity:${member.id}`
         const rosterSection = `agent-team:roster:${team.id}`
         agentCtx.systemPrompt.section({
@@ -843,7 +898,12 @@ export class TeamRuntime {
         await handle.dispose()
         throw error
       }
-      this.owned.set(member.sessionId, { teamId: team.id, slotId: member.id, handle })
+      this.owned.set(member.sessionId, {
+        teamId: team.id,
+        slotId: member.id,
+        handle,
+        modelSelection,
+      })
       this.activating.delete(member.sessionId)
       await this.setMemberRuntimeState(team.id, member.id, handle.agent.status)
     } catch (error) {
@@ -931,6 +991,14 @@ function mapMembers(
   map: (member: TeamMemberSlot) => TeamMemberSlot,
 ): TeamAggregate['members'] {
   return Object.fromEntries(Object.entries(team.members).map(([id, member]) => [id, map(member)]))
+}
+
+function withReasoningEffort(
+  member: TeamMemberSlot,
+  reasoningEffort: string | undefined,
+): TeamMemberSlot {
+  const { reasoningEffort: _current, ...rest } = member
+  return reasoningEffort === undefined ? rest : { ...rest, reasoningEffort }
 }
 
 function skillNameFromArguments(value: unknown): string | undefined {

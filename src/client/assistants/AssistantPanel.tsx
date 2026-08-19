@@ -23,6 +23,7 @@ import { callAgentTeam, subscribeAssistantBuilderConversation } from '../api.js'
 import css from '../AgentTeam.module.css'
 import { shouldSubmitComposer } from '../keyboard.js'
 import { PERMISSION_LABELS } from '../labels.js'
+import { defaultReasoningLabel, useModelCapabilities } from '../model-reasoning.js'
 import { AnimatedModal, Empty, Field } from '../shared.js'
 import { ConversationNodeView } from '../workbench/ConversationColumn.js'
 import { PendingInteractionCard } from '../workbench/PendingInteractionCard.js'
@@ -689,7 +690,7 @@ function AssistantCard({
           <strong>{assistant.name}</strong>
           <span className={css.muted}>{assistant.provider} / {assistant.model}</span>
           <span className={css.muted}>
-            Preset: {assistant.agentPresetId} · 权限: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId}
+            Preset: {assistant.agentPresetId} · 权限: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId} · 思考模式：{assistant.reasoningEffort ?? '模型默认'}
           </span>
           <span className={css.muted}>
             Skills: {assistant.skillAllowlist.length > 0 ? assistant.skillAllowlist.join('、') : '未选择'}
@@ -789,6 +790,7 @@ function AssistantForm({
   const [provider, setProvider] = useState(assistant?.provider ?? providers[0]?.id ?? '')
   const models = catalog?.models[provider] ?? []
   const [modelChoice, setModelChoice] = useState(assistant?.model ?? '')
+  const [reasoningEffort, setReasoningEffort] = useState(assistant?.reasoningEffort ?? '')
   const [agentPresetId, setAgentPresetId] = useState(assistant?.agentPresetId ?? presets[0]?.id ?? '')
   const [permissionPresetId, setPermissionPresetId] = useState(assistant?.permissionPresetId ?? permissions[0]?.value ?? '')
   const [availableSkills, setAvailableSkills] = useState<SkillCatalogView['skills']>([])
@@ -800,6 +802,7 @@ function AssistantForm({
   const [mcpLoading, setMcpLoading] = useState(false)
   const [mcpError, setMcpError] = useState<string>()
   const [error, setError] = useState<string>()
+  const modelCapabilities = useModelCapabilities(provider, modelChoice)
 
   useEffect(() => {
     if (!provider && providers[0]) setProvider(providers[0].id)
@@ -812,6 +815,11 @@ function AssistantForm({
       return models[0]?.id ?? ''
     })
   }, [models])
+  useEffect(() => {
+    if (modelCapabilities.loading || modelCapabilities.value === undefined) return
+    const efforts = modelCapabilities.value.reasoning?.efforts ?? []
+    setReasoningEffort(current => current && !efforts.some(effort => effort.id === current) ? '' : current)
+  }, [modelCapabilities.loading, modelCapabilities.value])
   useEffect(() => {
     let active = true
     if (!agentPresetId) {
@@ -882,6 +890,7 @@ function AssistantForm({
         instructions,
         provider,
         model,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
         agentPresetId,
         permissionPresetId,
         skillAllowlist: selectedSkills,
@@ -921,6 +930,25 @@ function AssistantForm({
             ))}
           </select>
         </Field>
+        {modelCapabilities.value?.reasoning !== undefined && modelCapabilities.value.reasoning.efforts.length > 0 && (
+          <Field label="思考模式">
+            <select
+              value={reasoningEffort}
+              onChange={event => { setReasoningEffort(event.target.value) }}
+              className={css.input}
+              aria-describedby={`${formId}-reasoning-hint`}
+            >
+              <option value="">{defaultReasoningLabel(modelCapabilities.value)}</option>
+              {modelCapabilities.value.reasoning.efforts.map(effort => (
+                <option key={effort.id} value={effort.id}>
+                  {effort.name === effort.id ? effort.name : `${effort.name}（${effort.id}）`}
+                </option>
+              ))}
+            </select>
+            <span id={`${formId}-reasoning-hint`} className={css.hint}>由当前 Provider 和模型决定可用档位。</span>
+          </Field>
+        )}
+        {modelCapabilities.error && <span className={conversationCss.composerError}>{modelCapabilities.error}</span>}
         <Field label="Agent Preset">
           <select required value={agentPresetId} onChange={event => { setAgentPresetId(event.target.value) }} className={css.input}>
             {presets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
