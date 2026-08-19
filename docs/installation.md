@@ -6,6 +6,7 @@
 
 - Node.js `22.19.0+` 或 `24.0.0+`
 - DeepSeek Harness `0.1.0-rc.7`
+- Agent Team `0.1.1`
 - `pnpm` 已加入终端 `PATH`
 
 检查版本：
@@ -63,7 +64,7 @@ https://registry.npmjs.org/
 拿到 `.tgz` 文件后，在文件所在目录执行：
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.0.tgz
+npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.1.tgz
 ```
 
 文件名中的版本号可能不同，请按实际文件名替换。

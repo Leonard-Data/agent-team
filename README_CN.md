@@ -5,6 +5,8 @@
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
+当前版本：`0.1.1`
+
 在 DeepSeek Harness 中组建由多个独立 AI Agent 构成的团队。你可以混用不同模型和 Provider，指定唯一 Leader，让每位成员拥有独立对话和上下文，同时在同一个 Workspace 中协作。
 
 Agent Team **不是 Subagent 方案**。每位成员都是独立的根级 Agent，拥有自己的模型、Session、上下文、权限、思考模式和工具调用；团队任务、消息和共享 Workspace 构成协作层。

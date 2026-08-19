@@ -84,7 +84,7 @@ export function AssistantPanel({
         onClose={() => { setBuilderOpen(false) }}
         title="团队 Agent 小助手"
         closeLabel="关闭"
-        description="通过对话设计助手；完整配置会在你确认后保存到助手模板库。"
+        description="通过对话设计助手，完整配置会在你确认后保存到助手模板库。"
         className={css.assistantBuilderDialog ?? ''}
         contentClassName={css.assistantBuilderDialogContent ?? ''}
       >
