@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
-当前版本：`0.1.1`
+当前版本：`0.1.2`
 
 在 DeepSeek Harness 中组建由多个独立 AI Agent 构成的团队。你可以混用不同模型和 Provider，指定唯一 Leader，让每位成员拥有独立对话和上下文，同时在同一个 Workspace 中协作。
 
@@ -92,11 +92,11 @@ GPT Leader 的上下文只保留关键决策、任务状态和验收结果，不
 
 ![组建团队](./demo/3.png)
 
-### 侧边栏入口
+### 悬浮团队入口
 
-团队会直接显示在 Harness 侧边栏中。点击 `+` 可以创建团队，也可以在不离开 Harness 日常工作流的情况下切换不同团队。
+紧凑的悬浮按钮用于打开全屏团队工作台，不会与其他 Harness 客户端的侧边栏扩展争抢位置。鼠标悬停或拖动时会展开文字；拖到屏幕左右边缘并松开后，按钮会朝对应边缘收起，并在本地记住最后位置。团队创建和切换统一在工作台导航栏中完成。
 
-<img src="./demo/5.png" alt="Harness 侧边栏中的 Agent Team" width="320" />
+![悬浮团队入口](./demo/5.png)
 
 ## 环境要求
 
@@ -182,7 +182,7 @@ npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
 
 ### 3. 组建团队
 
-点击 Harness 左侧 **团队** 旁的 `+`：
+点击页面左侧的悬浮 **团队** 按钮，再点击工作台导航栏中的 `+`：
 
 1. 从助手列表添加成员；同一助手可以添加多次。
 2. 指定且仅指定一个 Leader。

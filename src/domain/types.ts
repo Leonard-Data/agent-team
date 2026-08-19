@@ -3,6 +3,7 @@ import type {
   assistantSnapshotSchema,
   addTeamMemberInputSchema,
   assistantTemplateSchema,
+  cloneTeamInputSchema,
   createAssistantInputSchema,
   createTeamDraftInputSchema,
   createTeamMemberInputSchema,
@@ -34,6 +35,7 @@ export type Operation = z.infer<typeof operationSchema>
 export type CreateTeamMemberInput = z.infer<typeof createTeamMemberInputSchema>
 export type AddTeamMemberInput = z.infer<typeof addTeamMemberInputSchema>
 export type CreateTeamDraftInput = z.infer<typeof createTeamDraftInputSchema>
+export type CloneTeamInput = z.infer<typeof cloneTeamInputSchema>
 
 export interface Page<T> {
   items: T[]

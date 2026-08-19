@@ -1,6 +1,7 @@
 import type {
   AddTeamMemberInput,
   AssistantTemplate,
+  CloneTeamInput,
   CreateAssistantInput,
   CreateTeamDraftInput,
   TeamAggregate,
@@ -36,6 +37,7 @@ export const AGENT_TEAM_METHODS = [
   'team.list',
   'team.get',
   'team.createDraft',
+  'team.clone',
   'team.start',
   'team.addMember',
   'team.removeMember',
@@ -333,6 +335,7 @@ export interface AgentTeamRequestMap {
   'team.list': { payload: undefined; result: PageView<TeamView> }
   'team.get': { payload: { id: string }; result: TeamView }
   'team.createDraft': { payload: CreateTeamDraftInput; result: TeamView }
+  'team.clone': { payload: CloneTeamInput & { teamId: string }; result: TeamView }
   'team.start': { payload: { id: string }; result: TeamView }
   'team.addMember': { payload: { teamId: string; value: AddTeamMemberInput }; result: TeamView }
   'team.removeMember': { payload: { teamId: string; slotId: string }; result: TeamView }

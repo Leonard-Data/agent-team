@@ -304,6 +304,17 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
     case 'team.list': return service.listTeams()
     case 'team.get': return service.getTeam(idPayload.parse(request.payload).id)
     case 'team.createDraft': return service.createTeamDraft(request.payload as never)
+    case 'team.clone': {
+      const payload = z.object({
+        teamId: z.string().trim().min(1).max(200),
+        name: z.string().trim().min(1).max(500),
+        workspaceId: z.string().trim().min(1).max(500),
+      }).strict().parse(request.payload)
+      return service.cloneTeam(payload.teamId, {
+        name: payload.name,
+        workspaceId: payload.workspaceId,
+      })
+    }
     case 'team.start': return service.startTeam(idPayload.parse(request.payload).id, options)
     case 'team.addMember': {
       const payload = z.object({ teamId: z.string().min(1), value: z.unknown() }).strict().parse(request.payload)

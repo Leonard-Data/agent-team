@@ -7,7 +7,7 @@ English | [简体中文](./README_CN.md)
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
-Current release: `0.1.1`
+Current release: `0.1.2`
 
 Build teams of independent AI agents inside DeepSeek Harness. Mix models and providers, assign one Leader, and let every member work in its own conversation while sharing the same Workspace.
 
@@ -92,11 +92,11 @@ Select members, assign exactly one Leader, choose a Workspace, and decide whethe
 
 ![Build a team](./demo/3.png)
 
-### Sidebar Integration
+### Floating Team Launcher
 
-Teams appear directly in the Harness sidebar. Use the `+` button to create a team, then switch between existing teams without leaving your normal Harness workflow.
+A compact floating button opens the full-screen Team workbench without competing with sidebar extensions from other Harness clients. Hover over it or drag it to reveal the label. Drop it at either screen edge to collapse it toward that edge; the last position is remembered locally. Create teams and switch between them from the workbench navigator.
 
-<img src="./demo/5.png" alt="Agent Team in the Harness sidebar" width="320" />
+![Floating Team launcher](./demo/5.png)
 
 ## Requirements
 
@@ -182,7 +182,7 @@ A practical first team usually contains:
 
 ### 3. Create a Team
 
-Click the `+` next to **Team** in the Harness sidebar:
+Click the floating **Team** button, then click `+` in the workbench navigator:
 
 1. Add assistants from the list. You may add the same assistant multiple times.
 2. Select exactly one member as the Leader.
