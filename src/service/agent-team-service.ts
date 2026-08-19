@@ -8,6 +8,7 @@ import { isMcpServerName, mcpServerFromToolName } from '../domain/mcp.js'
 import {
   createAssistantInputSchema,
   addTeamMemberInputSchema,
+  cloneTeamInputSchema,
   createTeamDraftInputSchema,
   updateAssistantInputSchema,
 } from '../domain/schemas.js'
@@ -15,6 +16,7 @@ import {
   snapshotAssistant,
   type AddTeamMemberInput,
   type AssistantTemplate,
+  type CloneTeamInput,
   type CreateAssistantInput,
   type CreateTeamDraftInput,
   type Operation,
@@ -483,6 +485,51 @@ export class AgentTeamService extends Service {
     this.workspace.watch(team.id, team.workspacePath)
     await this.activity('team.created', team.id, team.revision, `Team ${team.name} draft created`)
     this.publish('team', team.id, team.revision, 'team.created')
+    return team
+  }
+
+  async cloneTeam(sourceTeamId: string, raw: CloneTeamInput): Promise<TeamAggregate> {
+    const input = cloneTeamInputSchema.parse(raw)
+    const source = requireTeam(this.store, sourceTeamId)
+    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(input.workspaceId))
+    if (workspace === undefined || await workspace.status() !== 'ok') {
+      throw new AgentTeamError('WORKSPACE_UNAVAILABLE', `Workspace '${input.workspaceId}' is unavailable`)
+    }
+
+    const now = new Date().toISOString()
+    const members: Record<string, TeamMemberSlot> = {}
+    let leaderSlotId = ''
+    for (const sourceMember of Object.values(source.members)) {
+      const member = cloneMemberSlot(sourceMember, now)
+      members[member.id] = member
+      if (sourceMember.id === source.leaderSlotId) leaderSlotId = member.id
+    }
+    if (leaderSlotId === '') {
+      throw new AgentTeamError('TEAM_INVALID_LEADER', 'Source team has no valid leader')
+    }
+
+    const team: TeamAggregate = {
+      schemaVersion: 1,
+      id: randomUUID(),
+      name: input.name.trim(),
+      workspaceId: String(workspace.id),
+      workspacePath: workspace.path,
+      leaderSlotId,
+      state: 'draft',
+      directMemberChat: source.directMemberChat,
+      members,
+      retiredSessions: {},
+      tasks: {},
+      leases: {},
+      outbox: {},
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await this.store.putTeam(team)
+    this.workspace.watch(team.id, team.workspacePath)
+    await this.activity('team.cloned', team.id, team.revision, `Team ${team.name} cloned from ${source.name}`)
+    this.publish('team', team.id, team.revision, 'team.cloned')
     return team
   }
 
@@ -1003,6 +1050,27 @@ function createMemberSlot(
     sessionId: `agent-team:${randomUUID()}`,
     desiredState,
     lastRuntimeState: desiredState === 'online' ? 'starting' : 'offline',
+    joinedAt: now,
+  }
+}
+
+function cloneMemberSlot(source: TeamMemberSlot, now: string): TeamMemberSlot {
+  const slotId = randomUUID()
+  return {
+    id: slotId,
+    assistantId: source.assistantId,
+    displayName: source.displayName,
+    role: source.role,
+    assistantSnapshot: {
+      ...source.assistantSnapshot,
+      skillAllowlist: [...source.assistantSnapshot.skillAllowlist],
+      mcpServers: [...source.assistantSnapshot.mcpServers],
+    },
+    permissionPresetId: source.permissionPresetId,
+    ...(source.reasoningEffort === undefined ? {} : { reasoningEffort: source.reasoningEffort }),
+    sessionId: `agent-team:${randomUUID()}`,
+    desiredState: 'offline',
+    lastRuntimeState: 'offline',
     joinedAt: now,
   }
 }

@@ -199,3 +199,8 @@ export const createTeamDraftInputSchema = z.object({
   directMemberChat: z.boolean().optional(),
   members: z.array(createTeamMemberInputSchema).min(1),
 }).strict()
+
+export const cloneTeamInputSchema = z.object({
+  name: nonEmpty,
+  workspaceId: nonEmpty,
+}).strict()

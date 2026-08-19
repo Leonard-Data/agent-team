@@ -1522,6 +1522,144 @@
   padding: 16px 24px;
 }
 
+.cloneTeamDialog {
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 48px));
+}
+
+.cloneTeamDialogContent {
+  min-height: 0;
+}
+
+.cloneTeamForm {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cloneTeamFields {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(320px, 1.3fr);
+  gap: 14px;
+}
+
+.cloneTeamMembers {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cloneTeamSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.cloneTeamSectionHeader span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.cloneTeamMemberGrid {
+  max-height: 250px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.cloneTeamMember {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.cloneTeamLeader {
+  border-color: var(--dsw-alias-state-warn-secondary);
+}
+
+.cloneTeamAvatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cloneTeamMemberCopy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cloneTeamMemberCopy strong,
+.cloneTeamMemberCopy span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cloneTeamMemberCopy strong {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.cloneTeamMemberCopy span {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.cloneTeamRole {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.cloneTeamLeader .cloneTeamRole {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.cloneTeamNotice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.cloneTeamActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .modalScrollContent {
   min-height: 0;
   overflow: auto;
@@ -2540,6 +2678,11 @@ textarea.input {
     max-height: calc(100vh - 20px);
   }
 
+  .cloneTeamDialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
   .memberGrid {
     grid-template-columns: 1fr;
   }
@@ -2564,6 +2707,11 @@ textarea.input {
   }
 
   .teamFields {
+    grid-template-columns: 1fr;
+  }
+
+  .cloneTeamFields,
+  .cloneTeamMemberGrid {
     grid-template-columns: 1fr;
   }
 

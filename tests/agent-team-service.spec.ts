@@ -329,6 +329,92 @@ describe('AgentTeamService', () => {
     expect(service.getAssistant(assistant.id).name).toBe('Codex Lead')
   })
 
+  it('clones team configuration into fresh members and sessions without runtime records', async () => {
+    const { service, store } = createHarness()
+    const assistant = await service.createAssistant({
+      ...assistantInput(),
+      reasoningEffort: 'low',
+      skillAllowlist: ['code-review'],
+      mcpServers: ['github'],
+    })
+    const draft = await service.createTeamDraft({
+      name: 'Source Team',
+      workspaceId: 'workspace-1',
+      directMemberChat: false,
+      members: [
+        { assistantId: assistant.id, role: 'leader' },
+        { assistantId: assistant.id, role: 'member' },
+      ],
+    })
+    const memberId = Object.values(draft.members).find(member => member.role === 'member')!.id
+    const configured = await service.setMemberPermissionPreset(draft.id, memberId, 'workspace-write')
+    const source = await store.updateTeam(configured.id, team => ({
+      ...team,
+      tasks: {
+        'task-1': {
+          id: 'task-1',
+          title: 'Existing work',
+          description: 'Do not copy this task.',
+          status: 'running',
+          ownerSlotId: memberId,
+          dependencyIds: [],
+          fileScopes: [],
+          revision: 1,
+          createdAt: team.createdAt,
+          updatedAt: team.updatedAt,
+        },
+      },
+    }))
+    await service.updateAssistant(assistant.id, { instructions: 'Updated after team creation.' })
+
+    const clone = await service.cloneTeam(source.id, {
+      name: 'Copied Team',
+      workspaceId: 'workspace-1',
+    })
+    const sourceMembers = Object.values(source.members)
+    const clonedMembers = Object.values(clone.members)
+
+    expect(clone).toMatchObject({
+      name: 'Copied Team',
+      workspaceId: 'workspace-1',
+      state: 'draft',
+      directMemberChat: false,
+      revision: 1,
+      tasks: {},
+      leases: {},
+      outbox: {},
+      retiredSessions: {},
+    })
+    expect(clone.id).not.toBe(source.id)
+    expect(clonedMembers.map(member => member.displayName)).toEqual(sourceMembers.map(member => member.displayName))
+    expect(clonedMembers.map(member => member.role)).toEqual(sourceMembers.map(member => member.role))
+    expect(clonedMembers.map(member => member.permissionPresetId)).toEqual(sourceMembers.map(member => member.permissionPresetId))
+    expect(clonedMembers.every(member => member.assistantSnapshot.instructions === 'Coordinate the team.')).toBe(true)
+    expect(clonedMembers.every(member => member.assistantSnapshot.skillAllowlist[0] === 'code-review')).toBe(true)
+    expect(clonedMembers.every(member => member.assistantSnapshot.mcpServers[0] === 'github')).toBe(true)
+    expect(new Set(clonedMembers.map(member => member.id)).size).toBe(clonedMembers.length)
+    expect(new Set(clonedMembers.map(member => member.sessionId)).size).toBe(clonedMembers.length)
+    expect(clonedMembers.every(member => !sourceMembers.some(sourceMember => sourceMember.id === member.id))).toBe(true)
+    expect(clonedMembers.every(member => !sourceMembers.some(sourceMember => sourceMember.sessionId === member.sessionId))).toBe(true)
+    expect(clone.members[clone.leaderSlotId]?.role).toBe('leader')
+    expect(service.getTeam(source.id).tasks['task-1']).toBeDefined()
+  })
+
+  it('rejects cloning into an unavailable Workspace', async () => {
+    const { service } = createHarness()
+    const assistant = await service.createAssistant(assistantInput())
+    const source = await service.createTeamDraft({
+      name: 'Source Team',
+      workspaceId: 'workspace-1',
+      members: [{ assistantId: assistant.id, role: 'leader' }],
+    })
+
+    await expect(service.cloneTeam(source.id, {
+      name: 'Copied Team',
+      workspaceId: 'missing-workspace',
+    })).rejects.toMatchObject({ code: 'WORKSPACE_UNAVAILABLE' })
+  })
+
   it('rejects malformed Skill names before storing a template', async () => {
     const { service } = createHarness()
     await expect(service.createAssistant({
