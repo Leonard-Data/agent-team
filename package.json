@@ -1,5 +1,5 @@
 {
-  "name": "dsh-agent-team",
+  "name": "@limuyang2/dsh-agent-team",
   "version": "0.1.0",
   "description": "Multi-agent team management plugin for DeepSeek Harness",
   "repository": {
@@ -7,6 +7,9 @@
     "url": "git+https://github.com/limuyang2/agent-team.git"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -26,7 +29,10 @@
     "lib/client.js",
     "lib/*.d.ts",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README_CN.md",
+    "demo/*.png",
+    "docs/*.md"
   ],
   "dsh": {
     "bundle": {

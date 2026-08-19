@@ -1,4 +1,3 @@
 - insert:
     - id: agent-team
-      name: dsh-agent-team
-
+      name: '@limuyang2/dsh-agent-team'

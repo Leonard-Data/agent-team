@@ -3,6 +3,7 @@ import { basename, dirname, resolve } from 'node:path'
 import { transform } from 'lightningcss'
 import { defineConfig } from 'tsdown'
 
+const PACKAGE_NAME = '@limuyang2/dsh-agent-team'
 const CSS_PREFIX = '\0agent-team-css:'
 const CSS_SUFFIX = '.mjs'
 
@@ -25,13 +26,13 @@ const cssModulesPlugin = {
     const classes = Object.fromEntries(
       Object.entries(result.exports ?? {}).map(([local, value]) => [local, value.name]),
     )
-    const tagId = `dsh-agent-team/${basename(file)}`
+    const tagId = `${PACKAGE_NAME}/${basename(file)}`
     return [
       `const css = ${JSON.stringify(result.code.toString())};`,
       `const tagId = ${JSON.stringify(tagId)};`,
       'if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {',
       '  const tag = document.createElement("style");',
-      '  tag.dataset.plugin = "dsh-agent-team";',
+      `  tag.dataset.plugin = ${JSON.stringify(PACKAGE_NAME)};`,
       '  tag.dataset.pluginCss = tagId;',
       '  tag.textContent = css;',
       '  document.head.appendChild(tag);',
@@ -74,7 +75,7 @@ export default defineConfig([
     plugins: [cssModulesPlugin],
     outputOptions: {
       entryFileNames: 'client.js',
-      banner: 'window.__ModuleLoader__.load({ id: "dsh-agent-team", factory: (require) => {',
+      banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PACKAGE_NAME)}, factory: (require) => {`,
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },

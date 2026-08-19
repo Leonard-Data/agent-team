@@ -1,24 +1,245 @@
-# dsh-agent-team
+# Agent Team for DeepSeek Harness
 
-DeepSeek Harness Web Profile 插件，用于创建助手模板、手工组建由多个平级独立 Agent 组成的团队，并让成员在同一个 Workspace 中协作。
+English | [简体中文](./README_CN.md)
 
-当前实现以 DeepSeek Harness `0.1.0-rc.6` 为兼容基线。详细技术设计和分阶段清单见 [`docs/README.md`](./docs/README.md)。
+[![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
+[![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
-已实现内置“团队 Agent 小助手”对话创建助手模板、创建时选择可用 Skills 和 MCP Servers、手工组建团队、独立 Agent 启动、共享 Workspace、基础任务板、成员信箱、Web UI 和冷恢复。MCP 连接由 Harness Profile/Preset 通过官方 `@deepseek-ai/dsh-mcp-client` 统一配置，助手模板只保存允许使用的 Server 名称，不保存凭据。当前完成范围与尚未完成项见 [`docs/09-implementation-status.md`](./docs/09-implementation-status.md)。
+Build teams of independent AI agents inside DeepSeek Harness. Mix models and providers, assign one Leader, and let every member work in its own conversation while sharing the same Workspace.
 
-内置小助手使用独立的多 Session 对话历史：打开弹窗时恢复最近会话，用户可从左侧历史栏切换或进入“新对话”草稿。草稿只存在于当前界面，发送首条消息时才创建真实 Session；未发送的草稿不进入历史、不能归档，旧版本遗留的空 Session 也不再展示。闲置历史可通过 Harness 官方 `workspaceRegistry.archiveSession` 归档；归档后会话从历史中移除，底层 Session 日志仍由 Harness 保留。每个会话通过当前 Profile 的默认可用模型启动，并优先采用 `read-only` 权限预设；对话窗口可选择 Provider/模型，选择会持久化，每个历史会话恢复自己的模型，新会话继承最近一次选择。也可用 `assistantBuilderProvider`、`assistantBuilderModel`、`assistantBuilderAgentPresetId` 和 `assistantBuilderPermissionPresetId` 设置首次使用的默认运行配置。它只允许执行目录读取、草稿校验和确认提交三个专用工具。创建采用服务端强制两阶段流程：草稿按 Session 隔离，先暂存已校验草稿，再等待用户在新消息中用自然语言明确同意最终配置后提交；进程重启或同一 Session 重新准备草稿会使旧草稿失效。
+Agent Team does **not** turn members into subagents. Every member is an independent root agent with its own model, session, context, permissions, reasoning mode, and tool activity. Team tasks, messages, and the shared Workspace provide the collaboration layer.
 
-## 开发
+![Agent Team workbench](./demo/4.png)
 
-```sh
-npm install
-npm run check
+## Why Independent Agents Instead of One Overloaded Agent?
+
+Agent Team is designed around a simple idea: **give specialized work to a specialized agent**.
+
+A common parent/subagent workflow reuses or inherits much of the parent runtime configuration. That is convenient, but it can make every task carry the same expensive model, broad tool catalog, and growing context. A small commit-message task, for example, may still run through the same high-capability model used for architecture and implementation.
+
+Agent Team lets every member have an explicit, focused configuration:
+
+| Concern | Common parent/subagent setup | Agent Team |
+| --- | --- | --- |
+| Model | Often reuses the parent model or one shared model policy | Choose a different provider and model for every member |
+| Skills and MCP | A broad catalog may be inherited or exposed everywhere | Give each role only the Skills and MCP Servers it needs |
+| Context | Planning, execution, tool output, and results accumulate together | Every member has an isolated Session and context window |
+| Cost | Simple work may still consume an expensive general model | Route routine work to smaller or specialized models |
+| Permissions | One broad permission policy can spread across the workflow | Set least-privilege defaults and runtime permissions per member |
+
+This separation keeps the Leader focused on planning and verification, keeps specialists focused on execution, reduces irrelevant tool choices, and prevents one agent's context from growing with every detail produced by the whole team. Members send tasks, progress, and results explicitly instead of sharing an ever-expanding conversation.
+
+> Subagent behavior varies by framework. The comparison above describes the common parent-inherited pattern; Agent Team's advantage is that model, tools, permissions, and context isolation are explicit product-level choices for every member.
+
+### Example: Use the Right Model for Each Job
+
+Consider a software development team with three specialized members:
+
+| Role | Model | Focused configuration |
+| --- | --- | --- |
+| Architecture Leader | GPT | Understand the requirement, design the solution, split work, coordinate members, and verify results |
+| Coding Agent | GLM | Load coding Skills and development MCP tools, modify the Workspace, and run tests |
+| Commit Assistant | DeepSeek Flash | Read Git status and diffs, then generate a Conventional Commit message with read-only permission |
+
+The GPT Leader spends its context on decisions and verification instead of every implementation detail. GLM receives the codebase context and tools required for execution. DeepSeek Flash handles the narrow commit task quickly without paying for the Leader's higher-capability model or loading the coding agent's large tool catalog.
+
+The collaboration flow is explicit:
+
+```text
+User goal → GPT Leader plans and assigns work
+          → GLM Coding Agent implements and reports test results
+          → GPT Leader verifies the result
+          → DeepSeek Flash Commit Assistant summarizes the Git diff
 ```
 
-## 安装到 Harness Profile
+## What You Can Do
 
-```sh
-dsh plugin --profile <profile-name> add github:limuyang2/agent-team
+- Create reusable assistants for planning, coding, testing, review, documentation, or any other role.
+- Mix providers and models in one team—for example, a Codex Leader with GLM coding members.
+- Create assistants manually or describe a role to the built-in **Team Agent Assistant**.
+- Add the same assistant more than once; every selection becomes an independent team member.
+- Watch all members side by side with streaming output, Markdown, Think blocks, and tool calls.
+- Let the Leader create tasks, assign members, track progress, and collect results.
+- Send messages directly to the Leader or, when enabled, to regular members.
+- Change a member's permission preset and reasoning mode for the current session.
+- Inspect loaded Skills, context usage, token statistics, and cache hit rate.
+- Browse shared Workspace files and preview Git changes and diffs.
+- Add or remove members, change the Leader, reset all contexts, or dissolve a team.
+
+## Screenshots
+
+### Create an Assistant by Conversation
+
+Describe the role you need. The built-in assistant collects missing settings, prepares the long-term instructions, and creates the assistant only after your confirmation.
+
+![Create an assistant by conversation](./demo/1.png)
+
+### Reusable Assistant Library
+
+Manage assistants under **Settings → Agent Team**. Each assistant can use a different provider, model, preset, default permission, reasoning mode, Skills, MCP Servers, and role instructions.
+
+![Assistant library](./demo/2.png)
+
+### Build a Team
+
+Select members, assign exactly one Leader, choose a Workspace, and decide whether direct communication with regular members is allowed.
+
+![Build a team](./demo/3.png)
+
+### Sidebar Integration
+
+Teams appear directly in the Harness sidebar. Use the `+` button to create a team, then switch between existing teams without leaving your normal Harness workflow.
+
+<img src="./demo/5.png" alt="Agent Team in the Harness sidebar" width="320" />
+
+## Requirements
+
+- Node.js `22.19.0+` or `24.0.0+`
+- DeepSeek Harness `0.1.0-rc.7`
+- `pnpm` available on `PATH` (Harness uses it to manage Profile plugins)
+
+Install pnpm if necessary:
+
+```bash
+npm install -g pnpm
 ```
 
-首版只支持 `dsh web`。团队可以解散：插件会停止成员、解除 Workspace Session 关联并删除团队领域数据，但不删除助手模板或 Workspace 文件。Harness 当前公开 Session Persistence API 不支持删除历史日志，因此旧 Session 日志会保留在 Harness 底层，但不再归属、恢复或展示于已解散团队。
+## Installation
+
+Install Agent Team into the Harness `web` Profile:
+
+```bash
+npx @deepseek-ai/dsh plugin --profile web add @limuyang2/dsh-agent-team
+```
+
+Start Harness:
+
+```bash
+npx @deepseek-ai/dsh web
+```
+
+Open the URL printed by Harness, normally <http://127.0.0.1:3080/>. Restart Harness after installing or replacing the plugin.
+
+## Quick Start
+
+### 1. Configure Models in Harness
+
+Configure the providers, models, and credentials you want to use in Harness first. Agent Team reads the model catalog from the active Profile and never stores provider API keys.
+
+### 2. Create Assistants
+
+Open **Settings → Agent Team** and choose one of the following:
+
+- **Start Conversation** to design an assistant through chat.
+- **Create Manually** to configure all fields directly.
+
+A practical first team usually contains:
+
+- A **Leader** that understands goals, plans work, delegates tasks, and verifies results.
+- One or more **members** focused on implementation, testing, review, or documentation.
+
+### 3. Create a Team
+
+Click the `+` next to **Team** in the Harness sidebar:
+
+1. Add assistants from the list. You may add the same assistant multiple times.
+2. Select exactly one member as the Leader.
+3. Enter a team name and choose a Workspace.
+4. Choose whether users may chat directly with regular members.
+5. Click **Create and Start**.
+
+The team starts automatically and opens in the full-screen workbench.
+
+### 4. Give the Leader a Goal
+
+Send the complete objective to the Leader. The Leader can split it into tasks, assign members, receive progress updates, and verify the final output. You can also talk to an individual member directly when the team policy allows it.
+
+## Workbench Guide
+
+Each visible column is a real, independent Harness session.
+
+- **Member tabs:** show or hide conversations. Hover a non-Leader tab to remove that member.
+- **Conversation header:** shows role, provider, model, reasoning mode, and live status. Double-click it to enlarge the conversation.
+- **Composer:** send messages, attach local files, mention Workspace files, stop generation, and change runtime settings.
+- **Permission:** applies to the selected member's current session. The assistant template only supplies the initial default.
+- **Reasoning mode:** applies from the next turn and only shows options supported by the selected model.
+- **Info:** displays the Skills loaded for the member.
+- **Context ring:** displays context usage, input/output tokens, and cache hit rate.
+- **Workspace:** browse files, refresh manually, watch file changes, and preview Git diffs.
+
+## Team Collaboration
+
+The Leader and members communicate through explicit team tools and messages:
+
+- The Leader creates tasks and assigns them to member instances.
+- Assigned members receive the task in their own session.
+- Members report running, completed, or failed status with a result.
+- Status and result updates automatically reach the Leader.
+- Members can send direct team messages when clarification is needed.
+- Membership changes are delivered to the Leader with stable member IDs.
+
+Members share a Workspace, but they do not share conversation history. This keeps roles and model contexts isolated while allowing them to work on the same files.
+
+## Team Management
+
+- **Add member:** starts a new independent member from an assistant snapshot and notifies the Leader.
+- **Remove member:** stops and archives that member's session, removes it from the team, and notifies the Leader.
+- **Change Leader:** changes the role without replacing the member's current session.
+- **Clear tasks and context:** stops all members, clears team tasks and queued messages, and gives every remaining member a new session. Team settings and Workspace files stay unchanged.
+- **Dissolve team:** permanently removes the team, its tasks, and team messages. Assistant templates and Workspace files are not deleted.
+
+Assistant settings are snapshotted when a member joins a team. Editing an assistant later does not hot-update existing members; remove and add the member again to apply the new configuration.
+
+## Important Behavior
+
+- The assistant's permission setting is only the member's initial default.
+- Reasoning options come from Harness model capabilities; unsupported options are not invented by the plugin.
+- MCP credentials remain in the Harness Profile. Assistant templates only store allowed server names.
+- Files selected from outside the Workspace are copied to `.agent-team/uploads/` so agents can access them reliably.
+- The **Changes** view requires a Git Workspace. Normal folders still support file browsing.
+- Harness currently has no public API for physically deleting one session log. Reset or dissolved sessions are no longer restored or used by Agent Team, but old logs may remain in Harness storage.
+
+## Troubleshooting
+
+### `pnpm not found on PATH`
+
+Run `npm install -g pnpm`, verify `pnpm --version`, and install the plugin again.
+
+### Port `3080` is already in use
+
+Another Harness process is already running. Stop the old process with `Ctrl+C`, then run `npx @deepseek-ai/dsh web` again.
+
+### A model or reasoning option is missing
+
+Refresh the assistant catalog and verify the model configuration in Harness. Reasoning modes only appear when the provider reports that capability.
+
+### An assistant cannot be deleted
+
+The assistant is still referenced by a team member. Remove those members or dissolve the related teams first.
+
+### No Git changes are displayed
+
+Confirm that the selected Workspace itself is a Git repository. A repository nested inside a non-Git Workspace is not treated as the Workspace repository.
+
+## User Documentation
+
+The detailed user guide is available in Chinese:
+
+- [Documentation index](./docs/README.md)
+- [Installation and startup](./docs/installation.md)
+- [Assistant library](./docs/assistants.md)
+- [Creating teams](./docs/creating-teams.md)
+- [Workbench and collaboration](./docs/workbench.md)
+- [Workspace and Git changes](./docs/workspace.md)
+- [Team management](./docs/team-management.md)
+- [Troubleshooting](./docs/troubleshooting.md)
+
+## Links
+
+- [npm package](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
+- [GitHub repository](https://github.com/limuyang2/agent-team)
+- [Issue tracker](https://github.com/limuyang2/agent-team/issues)
+
+## License
+
+MIT
