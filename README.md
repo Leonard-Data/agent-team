@@ -82,6 +82,8 @@ Describe the role you need. The built-in assistant collects missing settings, pr
 
 Manage assistants under **Settings → Agent Team**. Each assistant can use a different provider, model, preset, default permission, reasoning mode, Skills, MCP Servers, and role instructions.
 
+> **Skills and MCP scope:** Agent Team uses Skills and MCP Servers exposed through the standard DeepSeek Harness interfaces. This plugin does not provide installation, updates, or lifecycle management for Skills or MCP Servers. Install the appropriate Harness plugins to manage those resources first; Agent Team only lets an assistant select and use the resources already available in the active Profile.
+
 ![Assistant library](./demo/2.png)
 
 ### Build a Team

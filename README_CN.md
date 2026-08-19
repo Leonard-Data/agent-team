@@ -82,6 +82,8 @@ GPT Leader 的上下文只保留关键决策、任务状态和验收结果，不
 
 在 **设置 → Agent 团队** 中管理助手。每个助手可独立配置 Provider、模型、Agent Preset、默认权限、思考模式、Skills、MCP Servers 和角色规则。
 
+> **Skills 与 MCP 能力边界：** Agent Team 使用 DeepSeek Harness 标准接口提供的 Skills 和 MCP Servers。本插件不提供 Skills 或 MCP Servers 的安装、更新及生命周期管理能力。请先安装相应的 Harness 插件来管理这些资源；Agent Team 只负责让助手选择并使用当前 Profile 中已经可用的资源。
+
 ![助手库](./demo/2.png)
 
 ### 组建团队
