@@ -6,7 +6,7 @@
 
 - Node.js `22.19.0+` 或 `24.0.0+`
 - DeepSeek Harness `0.1.0-rc.7`
-- Agent Team `0.1.1`
+- Agent Team `0.1.2`
 - `pnpm` 已加入终端 `PATH`
 
 检查版本：
@@ -64,7 +64,7 @@ https://registry.npmjs.org/
 拿到 `.tgz` 文件后，在文件所在目录执行：
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.1.tgz
+npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.2.tgz
 ```
 
 文件名中的版本号可能不同，请按实际文件名替换。
@@ -73,10 +73,8 @@ npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.1.t
 
 启动 Harness 后检查两个入口：
 
-1. 左侧栏底部出现 **团队** 区域和 `+` 按钮。
+1. 页面左侧出现用于打开工作台的悬浮 **团队** 按钮；按钮可拖动并会记住位置。
 2. **设置 → Agent 团队** 中出现助手库。
-
-<img src="../demo/5.png" alt="Harness 侧边栏中的团队入口" width="320" />
 
 ## 安装或更新后重启
 
