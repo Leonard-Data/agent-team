@@ -2,6 +2,8 @@
 
 English | [简体中文](./README_CN.md)
 
+![Agent Team — Independent Agents, Shared Workspace](./demo/github-banner.png)
+
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
