@@ -112,6 +112,8 @@ npm install -g pnpm
 
 ## 安装
 
+### DeepSeek Harness Web
+
 将插件安装到 Harness 的 `web` Profile：
 
 ```bash
@@ -125,6 +127,16 @@ npx @deepseek-ai/dsh web
 ```
 
 打开终端输出的地址，通常是 <http://127.0.0.1:3080/>。安装或替换插件后，请重启 Harness。
+
+### DeepSeek Harness Desktop
+
+使用下面的命令将确定版本的 Agent Team 安装到 DeepSeek Harness Desktop 管理的 Profile：
+
+```bash
+dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.2
+```
+
+命令完成后完全退出并重新打开 DeepSeek Harness Desktop。`--save-exact` 会将 Desktop Profile 固定到经过验证的插件版本，避免自动升级到后续版本。
 
 ## 卸载
 
