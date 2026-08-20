@@ -1170,8 +1170,9 @@
 }
 
 .assistantBuilderModelSelect {
+  flex: 0 1 320px;
   min-width: 0;
-  max-width: 220px;
+  max-width: 320px;
   height: 34px;
   padding: 0 10px;
   border: 1px solid var(--dsw-alias-border-l2);

@@ -396,7 +396,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           ? '正在思考'
           : '可以对话'
   const providers = catalog?.providers ?? []
-  const models = catalog?.models[selectedProvider] ?? []
+  const modelSelection = JSON.stringify([selectedProvider, selectedModel])
   const appliedConfiguration = conversation?.configuration ?? draft?.configuration
   const modelChanged = appliedConfiguration !== undefined && (
     selectedProvider !== appliedConfiguration.provider
@@ -457,31 +457,28 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         </span>
         <div className={css.assistantBuilderModelControls}>
           <select
-            value={selectedProvider}
+            value={modelSelection}
             onChange={event => {
-              const provider = event.target.value
+              const [provider, model] = JSON.parse(event.target.value) as [string, string]
               setSelectedProvider(provider)
-              setSelectedModel(catalog?.models[provider]?.[0]?.id ?? '')
+              setSelectedModel(model)
               setModelSelectionDirty(true)
             }}
             className={css.assistantBuilderModelSelect}
-            aria-label="小助手 Provider"
+            aria-label="小助手模型目录"
             disabled={loading || running || applyingModel}
           >
-            {providers.map(provider => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
-          </select>
-          <select
-            value={selectedModel}
-            onChange={event => {
-              setSelectedModel(event.target.value)
-              setModelSelectionDirty(true)
-            }}
-            className={css.assistantBuilderModelSelect}
-            aria-label="小助手模型"
-            disabled={loading || running || applyingModel}
-          >
-            {models.map(model => (
-              <option key={model.id} value={model.id}>{model.name === model.id ? model.id : `${model.name}（${model.id}）`}</option>
+            {providers.map(provider => (
+              <optgroup key={provider.id} label={provider.name}>
+                {(catalog?.models[provider.id] ?? []).map(model => (
+                  <option
+                    key={`${provider.id}/${model.id}`}
+                    value={JSON.stringify([provider.id, model.id])}
+                  >
+                    {model.name === model.id ? model.id : `${model.name}（${model.id}）`}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <Button
