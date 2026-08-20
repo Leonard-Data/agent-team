@@ -56,7 +56,7 @@ export interface MutationOptions {
 
 export interface AgentTeamChange {
   cursor: number
-  entityType: 'assistant' | 'assistant-builder' | 'team' | 'operation' | 'conversation' | 'workspace'
+  entityType: 'assistant' | 'assistant-builder' | 'team' | 'operation' | 'conversation' | 'workspace' | 'catalog'
   entityId: string
   revision: number
   kind: string
@@ -134,6 +134,9 @@ export class AgentTeamService extends Service {
         this.ctx.logger.warn(`agent-team: Workspace watcher failed for team '${teamId}'`, error)
       },
     )
+    ctx.on('llm/adapters-updated', () => {
+      this.publish('catalog', 'models', 0, 'catalog.models_updated')
+    })
   }
 
   subscribe(listener: (change: AgentTeamChange) => void): () => void {

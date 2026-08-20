@@ -124,6 +124,7 @@ function FloatingTeamLauncher({ hasExecutingTeam }: { hasExecutingTeam: boolean 
   const [dragPosition, setDragPosition] = useState<FloatingLauncherPosition>()
   const [dragging, setDragging] = useState(false)
   const [dockSettled, setDockSettled] = useState(false)
+  const [tooltipSuppressed, setTooltipSuppressed] = useState(false)
   const dragRef = useRef<{
     pointerId: number
     pointerX: number
@@ -218,7 +219,11 @@ function FloatingTeamLauncher({ hasExecutingTeam }: { hasExecutingTeam: boolean 
       : { left: placement.position.x, top: placement.position.y }
 
   return (
-    <Tooltip label="打开团队工作台" delayMs={400}>
+    <Tooltip
+      label="打开团队工作台"
+      delayMs={400}
+      disabled={dragging || tooltipSuppressed}
+    >
       <button
         type="button"
         className={`${css.floatingTeamLauncher} ${dragging ? css.floatingTeamLauncherDragging : ''} ${dockSettled ? css.floatingTeamLauncherSettled : ''}`}
@@ -232,6 +237,7 @@ function FloatingTeamLauncher({ hasExecutingTeam }: { hasExecutingTeam: boolean 
         }}
         onPointerDown={event => {
           if (event.button !== 0) return
+          setTooltipSuppressed(true)
           const currentPlacement = placement ?? defaultFloatingLauncherPlacement()
           const current = clampFloatingLauncherPosition(currentPlacement.position)
           const currentDragPosition = clampFloatingLauncherDragPosition({
@@ -277,6 +283,9 @@ function FloatingTeamLauncher({ hasExecutingTeam }: { hasExecutingTeam: boolean 
         }}
         onPointerLeave={() => {
           if (!dragging) setDockSettled(false)
+        }}
+        onMouseLeave={() => {
+          setTooltipSuppressed(false)
         }}
         aria-label={hasExecutingTeam ? '打开团队工作台，有团队正在执行任务' : '打开团队工作台'}
       >

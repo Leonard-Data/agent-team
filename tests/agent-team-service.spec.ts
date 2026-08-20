@@ -31,6 +31,20 @@ const config: Config = {
 }
 
 describe('AgentTeamService', () => {
+  it('announces model directory changes so open selectors refresh', () => {
+    const { ctx, service } = createHarness()
+    const listener = vi.fn()
+    service.subscribe(listener)
+
+    ctx.emit('llm/adapters-updated')
+
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+      entityType: 'catalog',
+      entityId: 'models',
+      kind: 'catalog.models_updated',
+    }))
+  })
+
   it('reuses identical uploads and only renames same-name files with different content', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'agent-team-upload-'))
     try {
