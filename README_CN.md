@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
-当前版本：`0.1.2`
+当前版本：`0.1.3`
 
 在 DeepSeek Harness 中组建由多个独立 AI Agent 构成的团队。你可以混用不同模型和 Provider，指定唯一 Leader，让每位成员拥有独立对话和上下文，同时在同一个 Workspace 中协作。
 
@@ -133,7 +133,7 @@ npx @deepseek-ai/dsh web
 使用下面的命令将确定版本的 Agent Team 安装到 DeepSeek Harness Desktop 管理的 Profile：
 
 ```bash
-dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.2
+dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.3
 ```
 
 命令完成后完全退出并重新打开 DeepSeek Harness Desktop。`--save-exact` 会将 Desktop Profile 固定到经过验证的插件版本，避免自动升级到后续版本。

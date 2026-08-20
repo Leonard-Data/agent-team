@@ -7,7 +7,7 @@ English | [简体中文](./README_CN.md)
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
-Current release: `0.1.2`
+Current release: `0.1.3`
 
 Build teams of independent AI agents inside DeepSeek Harness. Mix models and providers, assign one Leader, and let every member work in its own conversation while sharing the same Workspace.
 
@@ -133,7 +133,7 @@ Open the URL printed by Harness, normally <http://127.0.0.1:3080/>. Restart Harn
 Install the exact Agent Team release into the Profile managed by DeepSeek Harness Desktop:
 
 ```bash
-dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.2
+dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.3
 ```
 
 Quit and reopen DeepSeek Harness Desktop after the command completes. `--save-exact` keeps the Desktop Profile pinned to the tested plugin version instead of automatically moving to a newer release.
