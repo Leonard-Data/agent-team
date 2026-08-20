@@ -112,6 +112,8 @@ npm install -g pnpm
 
 ## Installation
 
+### DeepSeek Harness Web
+
 Install Agent Team into the Harness `web` Profile:
 
 ```bash
@@ -125,6 +127,16 @@ npx @deepseek-ai/dsh web
 ```
 
 Open the URL printed by Harness, normally <http://127.0.0.1:3080/>. Restart Harness after installing or replacing the plugin.
+
+### DeepSeek Harness Desktop
+
+Install the exact Agent Team release into the Profile managed by DeepSeek Harness Desktop:
+
+```bash
+dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.2
+```
+
+Quit and reopen DeepSeek Harness Desktop after the command completes. `--save-exact` keeps the Desktop Profile pinned to the tested plugin version instead of automatically moving to a newer release.
 
 ## Uninstallation
 
