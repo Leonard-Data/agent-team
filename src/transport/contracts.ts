@@ -51,6 +51,7 @@ export const AGENT_TEAM_METHODS = [
   'team.member.setPermissionPreset',
   'team.member.setReasoningEffort',
   'team.workspace.list',
+  'team.workspace.search',
   'team.workspace.changes',
   'team.workspace.diff',
   'team.dissolve',
@@ -89,6 +90,8 @@ export interface SkillCatalogView {
     name: string
     description: string
     source: string
+    modelInvocable: boolean
+    userInvocable: boolean
   }>
 }
 
@@ -367,6 +370,10 @@ export interface AgentTeamRequestMap {
   }
   'team.workspace.list': {
     payload: { teamId: string; path?: string }
+    result: WorkspaceEntryView[]
+  }
+  'team.workspace.search': {
+    payload: { teamId: string; query?: string; limit?: number }
     result: WorkspaceEntryView[]
   }
   'team.workspace.changes': { payload: { teamId: string }; result: WorkspaceGitStatusView }

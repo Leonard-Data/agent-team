@@ -10,7 +10,7 @@ import {
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import { isModelInvocable } from '@deepseek-ai/dsh-skill'
+import { isModelInvocable, isUserInvocable } from '@deepseek-ai/dsh-skill'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
@@ -808,7 +808,9 @@ export class TeamRuntime {
           cwd: team.workspacePath,
           scope: agent,
         })
-        const available = new Set(skills.filter(isModelInvocable).map(skill => skill.name))
+        const available = new Set(skills
+          .filter(skill => isModelInvocable(skill) || isUserInvocable(skill))
+          .map(skill => skill.name))
         const missing = [...selectedSkills].filter(name => !available.has(name))
         if (missing.length > 0) {
           throw new AgentTeamError(

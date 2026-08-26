@@ -101,7 +101,7 @@ A compact floating button opens the full-screen Team workbench without competing
 ## Requirements
 
 - Node.js `22.19.0+` or `24.0.0+`
-- DeepSeek Harness `0.1.0-rc.7`
+- DeepSeek Harness `0.1.1-rc.2`
 - `pnpm` available on `PATH` (Harness uses it to manage Profile plugins)
 
 Install pnpm if necessary:
@@ -214,7 +214,7 @@ Each visible column is a real, independent Harness session.
 
 - **Member tabs:** show or hide conversations. Hover a non-Leader tab to remove that member.
 - **Conversation header:** shows role, provider, model, reasoning mode, and live status. Double-click it to enlarge the conversation.
-- **Composer:** send messages, attach local files, mention Workspace files, stop generation, and change runtime settings.
+- **Composer:** send messages; type `/` to invoke an allowed Skill; type `@` to search and mention Workspace files; attach local files, stop generation, and change runtime settings.
 - **Permission:** applies to the selected member's current session. The assistant template only supplies the initial default.
 - **Reasoning mode:** applies from the next turn and only shows options supported by the selected model.
 - **Info:** displays the Skills loaded for the member.

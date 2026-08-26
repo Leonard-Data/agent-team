@@ -101,7 +101,7 @@ GPT Leader 的上下文只保留关键决策、任务状态和验收结果，不
 ## 环境要求
 
 - Node.js `22.19.0+` 或 `24.0.0+`
-- DeepSeek Harness `0.1.0-rc.7`
+- DeepSeek Harness `0.1.1-rc.2`
 - 终端中可以使用 `pnpm`（Harness 使用它管理 Profile 插件）
 
 如果尚未安装 pnpm：
@@ -214,7 +214,7 @@ npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
 
 - **成员标签**：控制对话列的显示与隐藏；鼠标悬停在非 Leader 标签上可以移出成员。
 - **对话标题**：展示角色、Provider、模型、思考模式和实时状态；双击可以放大该成员对话。
-- **输入框**：发送消息、添加本地文件、引用 Workspace 文件、停止输出和修改运行配置。
+- **输入框**：发送消息；输入 `/` 调用当前成员允许的 Skill；输入 `@` 搜索并引用 Workspace 文件；也可上传本地文件、停止输出和修改运行配置。
 - **权限**：只影响当前成员的当前 Session；助手模板仅提供初始默认值。
 - **思考模式**：从下一轮开始生效，只展示当前模型支持的档位。
 - **Info**：查看成员当前加载的 Skills。

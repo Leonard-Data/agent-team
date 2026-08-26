@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import { isModelInvocable, isSkillName } from '@deepseek-ai/dsh-skill'
+import { isModelInvocable, isSkillName, isUserInvocable } from '@deepseek-ai/dsh-skill'
 import type { Config } from '../config.js'
 import { AgentTeamError } from '../domain/errors.js'
 import { isMcpServerName, mcpServerFromToolName } from '../domain/mcp.js'
@@ -83,6 +83,8 @@ export interface SkillCatalogSnapshot {
     name: string
     description: string
     source: string
+    modelInvocable: boolean
+    userInvocable: boolean
   }>
 }
 
@@ -243,10 +245,12 @@ export class AgentTeamService extends Service {
       const skills = await this.ctx.skills.list({ scope })
       return {
         agentPresetId,
-        skills: skills.filter(isModelInvocable).map(skill => ({
+        skills: skills.filter(skill => isModelInvocable(skill) || isUserInvocable(skill)).map(skill => ({
           name: skill.name,
           description: skill.description,
           source: skill.source,
+          modelInvocable: isModelInvocable(skill),
+          userInvocable: isUserInvocable(skill),
         })),
       }
     } catch (error) {
@@ -770,6 +774,10 @@ export class AgentTeamService extends Service {
 
   async listWorkspace(teamId: string, rawPath = ''): Promise<WorkspaceEntryView[]> {
     return this.workspace.list(teamId, rawPath)
+  }
+
+  async searchWorkspace(teamId: string, query = '', limit = 40): Promise<WorkspaceEntryView[]> {
+    return this.workspace.search(teamId, query, limit)
   }
 
   async getWorkspaceChanges(teamId: string): Promise<WorkspaceGitStatusView> {

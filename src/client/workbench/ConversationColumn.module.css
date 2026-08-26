@@ -698,6 +698,7 @@
 }
 
 .composer {
+  position: relative;
   flex: none;
   margin: 0 12px 12px;
   padding: 9px 10px 9px;
@@ -705,6 +706,88 @@
   border-radius: 16px;
   background: var(--dsw-alias-bg-layer-2);
   box-shadow: var(--dsw-alias-shadow-l1);
+}
+
+.composerTriggerMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 12;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-alias-shadow-l2, var(--dsw-alias-shadow-l1));
+}
+
+.composerTriggerHeading {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 11px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.composerTriggerHeading strong {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.composerTriggerOptions {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.composerTriggerOption {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.composerTriggerOption:hover,
+.composerTriggerOptionActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.composerTriggerOption strong,
+.composerTriggerOption span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.composerTriggerOption strong {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.composerTriggerOption span,
+.composerTriggerEmpty {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.composerTriggerEmpty {
+  display: block;
+  padding: 12px 9px;
+  text-align: center;
 }
 
 .composer:focus-within {
