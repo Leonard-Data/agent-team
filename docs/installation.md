@@ -5,7 +5,7 @@
 ## 环境要求
 
 - Node.js `22.19.0+` 或 `24.0.0+`
-- DeepSeek Harness `0.1.0-rc.7`
+- DeepSeek Harness `0.1.1-rc.2`
 - Agent Team `0.1.2`
 - `pnpm` 已加入终端 `PATH`
 

@@ -42,7 +42,7 @@
 | Agent Preset | 决定基础提示、可用工具和运行方式 |
 | 默认权限 | 成员首次启动时使用的权限，可在工作台修改 |
 | 思考模式 | 模型支持时，从 Harness 能力目录中选择强度 |
-| Skills | 允许模型按需加载的技能 |
+| Skills | 允许模型按需加载或由用户通过 `/` 调用的技能 |
 | MCP Servers | 允许使用的已配置 MCP Server |
 | 助手规则 | 长期角色、职责、约束和汇报方式 |
 
@@ -72,7 +72,7 @@
 
 ## Skills 与 MCP
 
-- Skills 来自所选 Agent Preset 的可用目录，助手只保存允许加载的名称。
+- Skills 来自所选 Agent Preset 的可用目录，助手只保存允许使用的名称；仅支持用户调用的 Skill 会标记为“仅斜杠调用”。
 - MCP 连接和凭据由 Harness Profile 管理，助手只保存允许使用的 Server 名称。
 - 如果列表为空，先检查 Harness Profile 和 Agent Preset 的配置。
 

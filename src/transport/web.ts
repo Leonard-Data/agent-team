@@ -404,6 +404,14 @@ async function dispatch(service: AgentTeamService, request: AgentTeamRequest): P
       }).strict().parse(request.payload)
       return service.listWorkspace(payload.teamId, payload.path)
     }
+    case 'team.workspace.search': {
+      const payload = z.object({
+        teamId: z.string().min(1),
+        query: z.string().max(4096).optional(),
+        limit: z.int().min(1).max(100).optional(),
+      }).strict().parse(request.payload)
+      return service.searchWorkspace(payload.teamId, payload.query, payload.limit)
+    }
     case 'team.workspace.changes': {
       const payload = z.object({ teamId: z.string().min(1) }).strict().parse(request.payload)
       return service.getWorkspaceChanges(payload.teamId)

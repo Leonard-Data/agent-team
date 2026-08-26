@@ -992,7 +992,7 @@ function AssistantForm({
                   }}
                 />
                 <span className={css.skillOptionText}>
-                  <strong>{skill.name}</strong>
+                  <strong>{skill.name}{!skill.modelInvocable && skill.userInvocable ? ' · 仅斜杠调用' : ''}</strong>
                   <small>{skill.description}</small>
                 </span>
               </label>

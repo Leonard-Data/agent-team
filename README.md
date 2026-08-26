@@ -7,7 +7,7 @@ English | [简体中文](./README_CN.md)
 [![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 [![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
 
-Current release: `0.1.3`
+Current release: `0.1.4`
 
 Build teams of independent AI agents inside DeepSeek Harness. Mix models and providers, assign one Leader, and let every member work in its own conversation while sharing the same Workspace.
 
@@ -101,7 +101,7 @@ A compact floating button opens the full-screen Team workbench without competing
 ## Requirements
 
 - Node.js `22.19.0+` or `24.0.0+`
-- DeepSeek Harness `0.1.0-rc.7`
+- DeepSeek Harness `0.1.1-rc.2`
 - `pnpm` available on `PATH` (Harness uses it to manage Profile plugins)
 
 Install pnpm if necessary:
@@ -133,7 +133,7 @@ Open the URL printed by Harness, normally <http://127.0.0.1:3080/>. Restart Harn
 Install the exact Agent Team release into the Profile managed by DeepSeek Harness Desktop:
 
 ```bash
-dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.3
+dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.4
 ```
 
 Quit and reopen DeepSeek Harness Desktop after the command completes. `--save-exact` keeps the Desktop Profile pinned to the tested plugin version instead of automatically moving to a newer release.
@@ -214,7 +214,7 @@ Each visible column is a real, independent Harness session.
 
 - **Member tabs:** show or hide conversations. Hover a non-Leader tab to remove that member.
 - **Conversation header:** shows role, provider, model, reasoning mode, and live status. Double-click it to enlarge the conversation.
-- **Composer:** send messages, attach local files, mention Workspace files, stop generation, and change runtime settings.
+- **Composer:** send messages; type `/` to invoke an allowed Skill; type `@` to search and mention Workspace files; attach local files, stop generation, and change runtime settings.
 - **Permission:** applies to the selected member's current session. The assistant template only supplies the initial default.
 - **Reasoning mode:** applies from the next turn and only shows options supported by the selected model.
 - **Info:** displays the Skills loaded for the member.

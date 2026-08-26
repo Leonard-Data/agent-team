@@ -1,4 +1,5 @@
 import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -73,6 +74,56 @@ export class WorkspaceService {
         return left.name.localeCompare(right.name)
       })
       .slice(0, 500)
+  }
+
+  async search(teamId: string, rawQuery = '', limit = 40): Promise<WorkspaceEntryView[]> {
+    const team = await this.requireWorkspace(teamId)
+    const root = await realpath(team.workspacePath)
+    const query = rawQuery.trim().replaceAll('\\', '/').toLocaleLowerCase()
+    const boundedLimit = Math.max(1, Math.min(limit, 100))
+    const pendingDirectories = ['']
+    const matches: WorkspaceEntryView[] = []
+    let inspectedEntries = 0
+
+    while (pendingDirectories.length > 0 && inspectedEntries < 20_000) {
+      const directory = pendingDirectories.shift()!
+      const requested = resolve(root, directory)
+      let target: string
+      try {
+        target = await realpath(requested)
+      } catch {
+        continue
+      }
+      if (target !== root && !target.startsWith(`${root}${sep}`)) continue
+
+      let entries: Array<Dirent<string>>
+      try {
+        entries = await readdir(target, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      entries.sort((left, right) => left.name.localeCompare(right.name))
+      for (const entry of entries) {
+        inspectedEntries += 1
+        if (inspectedEntries > 20_000) break
+        if (entry.name === '.git' || entry.name === 'node_modules') continue
+        if (entry.isSymbolicLink()) continue
+        const path = relative(root, resolve(target, entry.name)).split(sep).join('/')
+        if (entry.isDirectory()) {
+          pendingDirectories.push(path)
+          continue
+        }
+        if (!entry.isFile() || (query.length > 0 && !path.toLocaleLowerCase().includes(query))) continue
+        matches.push({ name: entry.name, path, kind: 'file' })
+        if (query.length === 0 && matches.length >= boundedLimit) return matches
+      }
+    }
+
+    return matches
+      .sort((left, right) => workspaceSearchRank(left.path, query) - workspaceSearchRank(right.path, query)
+        || left.path.length - right.path.length
+        || left.path.localeCompare(right.path))
+      .slice(0, boundedLimit)
   }
 
   async changes(teamId: string): Promise<WorkspaceGitStatusView> {
@@ -167,6 +218,16 @@ export class WorkspaceService {
     this.watch(team.id, team.workspacePath)
     return team
   }
+}
+
+function workspaceSearchRank(path: string, query: string): number {
+  if (query.length === 0) return 0
+  const normalized = path.toLocaleLowerCase()
+  const name = basename(path).toLocaleLowerCase()
+  if (name.startsWith(query)) return 0
+  if (normalized.startsWith(query)) return 1
+  if (name.includes(query)) return 2
+  return 3
 }
 
 function safeUploadName(rawName: string): string {

@@ -205,7 +205,7 @@ describe('AgentTeamService', () => {
     expect(ASSISTANT_BUILDER_PROMPT).toContain('优先调用 ask_user_question')
   })
 
-  it('lists only model-invocable Skills for the chosen Agent Preset', async () => {
+  it('lists model- or user-invocable Skills with their invocation policy', async () => {
     const { service } = createHarness()
 
     await expect(service.skillCatalog('default')).resolves.toEqual({
@@ -214,6 +214,14 @@ describe('AgentTeamService', () => {
         name: 'code-review',
         description: 'Review code changes.',
         source: 'user-agents',
+        modelInvocable: true,
+        userInvocable: true,
+      }, {
+        name: 'manual-only',
+        description: 'Only users may invoke this.',
+        source: 'user-agents',
+        modelInvocable: false,
+        userInvocable: true,
       }],
     })
   })
