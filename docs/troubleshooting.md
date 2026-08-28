@@ -76,4 +76,4 @@ Harness has no public API for physically deleting one session log. Agent Team de
 
 ## Report an Issue
 
-Open a [GitHub issue](https://github.com/limuyang2/agent-team/issues) with Harness and plugin versions, Provider/model names without credentials, reproducible steps, sanitized terminal errors and screenshots, and whether refresh or restart recovers the problem.
+Open a [GitHub issue](https://github.com/Leonard-Data/agent-team/issues) with Harness and plugin versions, Provider/model names without credentials, reproducible steps, sanitized terminal errors and screenshots, and whether refresh or restart recovers the problem.

@@ -22,21 +22,31 @@ Install pnpm if necessary:
 npm install -g pnpm
 ```
 
-## Install from npm
+## Build This Repository
 
-Run from any directory:
+Clone the English fork and build it locally:
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add @limuyang2/dsh-agent-team
+git clone https://github.com/Leonard-Data/agent-team.git
+cd agent-team
+npm install
+npm run check
+npm pack
 ```
 
-Then start Harness:
+The final command creates `limuyang2-dsh-agent-team-0.1.4.tgz`. The archive retains the existing npm package ID in its filename, but its contents are built from the current `Leonard-Data/agent-team` checkout.
+
+## Install in Harness Web
+
+Remove a previously installed upstream copy if necessary, then add the local archive:
 
 ```bash
+npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
+npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.4.tgz
 npx @deepseek-ai/dsh web
 ```
 
-Open the URL printed in the terminal, normally <http://127.0.0.1:3080/>.
+The remove command is only needed when another version is already installed. Open the URL printed in the terminal, normally <http://127.0.0.1:3080/>.
 
 ## Use the Official npm Registry
 
@@ -49,15 +59,15 @@ npm config get registry
 
 The second command should print `https://registry.npmjs.org/`.
 
-## Install a Local Package
+## Install in Harness Desktop
 
-From the directory containing the `.tgz` file, run:
+From the repository root after `npm pack`, run:
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.4.tgz
+dsh plugin add ./limuyang2-dsh-agent-team-0.1.4.tgz
 ```
 
-Replace the filename when installing a different version.
+Quit and reopen DeepSeek Harness Desktop after installation. Replace the filename when building a different version.
 
 ## Verify Installation
 

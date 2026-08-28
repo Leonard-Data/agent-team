@@ -4,8 +4,7 @@ English | [Simplified Chinese](./README_CN.md)
 
 ![Agent Team — Independent Agents, Shared Workspace](./demo/github-banner.png)
 
-[![npm version](https://img.shields.io/npm/v/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
-[![license](https://img.shields.io/npm/l/@limuyang2/dsh-agent-team.svg)](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
+[![license](https://img.shields.io/github/license/Leonard-Data/agent-team.svg)](./LICENSE)
 
 Current release: `0.1.4`
 
@@ -110,33 +109,64 @@ Install pnpm if necessary:
 npm install -g pnpm
 ```
 
-## Installation
+## Setup from This Repository
+
+Clone this fork, install its locked dependencies, and verify the source:
+
+```bash
+git clone https://github.com/Leonard-Data/agent-team.git
+cd agent-team
+npm install
+npm run check
+```
+
+Build an installable package from the current checkout:
+
+```bash
+npm pack
+```
+
+This creates `limuyang2-dsh-agent-team-0.1.4.tgz` in the repository root. The filename still uses `limuyang2` because the Harness plugin manifest retains the existing npm package ID, but the archive contains the code built from this repository.
 
 ### DeepSeek Harness Web
 
-Install Agent Team into the Harness `web` Profile:
+If the upstream package is already installed, remove it from the `web` Profile first:
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add @limuyang2/dsh-agent-team
+npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
 ```
 
-Start Harness:
+Install the package built from this checkout, then start Harness:
 
 ```bash
+npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.4.tgz
 npx @deepseek-ai/dsh web
 ```
 
-Open the URL printed by Harness, normally <http://127.0.0.1:3080/>. Restart Harness after installing or replacing the plugin.
+Open the URL printed by Harness, normally <http://127.0.0.1:3080/>.
 
 ### DeepSeek Harness Desktop
 
-Install the exact Agent Team release into the Profile managed by DeepSeek Harness Desktop:
+Install the locally built package into the Profile managed by DeepSeek Harness Desktop:
 
 ```bash
-dsh plugin add --save-exact @limuyang2/dsh-agent-team@0.1.4
+dsh plugin add ./limuyang2-dsh-agent-team-0.1.4.tgz
 ```
 
-Quit and reopen DeepSeek Harness Desktop after the command completes. `--save-exact` keeps the Desktop Profile pinned to the tested plugin version instead of automatically moving to a newer release.
+Quit and reopen DeepSeek Harness Desktop after installation.
+
+### Reinstall after Local Changes
+
+After editing the repository, rebuild, validate, and replace the installed package:
+
+```bash
+npm run check
+npm pack
+npx @deepseek-ai/dsh plugin --profile web remove @limuyang2/dsh-agent-team
+npx @deepseek-ai/dsh plugin --profile web add ./limuyang2-dsh-agent-team-0.1.4.tgz
+```
+
+Restart Harness after reinstalling the package.
 
 ## Uninstallation
 
@@ -290,9 +320,8 @@ The detailed user guide is available in English:
 
 ## Links
 
-- [npm package](https://www.npmjs.com/package/@limuyang2/dsh-agent-team)
-- [GitHub repository](https://github.com/limuyang2/agent-team)
-- [Issue tracker](https://github.com/limuyang2/agent-team/issues)
+- [GitHub repository](https://github.com/Leonard-Data/agent-team)
+- [Issue tracker](https://github.com/Leonard-Data/agent-team/issues)
 
 ## License
 

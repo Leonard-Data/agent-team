@@ -66,4 +66,4 @@ All members share one Workspace and can work on the same files. Each member's cu
 
 ## Getting Help
 
-If these guides do not resolve a problem, open a [GitHub issue](https://github.com/limuyang2/agent-team/issues) with the Harness and Agent Team versions, reproduction steps, error text, and sanitized screenshots. Remove API keys, tokens, and private paths first.
+If these guides do not resolve a problem, open a [GitHub issue](https://github.com/Leonard-Data/agent-team/issues) with the Harness and Agent Team versions, reproduction steps, error text, and sanitized screenshots. Remove API keys, tokens, and private paths first.
