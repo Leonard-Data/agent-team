@@ -1,67 +1,31 @@
-# Workspace 与 Git 变更
+# Workspace and Git Changes
 
-[上一篇：工作台与协作](./workbench.md) · [文档首页](./README.md) · [下一篇：团队管理](./team-management.md)
+[Previous: Workbench](./workbench.md) · [Documentation index](./README.md) · [Next: Team management](./team-management.md)
 
-团队所有成员共享一个 Workspace。不同成员可以使用不同权限，但看到的是同一份目录和文件变化。
+Every team member sees the same Workspace and file changes, although each may use different permissions.
 
-## 展开和收起
+## Open the Panel
 
-工作台右上角的 **Workspace** 按钮用于展开面板。面板打开后，可点击收起图标释放更多对话空间。
+Use the **Workspace** button at the top right of the workbench. Collapsing the panel changes only the layout and does not affect member access.
 
-展开或收起只改变界面布局，不影响成员访问 Workspace。
+## Files
 
-## 文件页签
+The **Files** tab displays a directory tree. Expand folders, refresh manually, or let host-side file watching update the view. Only safe paths within the Workspace are shown. Absolute paths, `..`, and symlink traversal outside the Workspace are rejected.
 
-**文件** 页签以目录树展示 Workspace：
+## Changes
 
-- 点击文件夹逐层展开。
-- 新文件和目录变化会自动刷新。
-- 右上角刷新图标可随时手动刷新。
-- 列表只展示 Workspace 范围内的安全路径。
+For a Git Workspace, **Changes** groups conflicted, staged, modified, and untracked files. Click a file for a read-only unified or split diff preview.
 
-为避免路径逃逸，插件会拒绝绝对路径、`..` 和通过符号链接离开 Workspace 的访问。
+If the Workspace root is not a Git repository, the tab says so while file browsing remains available. A repository nested inside a non-Git Workspace is not treated as the Workspace repository; select the repository root when creating the team.
 
-## 变更页签
+## Refresh Behavior
 
-Workspace 是 Git 仓库时，**变更** 页签会分类展示：
+The host tracks file changes and refreshes directory and Git state through the team event connection. Refresh manually after very large external writes, coalesced filesystem events, browser sleep, or connection recovery.
 
-- 冲突文件。
-- 已暂存文件。
-- 已修改文件。
-- 未跟踪文件。
+## Files Selected from the Composer
 
-不同状态使用颜色和状态码区分。点击文件可打开只读 Diff 预览，查看新增、删除和修改内容。
+Browsers cannot safely pass arbitrary absolute local paths to a Host Agent. Selected files are uploaded into `.agent-team/uploads/`, and a Workspace-relative path is inserted into the message. A reusable safe filename is preferred; a new sanitized name is generated only when necessary to avoid a collision.
 
-## 非 Git Workspace
+## Coordinate Concurrent Edits
 
-如果当前 Workspace 不是 Git 仓库，变更页签会明确提示。文件浏览仍然可用。
-
-注意：如果 Workspace 根目录不是仓库，但某个子目录是仓库，插件不会自动把子目录当作 Workspace 仓库。创建团队时应直接选择正确的仓库根目录。
-
-## 自动刷新机制
-
-插件在 Host 端跟踪 Workspace 文件变化，并通过团队事件连接刷新目录和 Git 状态。以下情况仍建议手动刷新：
-
-- 外部工具一次生成大量文件。
-- 文件系统事件被操作系统合并。
-- 浏览器长时间休眠后恢复。
-- 网络断开后刚刚重连。
-
-## 从输入框选择文件
-
-浏览器无法把任意本地绝对路径安全地直接交给 Host Agent。因此，从输入框选择 Workspace 外文件时，插件会：
-
-1. 上传文件内容到团队 Workspace。
-2. 保存到 `.agent-team/uploads/`。
-3. 在消息中插入 Workspace 内路径。
-
-删除附件后再次添加同一文件，会尽量复用可用名称；发生同名冲突时才会生成新的安全文件名。
-
-## 多成员修改建议
-
-多个成员可以同时修改同一 Workspace。为减少冲突：
-
-- 让 Leader 按文件或模块拆分任务。
-- 在任务说明中写清负责文件范围。
-- 修改共享核心文件前先通过团队消息协调。
-- 任务完成后让 Leader查看 Git Diff 并统一验收。
+Multiple members can modify one Workspace at the same time. Reduce conflicts by assigning files or modules explicitly, documenting ownership in tasks, coordinating before editing shared core files, and having the Leader review the final Git diff.

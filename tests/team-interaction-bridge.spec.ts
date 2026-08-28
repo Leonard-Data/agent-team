@@ -23,8 +23,8 @@ describe('TeamInteractionBridge', () => {
           sessionId,
           questions: [{
             id: 'language',
-            question: '选择语言？',
-            options: [{ label: 'TypeScript', description: '推荐' }, { label: 'Rust' }],
+            question: 'Choose a language?',
+            options: [{ label: 'TypeScript', description: 'Recommended' }, { label: 'Rust' }],
           }],
         },
       },
@@ -84,7 +84,7 @@ describe('TeamInteractionBridge', () => {
         sessionId,
         approvalId: 'approval-1' as never,
         toolName: 'bash',
-        reason: '需要访问工作区之外的路径',
+        reason: 'Needs access outside the Workspace',
       },
     }], respond), {
       acceptsSession: () => true,
@@ -106,14 +106,14 @@ describe('normalizeQuestionAnswers', () => {
   it('rejects incomplete and forged option answers', () => {
     const questions = [{
       id: 'model',
-      question: '选择模型？',
+      question: 'Choose a model?',
       options: [{ label: 'DeepSeek' }, { label: 'GLM' }],
     }]
     expect(() => normalizeQuestionAnswers(questions, [])).toThrow(AgentTeamError)
     expect(() => normalizeQuestionAnswers(questions, [{
       id: 'model',
       selected: ['Unknown'],
-    }])).toThrow('包含无效选项')
+    }])).toThrow('contains an invalid option')
   })
 })
 

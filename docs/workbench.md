@@ -1,93 +1,61 @@
-# 工作台与协作
+# Workbench and Collaboration
 
-[上一篇：创建团队](./creating-teams.md) · [文档首页](./README.md) · [下一篇：Workspace](./workspace.md)
+[Previous: Creating teams](./creating-teams.md) · [Documentation index](./README.md) · [Next: Workspace](./workspace.md)
 
-团队创建后会自动进入全屏工作台。左侧切换团队，中间并排显示成员对话，右侧按需展示共享 Workspace。
+The full-screen workbench opens after team creation. Switch teams on the left, use member conversations in the center, and open the shared Workspace on the right.
 
-![多成员工作台](../demo/4.png)
+![Multi-member workbench](../demo/4.png)
 
-## 顶部成员标签
+## Member Tabs
 
-- 点击标签显示或隐藏对应成员对话列。
-- Leader 使用皇冠标识。
-- 状态圆点反映空闲、运行、等待、错误或离线状态。
-- 鼠标悬停非 Leader 标签时，可以直接移出该成员。
-- **添加助手** 打开可复用的助手选择弹窗。
-- **团队管理** 打开成员和团队生命周期管理。
+- Click a tab to show or hide that conversation column.
+- A crown identifies the Leader.
+- Status indicators show idle, running, waiting, error, or offline state.
+- Hover a non-Leader tab to remove that member.
+- **Add assistant** opens the reusable assistant picker.
+- **Manage team** opens member and lifecycle controls.
 
-隐藏对话列不会停止成员，也不会清空它的上下文。
+Hiding a column does not stop the member or clear its context.
 
-## 成员对话列
+## Conversation Columns
 
-每一列都是独立的 Harness Session，包括：
+Every column is an independent Harness session with user messages, Markdown responses, collapsible Think content, tool activity, team messages, Question/Approval cards, member status, and stop controls. Double-click the header to expand a conversation into an overlay.
 
-- 用户消息和助手 Markdown 回复。
-- 可折叠的 **Think · 用时** 内容。
-- 工具名称、运行状态、参数、结果和错误。
-- Leader 指令、成员反馈和团队事件卡片。
-- Question / Approval 等待交互卡片。
-- 成员运行状态和停止操作。
+## Send Messages
 
-双击成员标题可以把该成员对话放大为悬浮窗口，再关闭恢复多列视图。
+- `Enter` sends a message and `Shift+Enter` inserts a new line.
+- Confirming an IME composition does not send the message.
+- A message sent while the member runs is queued according to Harness behavior.
+- The stop button affects only the current member.
 
-## 发送消息
+Describe the full goal to the Leader first, then message a specialist directly when implementation details need clarification.
 
-- `Enter` 发送消息。
-- `Shift+Enter` 换行。
-- 中文或其他输入法正在组词时，确认候选的回车不会发送消息。
-- 成员运行时发送的新消息会按 Harness 当前规则排队处理。
-- 点击圆形停止按钮只停止当前成员，不影响其他成员。
+## Add and Mention Files
 
-建议先向 Leader 描述完整目标，让 Leader 统一分派；需要补充实现细节时，再直接打开具体成员对话。
+Use the paperclip to select local files. They are copied into `.agent-team/uploads/` inside the Workspace and their Agent-readable paths are inserted into the message.
 
-## 添加和引用文件
+Type `@` to search Workspace files. Continue typing to filter, use arrow keys to select, and press Enter or Tab to insert. Paths containing spaces are quoted automatically. A mention supplies context but does not modify the file.
 
-输入框左下角的回形针用于选择本地文件。选择后，文件会复制到 Workspace 的 `.agent-team/uploads/`，并在消息中插入可供 Agent 读取的路径。
+## Invoke Skills
 
-在输入框中键入 `@` 会打开 Workspace 文件搜索菜单。继续输入路径片段可以筛选文件，使用上下方向键选择，按 Enter 或 Tab 插入；带空格的路径会自动添加引号。文件引用只提供上下文，不会自动修改文件。
+Type `/` to list user-invocable Skills allowed for the current member. Filter by name, use arrow keys to select, Enter or Tab to insert, and Esc to close. The sent `/skill-name` literal is handled by the Harness Skill boundary. Model-only Skills are not shown.
 
-## 使用斜杠调用 Skill
+## Session Permissions
 
-在输入框中键入 `/` 会列出当前成员允许且支持用户调用的 Skills。继续输入名称可以筛选，使用上下方向键选择，按 Enter 或 Tab 插入，按 Esc 关闭菜单。
+- **Read only** for analysis, review, retrieval, and planning.
+- **Workspace write** to modify the current Workspace.
+- **Full access** only when the task requires broader permissions.
 
-发送后，消息保留标准的 `/skill-name` 字面量，由 Harness 的 Skill 调用边界加载对应指令。只允许模型调用、不允许用户调用的 Skill 不会出现在菜单中。
+Runtime changes affect only the current member session and do not edit its template or other members.
 
-## 当前 Session 权限
+## Reasoning Mode and Context
 
-每个输入框都可选择：
+The reasoning selector shows levels supported by the current model. Changes apply on the next turn. The information icon lists loaded Skills, while the context ring shows usage. Hover over the ring for context window, input/output token, and cache statistics.
 
-- **只读**：适合分析、评审、检索和规划。
-- **工作区可写**：允许在当前 Workspace 中修改文件。
-- **完全访问**：使用前应确认任务确实需要更高权限。
+Use **Clear tasks and context** when the entire team needs new sessions.
 
-助手模板只提供初始默认权限。运行时修改只作用于当前团队成员，不修改模板，也不影响其他成员。
+## Agent Communication
 
-## 思考模式
+Members do not read one another's chat history. The Leader creates and assigns tasks, assigned members report status and results, and updates are delivered back to the Leader. Direct team messages handle clarification. Stable member IDs distinguish duplicate names and rejoined members.
 
-输入框中的 **思考模式** 下拉框展示当前模型支持的档位，例如 Low、Medium、High、Xhigh 或 Max。模型未声明能力时只使用模型默认。
-
-切换后从下一轮开始生效。成员标题区域会直接显示当前档位，方便比较不同成员配置。
-
-## Skills 与上下文
-
-- `i` 信息图标显示当前成员加载的 Skills；其中支持用户调用的 Skill 也会出现在 `/` 菜单中。
-- 上下文圆环显示已用比例。
-- 鼠标悬停圆环可以查看上下文窗口、输入 Token、输出 Token 和缓存命中率。
-
-上下文接近上限时，可以通过团队管理执行 **清空任务与上下文**，为所有成员换用全新 Session。
-
-## Agent 之间如何通信
-
-成员不会读取其他成员的聊天历史。协作通过团队工具进行：
-
-1. Leader 创建任务并指定负责人。
-2. 任务自动进入负责人的 Session。
-3. 成员开始时回报运行中，完成时附带结果。
-4. 状态和结果自动推送给 Leader。
-5. 需要澄清时，Leader 与成员可以发送直接团队消息。
-
-同名成员会携带稳定成员 ID，避免成员被移出或重新加入后发生混淆。
-
-## 切换团队
-
-左侧团队列表用于在多个团队工作台之间切换。团队条目只显示当前是否正在执行任务，不展示无意义的任务计数。切换团队不会停止后台仍在运行的成员。
+Switching teams in the left navigator does not stop members still running in the background.

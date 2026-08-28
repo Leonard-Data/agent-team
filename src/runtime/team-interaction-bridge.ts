@@ -88,15 +88,15 @@ export class TeamInteractionBridge {
   ): Promise<void> {
     const record = this.records.get(interactionId)
     if (record === undefined) {
-      throw new AgentTeamError('INTERACTION_NOT_FOUND', '该交互请求已结束或不存在')
+      throw new AgentTeamError('INTERACTION_NOT_FOUND', 'This interaction request has ended or does not exist')
     }
     if (String(record.sessionId) !== sessionId || !this.acceptsSession(sessionId)) {
-      throw new AgentTeamError('INTERACTION_NOT_FOUND', '该交互请求不属于指定的会话')
+      throw new AgentTeamError('INTERACTION_NOT_FOUND', 'This interaction request does not belong to the specified session')
     }
     let value: unknown
     if (record.kind === 'question') {
       if (response.kind !== 'question') {
-        throw new AgentTeamError('INTERACTION_INVALID', '交互响应类型与待处理请求不匹配')
+        throw new AgentTeamError('INTERACTION_INVALID', 'The interaction response type does not match the pending request')
       }
       value = {
         sessionId: record.sessionId,
@@ -104,7 +104,7 @@ export class TeamInteractionBridge {
       }
     } else {
       if (response.kind !== 'approval') {
-        throw new AgentTeamError('INTERACTION_INVALID', '交互响应类型与待处理请求不匹配')
+        throw new AgentTeamError('INTERACTION_INVALID', 'The interaction response type does not match the pending request')
       }
       value = {
         sessionId: record.sessionId,
@@ -121,9 +121,9 @@ export class TeamInteractionBridge {
     if (receipt.reason === 'not-pending') {
       this.records.delete(record.id)
       this.notifyChange(String(record.sessionId))
-      throw new AgentTeamError('INTERACTION_NOT_PENDING', '该交互请求已由其他页面处理')
+      throw new AgentTeamError('INTERACTION_NOT_PENDING', 'This interaction request was already handled on another page')
     }
-    throw new AgentTeamError('INTERACTION_INVALID', 'Harness 拒绝了该交互响应')
+    throw new AgentTeamError('INTERACTION_INVALID', 'Harness rejected the interaction response')
   }
 
   async dispose(): Promise<void> {
@@ -222,35 +222,35 @@ export function normalizeQuestionAnswers(
   const byId = new Map<string, QuestionAnswerView>()
   for (const answer of answers) {
     if (byId.has(answer.id)) {
-      throw new AgentTeamError('INTERACTION_INVALID', `问题“${answer.id}”存在重复答案`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Question "${answer.id}" has duplicate answers`)
     }
     byId.set(answer.id, answer)
   }
   if (byId.size !== questions.length) {
-    throw new AgentTeamError('INTERACTION_INVALID', '请完成全部问题后再提交')
+    throw new AgentTeamError('INTERACTION_INVALID', 'Answer every question before submitting')
   }
   return questions.map(question => {
     const answer = byId.get(question.id)
     if (answer === undefined) {
-      throw new AgentTeamError('INTERACTION_INVALID', `缺少问题“${question.id}”的答案`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Question "${question.id}" is missing an answer`)
     }
     const selected = [...answer.selected]
     if (new Set(selected).size !== selected.length) {
-      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”包含重复选项`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Question "${question.id}" contains duplicate options`)
     }
     const allowed = new Set(question.options?.map(option => option.label) ?? [])
     if (selected.some(label => !allowed.has(label))) {
-      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”包含无效选项`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Question "${question.id}" contains an invalid option`)
     }
     if (question.multiSelect !== true && selected.length > 1) {
-      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”只能选择一个选项`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Question "${question.id}" allows only one option`)
     }
     const custom = answer.custom?.trim()
     if (question.multiSelect !== true && custom !== undefined && custom.length > 0 && selected.length > 0) {
-      throw new AgentTeamError('INTERACTION_INVALID', `问题“${question.id}”的自定义答案不能与单选项同时提交`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Question "${question.id}" cannot submit a custom answer together with a single-choice option`)
     }
     if (selected.length === 0 && (custom === undefined || custom.length === 0)) {
-      throw new AgentTeamError('INTERACTION_INVALID', `请回答问题“${question.question}”`)
+      throw new AgentTeamError('INTERACTION_INVALID', `Please answer the question "${question.question}"`)
     }
     return {
       id: question.id,

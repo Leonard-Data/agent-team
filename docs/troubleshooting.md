@@ -1,126 +1,79 @@
-# 故障排查
+# Troubleshooting
 
-[上一篇：团队管理](./team-management.md) · [文档首页](./README.md)
+[Previous: Team management](./team-management.md) · [Documentation index](./README.md)
 
-## 安装命令提示 `pnpm not found on PATH`
+## `pnpm not found on PATH`
 
-Harness 使用 pnpm 管理 Profile 插件。执行：
+Harness uses pnpm to manage Profile plugins:
 
 ```bash
 npm install -g pnpm
 pnpm --version
 ```
 
-确认能输出版本后，重新安装插件。
+Retry installation after a version is printed.
 
-## `npm login` 打开了第三方镜像
+## npm Uses a Third-Party Registry
 
-检查当前 Registry：
+Check and switch the user-level registry:
 
 ```bash
 npm config get registry
-```
-
-切换到 npm 官方 Registry：
-
-```bash
 npm config set registry=https://registry.npmjs.org/ --location=user
 ```
 
-## 启动报错 `EADDRINUSE 127.0.0.1:3080`
+## `EADDRINUSE 127.0.0.1:3080`
 
-端口已被另一个 Harness 进程占用。回到原来启动 Harness 的终端按 `Ctrl+C`，然后重新执行：
+Another Harness process owns the port. Stop it with `Ctrl+C`, then run `npx @deepseek-ai/dsh web` again. On macOS or Linux, inspect the listener with `lsof -nP -iTCP:3080 -sTCP:LISTEN`.
 
-```bash
-npx @deepseek-ai/dsh web
-```
+## Team Entry Is Missing
 
-如不知道哪个进程占用端口，可只读检查：
+Verify that installation used `--profile web`, Harness was fully restarted, the browser was refreshed, `@limuyang2/dsh-agent-team` appears under **Settings → Plugins**, and the running Harness instance uses the same Profile.
 
-```bash
-lsof -nP -iTCP:3080 -sTCP:LISTEN
-```
+## Assistant or Team Lists Keep Refreshing
 
-## 安装后看不到“团队”入口
+Look for a lost event connection notice, inspect the Harness terminal for plugin load errors, refresh the browser, and wait for reconnection. Restart Harness if `assistant.list` or `team.list` continues to time out. Model catalog loading should not block saved lists.
 
-依次检查：
+## Model List Is Incomplete
 
-1. 安装命令使用了 `--profile web`。
-2. 安装后已经完全停止并重启 Harness。
-3. 浏览器已刷新。
-4. **设置 → 插件** 中能看到 `@limuyang2/dsh-agent-team`。
-5. 当前运行的确实是安装插件的那个 Harness Profile。
+Agent Team shows only Providers and models configured in the active Harness Profile. Verify Provider settings and credentials, refresh the assistant catalog, and reselect the Provider and model when editing.
 
-## 助手或团队列表一直刷新
+## Reasoning Mode Is Missing
 
-- 确认页面右上角没有“事件连接已断开”提示。
-- 检查 Harness 终端是否有插件加载错误。
-- 刷新浏览器，等待事件连接恢复。
-- 仍然提示 `assistant.list` 或 `team.list` 超时时，重启 Harness。
+Reasoning levels come from Harness model capabilities. When a Provider does not declare them, the plugin uses the model default. Correct or update the Profile configuration, then refresh the catalog.
 
-列表接口不依赖模型生成。模型目录加载较慢不应阻塞已经保存的助手和团队列表。
+## Permission Stays Read Only
 
-## 模型列表不完整
+Template permission is only the initial default. Change the current member session from the permission control in its composer. This does not modify the template.
 
-Agent Team 只展示 Harness 当前 Profile 已配置并可用的 Provider 与模型：
+## Messages Fail or Stop Does Nothing
 
-1. 先在 Harness 模型设置中确认 Provider 和模型。
-2. 检查凭据是否有效。
-3. 返回助手库点击刷新。
-4. 编辑助手时重新选择 Provider 和模型。
+Check the event connection and API status, wait for member state to refresh, and avoid repeatedly clicking Send while the network recovers. Stopping one member does not affect other columns.
 
-## GLM 或其他模型没有思考模式
+## Enter Sends during IME Composition
 
-思考档位来自 Harness 模型能力目录。若 Provider 没有声明能力，插件只显示模型默认。升级或修正 Profile 的模型能力配置后，刷新助手目录。
+The composer detects IME composition: candidate confirmation should not send, regular Enter sends, and Shift+Enter inserts a line. If this fails, report the operating system, browser, and input method.
 
-不要随意选择模型未支持的档位；错误参数可能导致请求失败。
+## Assistant Cannot Be Deleted
 
-## 权限一直显示只读
+The template is still referenced. Remove its members from every team or dissolve those teams, then delete it from **Settings → Agent Team**.
 
-助手模板权限只是初始默认值。进入团队工作台，在对应成员输入框左下角切换当前 Session 权限。更改会保存到该成员运行配置，但不会修改助手模板。
+## Workspace Does Not Refresh
 
-## 消息发送失败或停止按钮无效
+Use the refresh icon after browser sleep, bulk file changes, or event reconnection to reload the directory and Git state immediately.
 
-- 确认事件连接和 API 请求没有断开。
-- 等待当前成员状态刷新后重试。
-- 不要连续快速点击发送按钮；同一条消息会使用 ID 去重，但网络恢复期间仍应等待界面反馈。
-- 单成员停止只影响该成员，其他列可能继续运行。
+## Changes Says the Workspace Is Not a Git Repository
 
-## 中文或英文输入时回车误发送
+The selected Workspace root must contain `.git`. A repository nested inside a normal folder is not treated as the Workspace repository.
 
-当前版本会识别输入法组合状态。输入法候选确认时的回车不会发送；正常状态下 `Enter` 发送、`Shift+Enter` 换行。如仍复现，请记录操作系统、浏览器和输入法名称后提交 Issue。
+## Selected Files Appear under `.agent-team/uploads/`
 
-## 无法删除助手
+The browser cannot safely give a Host Agent arbitrary absolute paths. Copying files into the Workspace keeps them readable without crossing its security boundary.
 
-助手仍被一个或多个团队成员引用。进入相关团队：
+## Old Logs Remain after Clearing or Dissolving
 
-1. 把该助手对应的成员移出团队；或
-2. 解散不再需要的团队。
+Harness has no public API for physically deleting one session log. Agent Team detaches and stops restoring or displaying old sessions, but Harness may retain the underlying logs.
 
-然后返回 **设置 → Agent 团队** 删除。
+## Report an Issue
 
-## Workspace 不自动刷新
-
-点击 Workspace 标题右侧的刷新图标。浏览器从休眠恢复、文件瞬间大量变化或事件连接重连后，手动刷新可以立即重新读取目录和 Git 状态。
-
-## “变更”页签提示不是 Git 仓库
-
-插件检查的是团队 Workspace 根目录。请确认该目录包含 `.git`，而不是只有某个子目录包含仓库。普通目录仍可使用文件浏览功能。
-
-## 为什么选择文件后出现在 `.agent-team/uploads/`
-
-浏览器不能安全地把任意本地绝对路径直接交给 Host Agent。插件把文件复制进 Workspace，确保 Agent 可以读取且不会越过 Workspace 安全边界。
-
-## 清空或解散后旧日志仍存在
-
-Harness 当前没有物理删除单个 Session 日志的公开 API。插件会解除关联，不再恢复、展示或把旧内容加入模型上下文，但底层日志可能继续保留。
-
-## 提交问题
-
-在 [GitHub Issues](https://github.com/limuyang2/agent-team/issues) 提交：
-
-- Harness 与插件版本。
-- Provider 和模型名称（不要提交 API Key）。
-- 可重复操作步骤。
-- Harness 终端错误和界面截图。
-- 是否能够在刷新或重启后恢复。
+Open a [GitHub issue](https://github.com/limuyang2/agent-team/issues) with Harness and plugin versions, Provider/model names without credentials, reproducible steps, sanitized terminal errors and screenshots, and whether refresh or restart recovers the problem.

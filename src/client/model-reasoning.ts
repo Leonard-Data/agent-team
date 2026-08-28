@@ -50,6 +50,6 @@ export function reasoningEffortLabel(
 export function defaultReasoningLabel(capabilities: ModelCapabilitiesView | undefined): string {
   const defaultEffort = capabilities?.reasoning?.defaultEffort
   return defaultEffort === undefined
-    ? '模型默认'
-    : `模型默认（${reasoningEffortLabel(capabilities, defaultEffort)}）`
+    ? 'Model default'
+    : `Model default (${reasoningEffortLabel(capabilities, defaultEffort)})`
 }

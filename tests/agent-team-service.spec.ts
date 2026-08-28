@@ -197,12 +197,12 @@ describe('AgentTeamService', () => {
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_prepare')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('assistant_builder_commit')
     expect(ASSISTANT_BUILDER_PROMPT).not.toContain('assistant_builder_create')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('必须等待新的用户消息')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('不要要求固定口令')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('明确表达同意')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('不要询问或限制普通工具')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('Wait for a new user message')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('do not require a fixed phrase')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('clearly approves')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('Do not ask about or restrict ordinary tools')
     expect(ASSISTANT_BUILDER_PROMPT).toContain('MCP Servers')
-    expect(ASSISTANT_BUILDER_PROMPT).toContain('优先调用 ask_user_question')
+    expect(ASSISTANT_BUILDER_PROMPT).toContain('prefer ask_user_question')
   })
 
   it('lists model- or user-invocable Skills with their invocation policy', async () => {
@@ -252,8 +252,8 @@ describe('AgentTeamService', () => {
 
     await expect(service.catalog()).resolves.toMatchObject({
       permissionPresets: [
-        { value: 'standard', name: '标准' },
-        { value: 'workspace-write', name: '工作区可写' },
+        { value: 'standard', name: 'Standard' },
+        { value: 'workspace-write', name: 'Workspace write' },
       ],
     })
   })

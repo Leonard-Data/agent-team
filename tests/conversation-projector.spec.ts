@@ -55,19 +55,19 @@ describe('projectConversation', () => {
     const projected = projectConversation([
       event(0, 'assistant/chunk', {
         turn: 2, step: 1,
-        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '完整思考' } },
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: 'Complete reasoning' } },
       }),
       event(1, 'assistant/chunk', {
         turn: 2, step: 1,
-        chunk: { type: 'block-end', index: 1, block: { type: 'text', text: '完整回复' } },
+        chunk: { type: 'block-end', index: 1, block: { type: 'text', text: 'Complete response' } },
       }),
     ])
 
     expect(projected.nodes).toEqual([
       expect.objectContaining({
         kind: 'assistant',
-        text: '完整回复',
-        reasoning: '完整思考',
+        text: 'Complete response',
+        reasoning: 'Complete reasoning',
         streaming: true,
       }),
     ])
@@ -77,11 +77,11 @@ describe('projectConversation', () => {
     const projected = projectConversation([
       timedEvent(0, 1_000, 'assistant/chunk', {
         turn: 3, step: 1,
-        chunk: { type: 'reasoning-delta', index: 0, text: '分析中' },
+        chunk: { type: 'reasoning-delta', index: 0, text: 'Analyzing' },
       }),
       timedEvent(1, 3_400, 'assistant/chunk', {
         turn: 3, step: 1,
-        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '分析完成' } },
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: 'Analysis complete' } },
       }),
       timedEvent(2, 3_500, 'assistant/message', {
         turn: 3,
@@ -89,8 +89,8 @@ describe('projectConversation', () => {
         message: {
           id: 'assistant-3', role: 'assistant', source: { kind: 'model', provider: 'deepseek', model: 'deepseek-chat' },
           content: [
-            { type: 'reasoning', text: '分析完成' },
-            { type: 'text', text: '最终回答' },
+            { type: 'reasoning', text: 'Analysis complete' },
+            { type: 'text', text: 'Final answer' },
           ],
         },
       }),
@@ -122,23 +122,23 @@ describe('projectConversation', () => {
       }),
       event(2, 'user/message', {
         id: 'user-1', role: 'user', source: { kind: 'user' },
-        content: [{ type: 'text', text: '你好' }],
+        content: [{ type: 'text', text: 'Hello' }],
       }),
       event(3, 'user/message', {
         id: 'relay-1', role: 'user',
         source: { kind: 'plugin', plugin: 'dsh-agent-team', form: 'relay' },
-        content: [{ type: 'text', text: 'Leader 分配的任务' }],
+        content: [{ type: 'text', text: 'Task assigned by the Leader' }],
       }),
       event(4, 'user/message', {
         id: 'foreign-relay', role: 'user',
         source: { kind: 'plugin', plugin: 'another-plugin', form: 'relay' },
-        content: [{ type: 'text', text: '其他插件的内部转发' }],
+        content: [{ type: 'text', text: 'Internal relay from another plugin' }],
       }),
     ])
 
     expect(projected.nodes).toEqual([
-      expect.objectContaining({ kind: 'user', text: '你好' }),
-      expect.objectContaining({ kind: 'user', text: 'Leader 分配的任务' }),
+      expect.objectContaining({ kind: 'user', text: 'Hello' }),
+      expect.objectContaining({ kind: 'user', text: 'Task assigned by the Leader' }),
     ])
     expect(JSON.stringify(projected.nodes)).not.toContain('Current runtime context')
     expect(JSON.stringify(projected.nodes)).not.toContain('available_skills')

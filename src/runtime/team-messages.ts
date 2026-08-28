@@ -119,7 +119,7 @@ export function messageFromRecord(team: TeamAggregate, record: TeamMessage): Use
   const retiredSender = record.sender.kind === 'member'
     ? Object.values(team.retiredSessions).find(session => session.formerSlotId === record.sender.id)
     : undefined
-  const senderName = sender?.displayName ?? retiredSender?.displayName ?? '已移出成员'
+  const senderName = sender?.displayName ?? retiredSender?.displayName ?? 'Removed member'
   const text = record.sender.kind === 'member'
     ? `${teamMessageHeader(senderName, record.sender.id)}\n${record.content}`
     : record.content

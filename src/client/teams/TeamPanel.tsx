@@ -70,21 +70,21 @@ export function TeamPanel({
     <section className={css.section}>
       {selectedTeam === undefined && <div className={css.sectionHeader}>
         <div>
-          <h2 className={css.sectionHeading}>团队 <span className={css.count}>{teams.length}</span></h2>
-          <p className={css.sectionDescription}>选择 Leader 和成员，共享同一个 Workspace 协作。</p>
+          <h2 className={css.sectionHeading}>Teams <span className={css.count}>{teams.length}</span></h2>
+          <p className={css.sectionDescription}>Choose a Leader and members to collaborate in the same Workspace.</p>
         </div>
         <div className={css.sectionHeaderActions}>
           <Button variant="outline" onClick={() => { setManagingAssistants(true) }}>
-            管理助手
+            Manage assistants
           </Button>
           <Button variant="primary" disabled={assistants.length === 0} onClick={() => { setCreating(true) }}>
-            组建团队
+            Create team
           </Button>
         </div>
       </div>}
       {selectedTeam === undefined
         ? visibleTeams.length === 0
-          ? <Empty text="还没有团队" hint="先通过右上角“管理助手”创建助手，再选择 Leader 和团队成员。" />
+          ? <Empty text="No teams yet" hint="Create assistants with Manage assistants, then choose a Leader and team members." />
           : <div className={css.cardList}>{visibleTeams.map(team => (
               <TeamCard
                 key={team.id}
@@ -110,9 +110,9 @@ export function TeamPanel({
       <AnimatedModal
         open={managingAssistants}
         onClose={() => { setManagingAssistants(false) }}
-        title="管理助手"
-        closeLabel="关闭"
-        description="创建和维护可在不同团队间复用的助手模板。"
+        title="Manage assistants"
+        closeLabel="Close"
+        description="Create and maintain assistant templates that can be reused across teams."
         className={css.assistantManagementDialog ?? ''}
         contentClassName={css.assistantManagementDialogContent ?? ''}
       >
@@ -127,9 +127,9 @@ export function TeamPanel({
       <AnimatedModal
         open={creating}
         onClose={() => { setCreating(false) }}
-        title="新建团队"
-        closeLabel="关闭"
-        description="让多个 AI 助手组队协作。一个团队必须有且只有一个 Leader。"
+        title="Create team"
+        closeLabel="Close"
+        description="Bring multiple AI assistants together. Every team must have exactly one Leader."
         className={css.teamCreateDialog ?? ''}
         contentClassName={css.teamCreateContent ?? ''}
       >
@@ -212,7 +212,7 @@ function TeamWorkbench({
       refreshTimer.current = undefined
       void load()
     }, 50)
-  }, () => { setError('实时连接已断开，正在等待重连') }, () => {
+  }, () => { setError('Live connection lost; waiting to reconnect') }, () => {
     setError(undefined)
     void load()
   }), [load, team.id])
@@ -264,7 +264,7 @@ function TeamWorkbench({
   return (
     <div className={css.workbench}>
       <div className={css.workbenchMainPane}>
-        <div className={css.memberTabs} aria-label="团队成员">
+        <div className={css.memberTabs} aria-label="Team members">
         {members.map(member => {
           const conversation = conversations.get(member.id)
           const selected = visibleSlots.includes(member.id)
@@ -286,8 +286,8 @@ function TeamWorkbench({
                   <button
                     type="button"
                     className={css.memberTabRemoveAction}
-                    title={`移出成员 ${member.displayName}`}
-                    aria-label={`移出成员 ${member.displayName}`}
+                    title={`Remove member ${member.displayName}`}
+                    aria-label={`Remove member ${member.displayName}`}
                     onClick={() => {
                       setMemberActionError(undefined)
                       setMemberToRemove(member)
@@ -321,10 +321,10 @@ function TeamWorkbench({
             }}
           >
             <IconPlusOutline16 size={14} />
-            添加助手
+            Add assistant
           </Button>
           <Button variant="ghost" size="sm" className={css.manageButton} onClick={() => { setManagementOpen(value => !value) }}>
-            {managementOpen ? '收起管理' : '团队管理'}
+            {managementOpen ? 'Close management' : 'Manage team'}
           </Button>
         </span>
         </div>
@@ -336,7 +336,7 @@ function TeamWorkbench({
           <button
             type="button"
             className={css.conversationFocusBackdrop}
-            aria-label="关闭放大对话"
+            aria-label="Close expanded conversation"
             onClick={() => { setExpandedSlotId(undefined) }}
           />
         )}
@@ -368,9 +368,9 @@ function TeamWorkbench({
       <AnimatedModal
         open={managementOpen}
         onClose={() => { setManagementOpen(false) }}
-        title="团队管理"
-        description="管理成员、Leader、上下文和团队生命周期。"
-        closeLabel="关闭"
+        title="Team management"
+        description="Manage members, the Leader, context, and the team lifecycle."
+        closeLabel="Close"
         className={css.managementDialog ?? ''}
         contentClassName={css.managementDialogContent ?? ''}
       >
@@ -405,9 +405,9 @@ function TeamWorkbench({
           setMemberToRemove(undefined)
           setMemberActionError(undefined)
         }}
-        title="移出团队成员"
-        closeLabel="关闭"
-        description="该成员将停止参与当前团队。"
+        title="Remove team member"
+        closeLabel="Close"
+        description="This member will stop participating in the current team."
         className={css.memberRemoveDialog ?? ''}
         footer={(
           <>
@@ -419,7 +419,7 @@ function TeamWorkbench({
                 setMemberActionError(undefined)
               }}
             >
-              取消
+              Cancel
             </Button>
             <button
               type="button"
@@ -427,7 +427,7 @@ function TeamWorkbench({
               disabled={memberActionBusy}
               onClick={() => { void removeMember() }}
             >
-              {memberActionBusy ? '移出中…' : '确认移出'}
+              {memberActionBusy ? 'Removing…' : 'Remove'}
             </button>
           </>
         )}
@@ -435,8 +435,8 @@ function TeamWorkbench({
         <div className={css.memberRemoveConfirm}>
           <div className={css.memberRemoveIcon} aria-hidden="true">−</div>
           <div>
-            <strong>确定移出“{memberToRemove?.displayName}”？</strong>
-            <p>该成员将停止参与团队；若仍有未完成任务，系统会阻止移出。助手模板和 Session 历史都会保留。</p>
+            <strong>Remove "{memberToRemove?.displayName}"?</strong>
+            <p>The member will stop participating in the team. Removal is blocked while they have unfinished tasks. The assistant template and session history are retained.</p>
           </div>
           {memberActionError && <div role="alert" className={css.inlineError}>{memberActionError}</div>}
         </div>
@@ -494,23 +494,23 @@ function AddTeamMemberDialog({
       <AnimatedModal
         open={open}
         onClose={close}
-        title="添加助手"
-        description={`选择一个助手加入团队“${team.name}”。同一个助手可以多次加入。`}
-        closeLabel="关闭"
+        title="Add assistant"
+        description={`Choose an assistant to join team "${team.name}". The same assistant can join more than once.`}
+        closeLabel="Close"
         className={css.addMemberDialog ?? ''}
         contentClassName={css.addMemberDialogContent ?? ''}
       >
         <div className={css.addMemberDialogHeader}>
-          <strong>助手列表</strong>
+          <strong>Assistant list</strong>
           <div className={css.addMemberDialogHeaderActions}>
-            <span>{assistants.length} 个助手</span>
+            <span>{assistants.length} assistants</span>
             <Button
               variant="outline"
               size="sm"
               disabled={addingAssistantId !== undefined}
               onClick={() => { setConfiguringAssistants(true) }}
             >
-              助手配置
+              Assistant settings
             </Button>
           </div>
         </div>
@@ -529,20 +529,20 @@ function AddTeamMemberDialog({
                 <span>{assistant.provider} / {assistant.model}</span>
               </span>
               <span className={css.addMemberOptionAction}>
-                {addingAssistantId === assistant.id ? '添加中…' : <IconPlusOutline16 size={14} />}
+                {addingAssistantId === assistant.id ? 'Adding…' : <IconPlusOutline16 size={14} />}
               </span>
             </button>
           ))}
-          {assistants.length === 0 && <span className={css.addMemberEmpty}>还没有可添加的助手模板</span>}
+          {assistants.length === 0 && <span className={css.addMemberEmpty}>No assistant templates are available</span>}
         </div>
         {error && <div role="alert" className={css.inlineError}>{error}</div>}
       </AnimatedModal>
       <AnimatedModal
         open={configuringAssistants}
         onClose={() => { setConfiguringAssistants(false) }}
-        title="助手配置"
-        closeLabel="关闭"
-        description="创建和维护可在不同团队间复用的助手模板。"
+        title="Assistant settings"
+        closeLabel="Close"
+        description="Create and maintain assistant templates that can be reused across teams."
         className={css.assistantManagementDialog ?? ''}
         contentClassName={css.assistantManagementDialogContent ?? ''}
       >
@@ -574,7 +574,7 @@ function CloneTeamDialog({
   onCreated: (teamId: string) => Promise<void>
 }): JSX.Element {
   const catalogWorkspaces = catalog?.workspaces.filter(workspace => workspace.status === 'ok') ?? []
-  const [name, setName] = useState(`${team.name} 副本`)
+  const [name, setName] = useState(`${team.name} copy`)
   const [workspaceId, setWorkspaceId] = useState(team.workspaceId)
   const [pickedWorkspace, setPickedWorkspace] = useState<WorkspaceChoice>()
   const [saving, setSaving] = useState(false)
@@ -596,7 +596,7 @@ function CloneTeamDialog({
 
   useEffect(() => {
     if (!open) return
-    setName(`${team.name} 副本`)
+    setName(`${team.name} copy`)
     setWorkspaceId(team.workspaceId)
     setPickedWorkspace(undefined)
     setSaving(false)
@@ -649,20 +649,20 @@ function CloneTeamDialog({
     <AnimatedModal
       open={open}
       onClose={close}
-      title="复制团队"
-      closeLabel="关闭"
-      description="复用当前团队配置，并为每位成员创建全新 Session。"
+      title="Duplicate team"
+      closeLabel="Close"
+      description="Reuse the current team configuration and create a new session for every member."
       className={css.cloneTeamDialog ?? ''}
       contentClassName={css.cloneTeamDialogContent ?? ''}
     >
       <form className={css.cloneTeamForm} onSubmit={(event) => { void submit(event) }}>
         <div className={css.cloneTeamFields}>
-          <Field label="团队名称">
+          <Field label="Team name">
             <input
               required
               value={name}
               onChange={event => { setName(event.target.value) }}
-              placeholder="输入团队名称"
+              placeholder="Enter a team name"
               className={css.input}
               autoFocus
             />
@@ -675,7 +675,7 @@ function CloneTeamDialog({
                 onChange={event => { setWorkspaceId(event.target.value) }}
                 className={css.input}
               >
-                <option value="">{workspaces.length === 0 ? '暂无 Workspace' : '请选择 Workspace'}</option>
+                <option value="">{workspaces.length === 0 ? 'No Workspaces available' : 'Select a Workspace'}</option>
                 {workspaces.map(item => <option key={item.id} value={item.id}>{item.title} — {item.path}</option>)}
               </select>
               <Button
@@ -686,15 +686,15 @@ function CloneTeamDialog({
                 className={css.workspacePickButton}
               >
                 <IconFolderOpenOutline16 size={16} />
-                {pickingWorkspace ? '选择中…' : '选择文件夹'}
+                {pickingWorkspace ? 'Selecting…' : 'Choose folder'}
               </Button>
             </div>
           </Field>
         </div>
-        <section className={css.cloneTeamMembers} aria-label="复制的团队成员">
+        <section className={css.cloneTeamMembers} aria-label="Duplicated team members">
           <div className={css.cloneTeamSectionHeader}>
-            <strong>团队成员</strong>
-            <span>{members.length} 人</span>
+            <strong>Team members</strong>
+            <span>{members.length} members</span>
           </div>
           <div className={css.cloneTeamMemberGrid}>
             {members.map(member => (
@@ -704,17 +704,17 @@ function CloneTeamDialog({
                   <strong title={member.displayName}>{member.displayName}</strong>
                   <span>{member.assistantSnapshot.provider} / {member.assistantSnapshot.model}</span>
                 </span>
-                <span className={css.cloneTeamRole}>{member.role === 'leader' ? 'Leader' : '成员'}</span>
+                <span className={css.cloneTeamRole}>{member.role === 'leader' ? 'Leader' : 'Member'}</span>
               </div>
             ))}
           </div>
         </section>
-        <p className={css.cloneTeamNotice}>不会复制任务、对话上下文、消息历史或运行状态。</p>
+        <p className={css.cloneTeamNotice}>Tasks, conversation context, message history, and runtime state are not copied.</p>
         {error && <div role="alert" className={css.inlineError}>{error}</div>}
         <div className={css.cloneTeamActions}>
-          <Button variant="outline" type="button" disabled={saving || pickingWorkspace} onClick={close}>取消</Button>
+          <Button variant="outline" type="button" disabled={saving || pickingWorkspace} onClick={close}>Cancel</Button>
           <Button variant="primary" type="submit" disabled={saving || pickingWorkspace || !name.trim() || !workspaceId}>
-            {saving ? '复制并启动中…' : '复制并启动'}
+            {saving ? 'Duplicating and starting…' : 'Duplicate and start'}
           </Button>
         </div>
       </form>
@@ -821,14 +821,14 @@ function TeamCard({
           <strong className={css.teamCardName}>{team.name}</strong>
           <span className={css.teamCardWorkspace}>{team.workspacePath}</span>
         </div>
-        {executing && <span className={`${css.badge} ${css.badgeSuccess ?? ''}`}>任务执行中</span>}
+        {executing && <span className={`${css.badge} ${css.badgeSuccess ?? ''}`}>Tasks running</span>}
       </header>
 
-      <section className={css.teamMemberSection} aria-label="团队成员">
+      <section className={css.teamMemberSection} aria-label="Team members">
         <div className={css.teamSectionHeader}>
-          <strong>团队成员</strong>
+          <strong>Team members</strong>
           <span className={css.teamSectionActions}>
-            <span>{members.length} 人</span>
+            <span>{members.length} members</span>
             <button
               type="button"
               className={css.addMemberButton}
@@ -836,7 +836,7 @@ function TeamCard({
               onClick={() => { setAddingMember(true) }}
             >
               <IconPlusOutline16 size={14} />
-              添加助手
+              Add assistant
             </button>
           </span>
         </div>
@@ -860,7 +860,7 @@ function TeamCard({
                     disabled={busy}
                     onClick={() => { void changeLeader(member.id) }}
                   >
-                    设为 Leader
+                    Set as Leader
                   </button>}
                 {member.id !== team.leaderSlotId && (
                   <button
@@ -872,7 +872,7 @@ function TeamCard({
                       setMemberToRemove({ slotId: member.id, displayName: member.displayName })
                     }}
                   >
-                    移出
+                    Remove
                   </button>
                 )}
               </span>
@@ -882,8 +882,8 @@ function TeamCard({
       </section>
       <div className={`${css.contextResetPanel} ${css.cloneTeamPanel ?? ''}`}>
         <div className={css.contextResetCopy}>
-          <strong>复制团队</strong>
-          <span>复用当前成员和配置，为所有成员创建全新 Session。</span>
+          <strong>Duplicate team</strong>
+          <span>Reuse the current members and settings with a new session for every member.</span>
         </div>
         <Button
           variant="outline"
@@ -893,16 +893,16 @@ function TeamCard({
             setCloneOpen(true)
           }}
         >
-          复制团队
+          Duplicate team
         </Button>
       </div>
       {tasks.length > 0 && (
         <div className={css.taskList}>
-          <strong className={css.taskTitle}>任务板</strong>
+          <strong className={css.taskTitle}>Task board</strong>
           {tasks.map(task => (
             <div key={task.id} className={css.memberRow}>
               <span>{task.title}</span>
-              <span className={css.muted}>{TASK_STATE_LABELS[task.status] ?? task.status}{task.ownerSlotId ? ` · ${team.members[task.ownerSlotId]?.displayName ?? '已移除成员'}` : ''}</span>
+              <span className={css.muted}>{TASK_STATE_LABELS[task.status] ?? task.status}{task.ownerSlotId ? ` · ${team.members[task.ownerSlotId]?.displayName ?? 'Removed member'}` : ''}</span>
             </div>
           ))}
         </div>
@@ -910,8 +910,8 @@ function TeamCard({
       {team.state !== 'deleting' && team.state !== 'delete_blocked' && (
         <div className={css.contextResetPanel}>
           <div className={css.contextResetCopy}>
-            <strong>清空任务与上下文</strong>
-            <span>停止所有成员并清空任务板，为每位成员换用全新 Session。Workspace 文件和团队配置不变。</span>
+            <strong>Clear tasks and context</strong>
+            <span>Stop all members, clear the task board, and give every member a new session. Workspace files and team settings remain unchanged.</span>
           </div>
           <button
             type="button"
@@ -922,14 +922,14 @@ function TeamCard({
               setResetOpen(true)
             }}
           >
-            {busy ? '处理中…' : '清空'}
+            {busy ? 'Processing…' : 'Clear'}
           </button>
         </div>
       )}
       <div className={`${css.contextResetPanel} ${css.dissolvePanel}`}>
         <div className={css.contextResetCopy}>
-          <strong>解散团队</strong>
-          <span>永久删除团队、任务和团队消息；助手模板与 Workspace 文件保留，旧 Session 日志不再恢复。</span>
+          <strong>Dissolve team</strong>
+          <span>Permanently delete the team, tasks, and team messages. Assistant templates and Workspace files remain; old session logs are not restored.</span>
         </div>
         <button
           type="button"
@@ -940,7 +940,7 @@ function TeamCard({
             setDissolveOpen(true)
           }}
         >
-          {team.state === 'deleting' ? '解散中…' : team.state === 'delete_blocked' ? '重试解散' : '解散团队'}
+          {team.state === 'deleting' ? 'Dissolving…' : team.state === 'delete_blocked' ? 'Retry dissolve' : 'Dissolve team'}
         </button>
       </div>
         {error && !dissolveOpen && !resetOpen && memberToRemove === undefined && <div role="alert" className={css.inlineError}>{error}</div>}
@@ -968,9 +968,9 @@ function TeamCard({
           setMemberToRemove(undefined)
           setError(undefined)
         }}
-        title="移出团队成员"
-        closeLabel="关闭"
-        description="该成员将停止参与当前团队。"
+        title="Remove team member"
+        closeLabel="Close"
+        description="This member will stop participating in the current team."
         className={css.memberRemoveDialog ?? ''}
         footer={(
           <>
@@ -982,7 +982,7 @@ function TeamCard({
                 setError(undefined)
               }}
             >
-              取消
+              Cancel
             </Button>
             <button
               type="button"
@@ -990,7 +990,7 @@ function TeamCard({
               disabled={busy}
               onClick={() => { void removeMember() }}
             >
-              {busy ? '移出中…' : '确认移出'}
+              {busy ? 'Removing…' : 'Remove'}
             </button>
           </>
         )}
@@ -998,8 +998,8 @@ function TeamCard({
         <div className={css.memberRemoveConfirm}>
           <div className={css.memberRemoveIcon} aria-hidden="true">−</div>
           <div>
-            <strong>确定移出“{memberToRemove?.displayName}”？</strong>
-            <p>该成员将停止参与团队；若仍有未完成任务，系统会阻止移出。助手模板和 Session 历史都会保留。</p>
+            <strong>Remove "{memberToRemove?.displayName}"?</strong>
+            <p>The member will stop participating in the team. Removal is blocked while they have unfinished tasks. The assistant template and session history are retained.</p>
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
@@ -1011,9 +1011,9 @@ function TeamCard({
           setResetOpen(false)
           setError(undefined)
         }}
-        title="清空任务与上下文"
-        closeLabel="关闭"
-        description="所有成员将换用全新的对话上下文。"
+        title="Clear tasks and context"
+        closeLabel="Close"
+        description="All members will receive fresh conversation context."
         className={css.teamResetDialog ?? ''}
         footer={(
           <>
@@ -1025,7 +1025,7 @@ function TeamCard({
                 setError(undefined)
               }}
             >
-              取消
+              Cancel
             </Button>
             <button
               type="button"
@@ -1033,7 +1033,7 @@ function TeamCard({
               disabled={busy}
               onClick={() => { void resetTeam() }}
             >
-              {busy ? '清空中…' : '确认清空'}
+              {busy ? 'Clearing…' : 'Clear'}
             </button>
           </>
         )}
@@ -1041,8 +1041,8 @@ function TeamCard({
         <div className={css.teamResetConfirm}>
           <div className={css.teamResetIcon} aria-hidden="true">↻</div>
           <div>
-            <strong>确定清空“{team.name}”的任务与上下文？</strong>
-            <p>所有成员会停止，任务板和待处理消息会被清空，并换用全新 Session。Workspace 文件、团队配置和旧 Session 日志会保留。</p>
+            <strong>Clear tasks and context for "{team.name}"?</strong>
+            <p>All members will stop, the task board and pending messages will be cleared, and every member will receive a new session. Workspace files, team settings, and old session logs are retained.</p>
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
@@ -1054,9 +1054,9 @@ function TeamCard({
           setDissolveOpen(false)
           setError(undefined)
         }}
-        title="解散团队"
-        closeLabel="关闭"
-        description="此操作无法撤销。"
+        title="Dissolve team"
+        closeLabel="Close"
+        description="This action cannot be undone."
         className={css.teamDissolveDialog ?? ''}
         footer={(
           <>
@@ -1068,7 +1068,7 @@ function TeamCard({
                 setError(undefined)
               }}
             >
-              取消
+              Cancel
             </Button>
             <button
               type="button"
@@ -1076,7 +1076,7 @@ function TeamCard({
               disabled={busy}
               onClick={() => { void dissolve() }}
             >
-              {busy ? '解散中…' : '确认解散'}
+              {busy ? 'Dissolving…' : 'Dissolve'}
             </button>
           </>
         )}
@@ -1084,8 +1084,8 @@ function TeamCard({
         <div className={css.teamDissolveConfirm}>
           <div className={css.teamDissolveIcon} aria-hidden="true">!</div>
           <div>
-            <strong>确定解散“{team.name}”？</strong>
-            <p>所有成员将停止，团队任务、消息和配置会被永久删除。助手模板与 Workspace 文件会保留。</p>
+            <strong>Dissolve "{team.name}"?</strong>
+            <p>All members will stop, and the team's tasks, messages, and settings will be permanently deleted. Assistant templates and Workspace files are retained.</p>
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
@@ -1207,14 +1207,14 @@ function TeamForm({
       <div className={css.teamBuilderGrid}>
         <section className={css.assistantPicker}>
           <div className={css.builderSectionHeading}>
-            <strong>所有助手 <span className={css.count}>{assistants.length}</span></strong>
+            <strong>All assistants <span className={css.count}>{assistants.length}</span></strong>
           </div>
           <input
             type="search"
             value={query}
             onChange={event => { setQuery(event.target.value) }}
-            placeholder="搜索助手、Provider 或模型"
-            aria-label="搜索助手"
+            placeholder="Search assistants, Providers, or models"
+            aria-label="Search assistants"
             className={css.builderSearch}
           />
           <div className={css.assistantPickList}>
@@ -1231,21 +1231,21 @@ function TeamForm({
                   type="button"
                   className={css.assistantAddButton}
                   onClick={() => { addAssistant(assistant) }}
-                  aria-label={`添加 ${assistant.name}`}
+                  aria-label={`Add ${assistant.name}`}
                 >
                   <IconPlusOutline16 size={16} />
                 </button>
               </div>
             ))}
-            {filteredAssistants.length === 0 && <Empty text="没有匹配的助手" />}
+            {filteredAssistants.length === 0 && <Empty text="No matching assistants" />}
           </div>
         </section>
 
         <section className={css.selectedMembers}>
           <div className={css.builderSectionHeading}>
             <div>
-              <strong>已选成员 {members.length}</strong>
-              <p>选择团队成员并指定一个 Leader。同一助手可多次选择。</p>
+              <strong>Selected members: {members.length}</strong>
+              <p>Choose team members and assign one Leader. The same assistant may be selected more than once.</p>
             </div>
             <span className={css.leaderLegend}>Leader</span>
           </div>
@@ -1253,8 +1253,8 @@ function TeamForm({
             {members.length === 0
               ? (
                   <div className={css.memberEmpty}>
-                    <strong>至少选择一个助手当团队 Leader。</strong>
-                    <span>从左侧助手列表添加成员。</span>
+                    <strong>Select at least one assistant as the team Leader.</strong>
+                    <span>Add members from the assistant list on the left.</span>
                   </div>
                 )
               : members.map(member => {
@@ -1266,17 +1266,17 @@ function TeamForm({
                         {assistant?.name.slice(0, 1).toLocaleUpperCase() ?? '?'}
                       </div>
                       <div className={css.selectedMemberCopy}>
-                        <strong>{assistant?.name ?? '助手'}</strong>
+                        <strong>{assistant?.name ?? 'Assistant'}</strong>
                         <span>{assistant?.provider} / {assistant?.model}</span>
                       </div>
                       {leader
                         ? <span className={css.leaderBadge}>Leader</span>
-                        : <button type="button" className={css.setLeaderButton} onClick={() => { setLeaderKey(member.key) }}>设为 Leader</button>}
+                        : <button type="button" className={css.setLeaderButton} onClick={() => { setLeaderKey(member.key) }}>Set as Leader</button>}
                       <button
                         type="button"
                         className={css.removeDraftMember}
                         onClick={() => { removeMember(member.key) }}
-                        aria-label={`移除 ${assistant?.name ?? '助手'}`}
+                        aria-label={`Remove ${assistant?.name ?? 'Assistant'}`}
                       >
                         <IconCloseOutline16 size={14} />
                       </button>
@@ -1285,13 +1285,13 @@ function TeamForm({
                 })}
           </div>
           <div className={css.teamFields}>
-            <Field label="团队名称">
-              <input required value={name} onChange={event => { setName(event.target.value) }} placeholder="输入团队名称" className={css.input} />
+            <Field label="Team name">
+              <input required value={name} onChange={event => { setName(event.target.value) }} placeholder="Enter a team name" className={css.input} />
             </Field>
             <Field label="Workspace">
               <div className={css.workspacePickerRow}>
                 <select required value={workspaceId} onChange={event => { setWorkspaceId(event.target.value) }} className={css.input}>
-                  <option value="">{workspaces.length === 0 ? '暂无 Workspace' : '请选择 Workspace'}</option>
+                  <option value="">{workspaces.length === 0 ? 'No Workspaces available' : 'Select a Workspace'}</option>
                   {workspaces.map(item => <option key={item.id} value={item.id}>{item.title} — {item.path}</option>)}
                 </select>
                 <Button
@@ -1302,22 +1302,22 @@ function TeamForm({
                   className={css.workspacePickButton}
                 >
                   <IconFolderOpenOutline16 size={16} />
-                  {pickingWorkspace ? '选择中…' : '选择文件夹'}
+                  {pickingWorkspace ? 'Selecting…' : 'Choose folder'}
                 </Button>
               </div>
             </Field>
             <label className={css.checkboxRow}>
               <input type="checkbox" checked={directMemberChat} onChange={event => { setDirectMemberChat(event.target.checked) }} />
-              允许用户和普通成员直接通信
+              Allow users to message regular members directly
             </label>
           </div>
         </section>
       </div>
       {error && <div role="alert" className={css.inlineError}>{error}</div>}
       <div className={css.teamBuilderActions}>
-        <Button variant="outline" onClick={onCancel} disabled={saving}>取消</Button>
+        <Button variant="outline" onClick={onCancel} disabled={saving}>Cancel</Button>
         <Button variant="primary" type="submit" disabled={saving || !canSubmit}>
-          {saving ? '创建并启动中…' : '创建并启动'}
+          {saving ? 'Creating and starting…' : 'Create and start'}
         </Button>
       </div>
     </form>

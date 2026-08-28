@@ -103,22 +103,22 @@ export function WorkspacePanel({
         <div className={css.workspaceHeader}>
           <div><strong>Workspace</strong><span>{team.workspacePath}</span></div>
           <div className={css.workspaceHeaderActions}>
-            <Tooltip label={refreshing ? '刷新中…' : '刷新 Workspace'} side="bottom" delayMs={400}>
+            <Tooltip label={refreshing ? 'Refreshing…' : 'Refresh Workspace'} side="bottom" delayMs={400}>
               <button
                 type="button"
                 className={`${css.workspaceRefreshButton} ${refreshing ? css.workspaceRefreshButtonBusy : ''}`}
                 disabled={refreshing}
-                aria-label={refreshing ? '正在刷新 Workspace' : '刷新 Workspace'}
+                aria-label={refreshing ? 'Refreshing Workspace' : 'Refresh Workspace'}
                 onClick={() => { void load() }}
               >
                 <IconRefreshOutline16 size={16} />
               </button>
             </Tooltip>
-            <Tooltip label="收起 Workspace" side="bottom" delayMs={400}>
+            <Tooltip label="Collapse Workspace" side="bottom" delayMs={400}>
               <button
                 type="button"
                 className={css.workspaceRefreshButton}
-                aria-label="收起 Workspace"
+                aria-label="Collapse Workspace"
                 onClick={onCollapse}
               >
                 <IconChevronRightOutline14 size={14} />
@@ -126,14 +126,14 @@ export function WorkspacePanel({
             </Tooltip>
           </div>
         </div>
-        <div className={css.workspaceTabs} role="tablist" aria-label="Workspace 视图">
+        <div className={css.workspaceTabs} role="tablist" aria-label="Workspace views">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'files'}
             className={activeTab === 'files' ? css.workspaceTabActive : ''}
             onClick={() => { setActiveTab('files') }}
-          >文件</button>
+          >Files</button>
           <button
             type="button"
             role="tab"
@@ -141,7 +141,7 @@ export function WorkspacePanel({
             className={activeTab === 'changes' ? css.workspaceTabActive : ''}
             onClick={() => { setActiveTab('changes') }}
           >
-            变更
+            Changes
             {gitStatus?.state === 'repository' && gitStatus.changes.length > 0
               ? <span>{gitStatus.changes.length}</span>
               : null}
@@ -160,7 +160,7 @@ export function WorkspacePanel({
                 />
               ))}
               {entries.length === 0 && !fileError && (
-                <span className={css.fileEmpty}>{fileRefreshing ? '正在读取目录…' : '目录为空'}</span>
+                <span className={css.fileEmpty}>{fileRefreshing ? 'Reading directory…' : 'Directory is empty'}</span>
               )}
               {fileError && <span className={css.fileError}>{fileError}</span>}
             </div>
@@ -200,13 +200,13 @@ function WorkspaceChanges({
   onOpenDiff: (target: WorkspaceDiffTarget) => void
 }): JSX.Element {
   if (error !== undefined) return <span className={css.fileError}>{error}</span>
-  if (status === undefined) return <span className={css.fileEmpty}>{refreshing ? '正在读取 Git 状态…' : '暂无状态'}</span>
+  if (status === undefined) return <span className={css.fileEmpty}>{refreshing ? 'Reading Git status…' : 'No status available'}</span>
   if (status.state === 'not-repository') {
     return (
       <div className={css.workspaceGitEmpty}>
         <span><IconBranchOutline16 size={20} /></span>
-        <strong>当前 Workspace 不是 Git 仓库</strong>
-        <p>仍可在“文件”中浏览工作区内容。</p>
+        <strong>This Workspace is not a Git repository</strong>
+        <p>You can still browse its contents under Files.</p>
       </div>
     )
   }
@@ -214,8 +214,8 @@ function WorkspaceChanges({
     return (
       <div className={css.workspaceGitEmpty}>
         <span><IconBranchOutline16 size={20} /></span>
-        <strong>没有未提交变更</strong>
-        <p>Workspace 当前处于干净状态。</p>
+        <strong>No uncommitted changes</strong>
+        <p>The Workspace is clean.</p>
       </div>
     )
   }
@@ -226,11 +226,11 @@ function WorkspaceChanges({
   const untracked = status.changes.filter(change => change.kind === 'untracked')
   return (
     <div className={css.workspaceChanges}>
-      <WorkspaceChangeGroup title="冲突" changes={conflicted} scope="unstaged" onOpenDiff={onOpenDiff} />
-      <WorkspaceChangeGroup title="已暂存" changes={staged} scope="staged" onOpenDiff={onOpenDiff} />
-      <WorkspaceChangeGroup title="已修改" changes={modified} scope="unstaged" onOpenDiff={onOpenDiff} />
-      <WorkspaceChangeGroup title="未跟踪" changes={untracked} scope="unstaged" onOpenDiff={onOpenDiff} />
-      {status.truncated && <span className={css.workspaceChangesTruncated}>变更过多，仅显示前 2000 项。</span>}
+      <WorkspaceChangeGroup title="Conflicts" changes={conflicted} scope="unstaged" onOpenDiff={onOpenDiff} />
+      <WorkspaceChangeGroup title="Staged" changes={staged} scope="staged" onOpenDiff={onOpenDiff} />
+      <WorkspaceChangeGroup title="Modified" changes={modified} scope="unstaged" onOpenDiff={onOpenDiff} />
+      <WorkspaceChangeGroup title="Untracked" changes={untracked} scope="unstaged" onOpenDiff={onOpenDiff} />
+      {status.truncated && <span className={css.workspaceChangesTruncated}>Too many changes; showing the first 2,000.</span>}
     </div>
   )
 }
@@ -255,7 +255,7 @@ function WorkspaceChangeGroup({
           type="button"
           className={css.workspaceChangeRow}
           key={`${title}:${change.path}`}
-          title={`预览 ${change.path}`}
+          title={`Preview ${change.path}`}
           onClick={() => { onOpenDiff({ change, scope }) }}
         >
           <span className={`${css.workspaceChangeCode} ${workspaceChangeTone(change)}`}>
@@ -311,14 +311,14 @@ function WorkspaceDiffDialog({
     return () => { active = false }
   }, [layout, target, teamId, themeType])
 
-  const scopeLabel = target?.scope === 'staged' ? '已暂存' : '工作区'
+  const scopeLabel = target?.scope === 'staged' ? 'Staged' : 'Workspace'
   const hasTextPatch = diff !== undefined && !diff.binary && diff.html.length > 0
   return (
     <AnimatedModal
       open={target !== undefined}
       onClose={onClose}
-      title={target?.change.path ?? '文件变更'}
-      closeLabel="关闭变更预览"
+      title={target?.change.path ?? 'File changes'}
+      closeLabel="Close change preview"
       className={css.workspaceDiffDialog ?? ''}
       headless
     >
@@ -326,35 +326,35 @@ function WorkspaceDiffDialog({
         <header className={css.workspaceDiffHeader}>
           <div className={css.workspaceDiffHeading}>
             <div className={css.workspaceDiffTitleRow}>
-              <h2>{target?.change.path ?? '文件变更'}</h2>
+              <h2>{target?.change.path ?? 'File changes'}</h2>
               <span>{workspaceChangeLabel(target?.change.kind)}</span>
             </div>
-            <p>{scopeLabel}变更 · 只读预览</p>
+            <p>{scopeLabel} changes · Read-only preview</p>
           </div>
           <div className={css.workspaceDiffHeaderActions}>
-            <div className={css.workspaceDiffLayout} role="group" aria-label="Diff 布局">
+            <div className={css.workspaceDiffLayout} role="group" aria-label="Diff layout">
               <button
                 type="button"
                 className={layout === 'unified' ? css.workspaceDiffLayoutActive : ''}
                 onClick={() => { setLayout('unified') }}
-              >统一</button>
+              >Unified</button>
               <button
                 type="button"
                 className={layout === 'split' ? css.workspaceDiffLayoutActive : ''}
                 onClick={() => { setLayout('split') }}
-              >分栏</button>
+              >Split</button>
             </div>
-            <button type="button" className={css.workspaceDiffClose} aria-label="关闭变更预览" onClick={onClose}>
+            <button type="button" className={css.workspaceDiffClose} aria-label="Close change preview" onClick={onClose}>
               <IconCloseOutline16 size={16} />
             </button>
           </div>
         </header>
         <div className={css.workspaceDiffBody}>
-          {loading && <div className={css.workspaceDiffState}>正在读取文件变更…</div>}
+          {loading && <div className={css.workspaceDiffState}>Reading file changes…</div>}
           {error && <div role="alert" className={css.workspaceDiffError}>{error}</div>}
-          {diff?.binary && <div className={css.workspaceDiffState}>二进制文件无法显示文本 Diff。</div>}
+          {diff?.binary && <div className={css.workspaceDiffState}>Text diffs are unavailable for binary files.</div>}
           {diff !== undefined && !diff.binary && !hasTextPatch && (
-            <div className={css.workspaceDiffState}>这个文件只有元数据变化，没有可显示的文本差异。</div>
+            <div className={css.workspaceDiffState}>This file has metadata-only changes and no displayable text diff.</div>
           )}
           {hasTextPatch && diff !== undefined && <WorkspaceDiffHtml html={diff.html} />}
         </div>
@@ -389,14 +389,14 @@ function useHarnessThemeType(): 'light' | 'dark' {
 }
 
 function workspaceChangeLabel(kind: WorkspaceGitChangeView['kind'] | undefined): string {
-  if (kind === 'added') return '新增文件'
-  if (kind === 'deleted') return '删除文件'
-  if (kind === 'renamed') return '重命名'
-  if (kind === 'copied') return '复制文件'
-  if (kind === 'unmerged') return '冲突文件'
-  if (kind === 'untracked') return '未跟踪文件'
-  if (kind === 'type-changed') return '类型变化'
-  return '修改文件'
+  if (kind === 'added') return 'Added file'
+  if (kind === 'deleted') return 'Deleted file'
+  if (kind === 'renamed') return 'Renamed'
+  if (kind === 'copied') return 'Copied file'
+  if (kind === 'unmerged') return 'Conflicted file'
+  if (kind === 'untracked') return 'Untracked file'
+  if (kind === 'type-changed') return 'Type changed'
+  return 'Modified file'
 }
 
 function workspaceChangeCode(change: WorkspaceGitChangeView): string {

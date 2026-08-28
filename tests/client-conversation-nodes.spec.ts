@@ -14,14 +14,14 @@ function userNode(id: string, text: string): ConversationNode {
 
 describe('mergeConversationNodes', () => {
   it('removes an optimistic message after the committed message with the same id arrives', () => {
-    const committed = userNode('message-1', '重新获取团队成员')
-    const pending = userNode('message-1', '重新获取团队成员')
+    const committed = userNode('message-1', 'Refresh team members')
+    const pending = userNode('message-1', 'Refresh team members')
 
     expect(mergeConversationNodes([committed], [pending])).toEqual([committed])
   })
 
   it('keeps an optimistic message until its committed message arrives', () => {
-    const pending = userNode('pending:1', '重新获取团队成员')
+    const pending = userNode('pending:1', 'Refresh team members')
 
     expect(mergeConversationNodes([], [pending])).toEqual([pending])
   })

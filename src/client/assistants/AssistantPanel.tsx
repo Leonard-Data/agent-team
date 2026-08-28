@@ -49,24 +49,24 @@ export function AssistantPanel({
     <section className={css.section}>
       <div className={css.sectionHeader}>
         <div>
-          <h2 className={css.sectionHeading}>助手模板 <span className={css.count}>{assistants.length}</span></h2>
-          <p className={css.sectionDescription}>助手是可复用模板，解散团队不会删除助手。</p>
+          <h2 className={css.sectionHeading}>Assistant templates <span className={css.count}>{assistants.length}</span></h2>
+          <p className={css.sectionDescription}>Assistants are reusable templates and are not deleted when a team is dissolved.</p>
         </div>
         <div className={css.sectionHeaderActions}>
-          <Button variant="primary" onClick={() => { setCreating(true) }}>手动新建</Button>
+          <Button variant="primary" onClick={() => { setCreating(true) }}>Create manually</Button>
         </div>
       </div>
       <article className={css.assistantBuilderCard}>
         <div className={css.assistantBuilderAvatar} aria-hidden="true">AI</div>
         <div className={css.assistantBuilderCopy}>
-          <span className={css.assistantBuilderEyebrow}>内置 · 默认</span>
-          <strong>团队 Agent 小助手</strong>
-          <p>描述你需要的角色，它会询问必要参数、整理长期提示词，并在确认后创建助手。</p>
+          <span className={css.assistantBuilderEyebrow}>Built in · Default</span>
+          <strong>Team Agent Assistant</strong>
+          <p>Describe the role you need. It will collect the required settings, prepare long-term instructions, and create the assistant after confirmation.</p>
         </div>
-        <Button variant="primary" onClick={() => { setBuilderOpen(true) }}>开始对话</Button>
+        <Button variant="primary" onClick={() => { setBuilderOpen(true) }}>Start conversation</Button>
       </article>
       {assistants.length === 0
-        ? <Empty text="还没有助手模板" hint="创建助手后，就可以把它作为 Leader 或普通成员加入不同团队。" />
+        ? <Empty text="No assistant templates yet" hint="Create an assistant, then add it to teams as a Leader or regular member." />
         : (
             <div className={css.cardGrid}>
               {assistants.map(assistant => (
@@ -82,9 +82,9 @@ export function AssistantPanel({
       <AnimatedModal
         open={builderOpen}
         onClose={() => { setBuilderOpen(false) }}
-        title="团队 Agent 小助手"
-        closeLabel="关闭"
-        description="通过对话设计助手，完整配置会在你确认后保存到助手模板库。"
+        title="Team Agent Assistant"
+        closeLabel="Close"
+        description="Design an assistant through conversation. Its complete configuration is saved to the template library after you confirm it."
         className={css.assistantBuilderDialog ?? ''}
         contentClassName={css.assistantBuilderDialogContent ?? ''}
       >
@@ -93,21 +93,21 @@ export function AssistantPanel({
       <AnimatedModal
         open={creating}
         onClose={() => { setCreating(false) }}
-        title="新建助手"
-        closeLabel="关闭"
-        description="配置可复用的模型、权限与长期规则。具体任务在团队启动后发送。"
+        title="Create assistant"
+        closeLabel="Close"
+        description="Configure reusable model, permission, and long-term rules. Send specific tasks after the team starts."
         className={css.assistantDialog ?? ''}
         contentClassName={css.modalScrollContent ?? ''}
         footer={(
           <>
-            <Button variant="outline" onClick={() => { setCreating(false) }} disabled={assistantSaving}>取消</Button>
+            <Button variant="outline" onClick={() => { setCreating(false) }} disabled={assistantSaving}>Cancel</Button>
             <Button
               variant="primary"
               type="submit"
               form={ASSISTANT_FORM_ID}
               disabled={assistantSaving}
             >
-              {assistantSaving ? '保存中…' : '保存助手'}
+              {assistantSaving ? 'Saving…' : 'Save assistant'}
             </Button>
           </>
         )}
@@ -123,23 +123,23 @@ export function AssistantPanel({
       <AnimatedModal
         open={editingAssistant !== undefined}
         onClose={() => { setEditingAssistant(undefined) }}
-        title="编辑助手"
-        closeLabel="关闭"
-        description="更新助手模板只影响之后启动的团队成员，不修改已有成员快照。"
+        title="Edit assistant"
+        closeLabel="Close"
+        description="Template updates affect only team members started later and do not change existing member snapshots."
         className={css.assistantDialog ?? ''}
         contentClassName={css.modalScrollContent ?? ''}
         footer={editingAssistant === undefined
           ? undefined
           : (
               <>
-                <Button variant="outline" onClick={() => { setEditingAssistant(undefined) }} disabled={assistantSaving}>取消</Button>
+                <Button variant="outline" onClick={() => { setEditingAssistant(undefined) }} disabled={assistantSaving}>Cancel</Button>
                 <Button
                   variant="primary"
                   type="submit"
                   form={ASSISTANT_EDIT_FORM_ID}
                   disabled={assistantSaving}
                 >
-                  {assistantSaving ? '保存中…' : '保存修改'}
+                  {assistantSaving ? 'Saving…' : 'Save changes'}
                 </Button>
               </>
             )}
@@ -234,7 +234,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
       else void load()
       setError(undefined)
     }, () => {
-      setError('实时连接已断开，正在等待重连')
+      setError('Live connection lost; waiting to reconnect')
     }, () => {
       setError(undefined)
       if (drafting.current) void loadHistory()
@@ -387,14 +387,14 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
   const running = conversation?.status === 'running'
   const pendingInteractions = conversation?.pendingInteractions ?? []
   const runtimeLabel = pendingInteractions.some(interaction => interaction.kind === 'approval')
-    ? '等待审批'
+    ? 'Awaiting approval'
     : pendingInteractions.length > 0
-      ? '等待回答'
+      ? 'Awaiting answer'
       : loading
-        ? '正在启动…'
+        ? 'Starting…'
         : running
-          ? '正在思考'
-          : '可以对话'
+          ? 'Thinking'
+          : 'Ready to chat'
   const providers = catalog?.providers ?? []
   const modelSelection = JSON.stringify([selectedProvider, selectedModel])
   const appliedConfiguration = conversation?.configuration ?? draft?.configuration
@@ -413,7 +413,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
           onClick={() => { void createDraft() }}
         >
           <IconPlusOutline16 size={14} />
-          <span>新对话</span>
+          <span>New conversation</span>
         </button>
         <div className={css.assistantBuilderHistoryList}>
           {history.map(item => (
@@ -430,11 +430,11 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
                   <em>{assistantBuilderStateLabel(item.state)}</em>
                 </span>
               </button>
-              <Tooltip label="归档会话" side="right" delayMs={400}>
+              <Tooltip label="Archive conversation" side="right" delayMs={400}>
                 <button
                   type="button"
                   className={css.assistantBuilderHistoryArchive}
-                  aria-label={`归档会话 ${item.title}`}
+                  aria-label={`Archive conversation ${item.title}`}
                   disabled={loading || archivingSessionId !== undefined || (running && item.sessionId === conversation?.sessionId)}
                   onClick={() => {
                     setArchiveError(undefined)
@@ -446,7 +446,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
               </Tooltip>
             </div>
           ))}
-          {!loading && history.length === 0 && <span className={css.assistantBuilderHistoryEmpty}>暂无历史对话</span>}
+          {!loading && history.length === 0 && <span className={css.assistantBuilderHistoryEmpty}>No conversation history</span>}
         </div>
       </aside>
       <div className={css.assistantBuilderMain}>
@@ -465,7 +465,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
               setModelSelectionDirty(true)
             }}
             className={css.assistantBuilderModelSelect}
-            aria-label="小助手模型目录"
+            aria-label="Assistant model catalog"
             disabled={loading || running || applyingModel}
           >
             {providers.map(provider => (
@@ -487,7 +487,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             disabled={!modelChanged || !selectedProvider || !selectedModel || loading || running || applyingModel}
             onClick={() => { void applyModel() }}
           >
-            {applyingModel ? '切换中…' : '应用模型'}
+            {applyingModel ? 'Switching…' : 'Apply model'}
           </Button>
         </div>
         </div>
@@ -495,7 +495,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
         {!loading && (draft !== undefined || conversation?.nodes.length === 0) && (
           <article className={`${conversationCss.messageNode} ${conversationCss.assistantMessage}`}>
             <div className={conversationCss.messageText}>
-              <MarkdownText text="你好，我是团队 Agent 小助手。告诉我你想创建什么样的助手，以及它主要负责什么；缺少的配置我会逐项询问你。" />
+              <MarkdownText text="Hi, I'm the Team Agent Assistant. Tell me what kind of assistant you want to create and its main responsibilities. I'll ask for any missing settings." />
             </div>
           </article>
         )}
@@ -534,26 +534,26 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             event.preventDefault()
             void send()
           }}
-          placeholder={running ? '小助手正在回复…' : '例如：我需要一个负责 React 前端开发和代码审查的助手'}
+          placeholder={running ? 'The assistant is responding…' : 'For example: I need an assistant for React frontend development and code review'}
           disabled={loading || running}
           rows={3}
         />
         <div className={conversationCss.composerFooter}>
-          <span className={css.muted}>Enter 发送 · Shift+Enter 换行</span>
+          <span className={css.muted}>Enter Send · Shift+Enter New line</span>
           <div className={conversationCss.composerActions}>
             {running && (
-              <Tooltip label="停止生成" side="top" delayMs={400}>
-                <button type="button" className={conversationCss.composerIconButton} onClick={() => { void stop() }} aria-label="停止生成">
+              <Tooltip label="Stop generating" side="top" delayMs={400}>
+                <button type="button" className={conversationCss.composerIconButton} onClick={() => { void stop() }} aria-label="Stop generating">
                   <IconStopFill16 size={16} />
                 </button>
               </Tooltip>
             )}
-            <Tooltip label={sending ? '发送中…' : '发送消息'} side="top" delayMs={400}>
+            <Tooltip label={sending ? 'Sending…' : 'Send message'} side="top" delayMs={400}>
               <button
                 type="submit"
                 className={conversationCss.composerIconButton}
                 disabled={loading || running || sending || !selectedProvider || !selectedModel || content.trim().length === 0}
-                aria-label={sending ? '发送中' : '发送消息'}
+                aria-label={sending ? 'Sending' : 'Send message'}
               >
                 <IconSendOutline16 size={16} />
               </button>
@@ -572,9 +572,9 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             setArchiveError(undefined)
           }
         }}
-        title="归档会话"
-        closeLabel="关闭"
-        description="归档后，该会话将不再显示在团队 Agent 小助手的历史记录中。"
+        title="Archive conversation"
+        closeLabel="Close"
+        description="After archiving, this conversation will no longer appear in the Team Agent Assistant history."
         className={css.assistantBuilderArchiveDialog ?? ''}
         footer={(
           <>
@@ -586,14 +586,14 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
                 setArchiveError(undefined)
               }}
             >
-              取消
+              Cancel
             </Button>
             <Button
               variant="primary"
               disabled={archiveCandidate === undefined || archivingSessionId !== undefined}
               onClick={() => { void archiveConversation() }}
             >
-              {archivingSessionId !== undefined ? '归档中…' : '确认归档'}
+              {archivingSessionId !== undefined ? 'Archiving…' : 'Archive'}
             </Button>
           </>
         )}
@@ -605,7 +605,7 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
             </div>
             <div>
               <strong>{archiveCandidate.title}</strong>
-              <p>会话内容不会被删除，底层 Session 日志仍由 Harness 保留。</p>
+              <p>The conversation content is not deleted; Harness retains the underlying session log.</p>
             </div>
             {archiveError && <div role="alert" className={css.inlineError}>{archiveError}</div>}
           </div>
@@ -616,13 +616,13 @@ function AssistantBuilderConversation({ catalog }: { catalog: CatalogView | unde
 }
 
 function assistantBuilderStateLabel(state: AssistantBuilderConversationSummary['state']): string {
-  if (state === 'completed') return '已创建'
-  if (state === 'in_progress') return '配置中'
-  return '新对话'
+  if (state === 'completed') return 'Created'
+  if (state === 'in_progress') return 'Configuring'
+  return 'New conversation'
 }
 
 function formatConversationTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat('en-US', {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -676,7 +676,7 @@ function AssistantCard({
           className={css.assistantCardContent}
           role="button"
           tabIndex={busy ? -1 : 0}
-          aria-label={`编辑助手 ${assistant.name}`}
+          aria-label={`Edit assistant ${assistant.name}`}
           onClick={() => { if (!busy) onEdit() }}
           onKeyDown={event => {
             if (busy || (event.key !== 'Enter' && event.key !== ' ')) return
@@ -687,19 +687,19 @@ function AssistantCard({
           <strong>{assistant.name}</strong>
           <span className={css.muted}>{assistant.provider} / {assistant.model}</span>
           <span className={css.muted}>
-            Preset: {assistant.agentPresetId} · 权限: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId} · 思考模式：{assistant.reasoningEffort ?? '模型默认'}
+            Preset: {assistant.agentPresetId} · Permission: {PERMISSION_LABELS[assistant.permissionPresetId] ?? assistant.permissionPresetId} · Reasoning mode: {assistant.reasoningEffort ?? 'Model default'}
           </span>
           <span className={css.muted}>
-            Skills: {assistant.skillAllowlist.length > 0 ? assistant.skillAllowlist.join('、') : '未选择'}
+            Skills: {assistant.skillAllowlist.length > 0 ? assistant.skillAllowlist.join(', ') : 'None selected'}
           </span>
           <span className={css.muted}>
-            MCP: {assistant.mcpServers.length > 0 ? assistant.mcpServers.join('、') : '未选择'}
+            MCP: {assistant.mcpServers.length > 0 ? assistant.mcpServers.join(', ') : 'None selected'}
           </span>
           {assistant.description && <p className={css.description}>{assistant.description}</p>}
         </div>
         <div className={css.actions}>
-          <button type="button" className={css.secondaryButton} disabled={busy} onClick={onEdit}>编辑</button>
-          <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void clone() }}>复制</button>
+          <button type="button" className={css.secondaryButton} disabled={busy} onClick={onEdit}>Edit</button>
+          <button type="button" className={css.secondaryButton} disabled={busy} onClick={() => { void clone() }}>Duplicate</button>
           <button
             type="button"
             className={css.dangerButton}
@@ -709,7 +709,7 @@ function AssistantCard({
               setDeleteOpen(true)
             }}
           >
-            删除
+            Delete
           </button>
         </div>
         {error && !deleteOpen && <div role="alert" className={css.inlineError}>{error}</div>}
@@ -721,9 +721,9 @@ function AssistantCard({
           setDeleteOpen(false)
           setError(undefined)
         }}
-        title="删除助手模板"
-        closeLabel="关闭"
-        description="此操作无法撤销。"
+        title="Delete assistant template"
+        closeLabel="Close"
+        description="This action cannot be undone."
         className={css.assistantDeleteDialog ?? ''}
         footer={(
           <>
@@ -735,7 +735,7 @@ function AssistantCard({
                 setError(undefined)
               }}
             >
-              取消
+              Cancel
             </Button>
             <button
               type="button"
@@ -743,7 +743,7 @@ function AssistantCard({
               disabled={busy}
               onClick={() => { void remove() }}
             >
-              {busy ? '删除中…' : '确认删除'}
+              {busy ? 'Deleting…' : 'Delete'}
             </button>
           </>
         )}
@@ -754,7 +754,7 @@ function AssistantCard({
           </div>
           <div>
             <strong>{assistant.name}</strong>
-            <p>删除后不会影响团队或 Workspace。若模板仍被团队成员引用，系统会拒绝删除。</p>
+            <p>Deleting the template does not affect teams or Workspaces. The system refuses deletion while a team member still references it.</p>
           </div>
           {error && <div role="alert" className={css.inlineError}>{error}</div>}
         </div>
@@ -909,17 +909,17 @@ function AssistantForm({
   return (
     <form id={formId} onSubmit={(event) => { void submit(event) }} className={`${css.form} ${css.assistantForm}`}>
       <div className={css.formGrid}>
-        <Field label="名称"><input required value={name} onChange={event => { setName(event.target.value) }} className={css.input} /></Field>
-        <Field label="说明"><input value={description} onChange={event => { setDescription(event.target.value) }} className={css.input} /></Field>
+        <Field label="Name"><input required value={name} onChange={event => { setName(event.target.value) }} className={css.input} /></Field>
+        <Field label="Description"><input value={description} onChange={event => { setDescription(event.target.value) }} className={css.input} /></Field>
         <Field label="Provider">
           <select required value={provider} onChange={event => { setProvider(event.target.value) }} className={css.input}>
-            <option value="">请选择</option>
+            <option value="">Select a provider</option>
             {providers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </Field>
-        <Field label={`模型（${models.length} 个可选）`}>
+        <Field label={`Model (${models.length} available)`}>
           <select required value={modelChoice} onChange={event => { setModelChoice(event.target.value) }} className={css.input}>
-            <option value="" disabled>请选择</option>
+            <option value="" disabled>Select a model</option>
             {models.map(item => (
               <option key={item.id} value={item.id}>
                 {item.name === item.id ? item.id : `${item.name}（${item.id}）`}
@@ -928,7 +928,7 @@ function AssistantForm({
           </select>
         </Field>
         {modelCapabilities.value?.reasoning !== undefined && modelCapabilities.value.reasoning.efforts.length > 0 && (
-          <Field label="思考模式">
+          <Field label="Reasoning mode">
             <select
               value={reasoningEffort}
               onChange={event => { setReasoningEffort(event.target.value) }}
@@ -942,7 +942,7 @@ function AssistantForm({
                 </option>
               ))}
             </select>
-            <span id={`${formId}-reasoning-hint`} className={css.hint}>由当前 Provider 和模型决定可用档位。</span>
+            <span id={`${formId}-reasoning-hint`} className={css.hint}>Available levels are determined by the current Provider and model.</span>
           </Field>
         )}
         {modelCapabilities.error && <span className={conversationCss.composerError}>{modelCapabilities.error}</span>}
@@ -951,7 +951,7 @@ function AssistantForm({
             {presets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </Field>
-        <Field label="权限预设">
+        <Field label="Permission preset">
           <select required value={permissionPresetId} onChange={event => { setPermissionPresetId(event.target.value) }} className={css.input}>
             {permissions.map(item => (
               <option key={item.value} value={item.value}>
@@ -960,25 +960,25 @@ function AssistantForm({
             ))}
           </select>
         </Field>
-        <Field label="助手规则（可选）" className={css.fullWidth ?? ''}>
+        <Field label="Assistant instructions (optional)" className={css.fullWidth ?? ''}>
           <textarea
             value={instructions}
             onChange={event => { setInstructions(event.target.value) }}
             rows={4}
-            placeholder="例如：你负责前端实现；遵循现有代码风格；修改前先阅读相关文件；完成后向 Leader 汇报测试结果。"
+            placeholder="For example: Own frontend implementation; follow the existing code style; read relevant files before editing; report test results to the Leader when finished."
             className={css.input}
           />
-          <span className={css.hint}>随助手模板保存，在成员启动时加入系统提示词；这里不填写具体任务。</span>
+          <span className={css.hint}>Saved with the template and added to the system prompt when a member starts. Do not enter a specific task here.</span>
         </Field>
         <Field
-          label={`可用 Skills（已选择 ${selectedSkills.length} 个）`}
+          label={`Available Skills (${selectedSkills.length} selected)`}
           className={css.fullWidth ?? ''}
         >
-          <div className={css.skillPicker} role="group" aria-label="选择助手可使用的 Skills">
-            {skillsLoading && <span className={css.hint}>正在读取该 Preset 的 Skills…</span>}
+          <div className={css.skillPicker} role="group" aria-label="Select Skills available to the assistant">
+            {skillsLoading && <span className={css.hint}>Loading Skills for this Preset…</span>}
             {!skillsLoading && skillsError && <span className={conversationCss.composerError}>{skillsError}</span>}
             {!skillsLoading && !skillsError && availableSkills.length === 0 && (
-              <span className={css.hint}>该 Agent Preset 没有可用的 Skill。</span>
+              <span className={css.hint}>This Agent Preset has no available Skills.</span>
             )}
             {!skillsLoading && availableSkills.map(skill => (
               <label key={skill.name} className={css.skillOption}>
@@ -992,23 +992,23 @@ function AssistantForm({
                   }}
                 />
                 <span className={css.skillOptionText}>
-                  <strong>{skill.name}{!skill.modelInvocable && skill.userInvocable ? ' · 仅斜杠调用' : ''}</strong>
+                  <strong>{skill.name}{!skill.modelInvocable && skill.userInvocable ? ' · Slash command only' : ''}</strong>
                   <small>{skill.description}</small>
                 </span>
               </label>
             ))}
           </div>
-          <span className={css.hint}>只选择这个助手执行任务时可能需要的 Skills；运行时会按任务需要加载具体 Skill 指令。</span>
+          <span className={css.hint}>Select only the Skills this assistant may need. Skill instructions are loaded at runtime when required by the task.</span>
         </Field>
         <Field
-          label={`可用 MCP（已选择 ${selectedMcpServers.length} 个）`}
+          label={`Available MCP Servers (${selectedMcpServers.length} selected)`}
           className={css.fullWidth ?? ''}
         >
-          <div className={css.skillPicker} role="group" aria-label="选择助手可使用的 MCP Server">
-            {mcpLoading && <span className={css.hint}>正在读取该 Preset 的 MCP Server…</span>}
+          <div className={css.skillPicker} role="group" aria-label="Select MCP Servers available to the assistant">
+            {mcpLoading && <span className={css.hint}>Loading MCP Servers for this Preset…</span>}
             {!mcpLoading && mcpError && <span className={conversationCss.composerError}>{mcpError}</span>}
             {!mcpLoading && !mcpError && availableMcpServers.length === 0 && (
-              <span className={css.hint}>当前 Harness 未为该 Agent Preset 配置 MCP Server。</span>
+              <span className={css.hint}>Harness has no MCP Servers configured for this Agent Preset.</span>
             )}
             {!mcpLoading && availableMcpServers.map(server => (
               <label key={server.name} className={css.skillOption}>
@@ -1023,12 +1023,12 @@ function AssistantForm({
                 />
                 <span className={css.skillOptionText}>
                   <strong>{server.name}</strong>
-                  <small>{server.tools.length} 个工具</small>
+                  <small>{server.tools.length} tools</small>
                 </span>
               </label>
             ))}
           </div>
-          <span className={css.hint}>MCP 连接和密钥由 Harness Profile/Preset 统一管理；运行时只向助手开放已选 Server 的工具。</span>
+          <span className={css.hint}>Harness Profile/Preset manages MCP connections and credentials; only tools from selected Servers are exposed to the assistant at runtime.</span>
         </Field>
       </div>
       {error && <div role="alert" className={css.inlineError}>{error}</div>}

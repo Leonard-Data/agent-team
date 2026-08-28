@@ -1,6 +1,6 @@
 # Agent Team for DeepSeek Harness
 
-English | [简体中文](./README_CN.md)
+English | [Simplified Chinese](./README_CN.md)
 
 ![Agent Team — Independent Agents, Shared Workspace](./demo/github-banner.png)
 
@@ -277,7 +277,7 @@ Confirm that the selected Workspace itself is a Git repository. A repository nes
 
 ## User Documentation
 
-The detailed user guide is available in Chinese:
+The detailed user guide is available in English:
 
 - [Documentation index](./docs/README.md)
 - [Installation and startup](./docs/installation.md)

@@ -8,16 +8,16 @@ import {
 
 describe('composer triggers', () => {
   it('finds slash and file triggers at the caret', () => {
-    expect(composerTriggerAt('请执行 /doc', 8)).toEqual({
+    expect(composerTriggerAt('Please run /doc', 15)).toEqual({
       kind: 'skill',
-      start: 4,
-      end: 8,
+      start: 11,
+      end: 15,
       query: 'doc',
     })
-    expect(composerTriggerAt('检查 @src/mai', 11)).toEqual({
+    expect(composerTriggerAt('Check @src/mai', 14)).toEqual({
       kind: 'file',
-      start: 3,
-      end: 11,
+      start: 6,
+      end: 14,
       query: 'src/mai',
     })
   })
@@ -28,11 +28,11 @@ describe('composer triggers', () => {
   })
 
   it('replaces the complete token and leaves the caret after a separator', () => {
-    const trigger = composerTriggerAt('使用 /docx-old 完成', 9)
+    const trigger = composerTriggerAt('Use /docx-old now', 13)
     expect(trigger).toBeDefined()
-    expect(replaceComposerTrigger('使用 /docx-old 完成', trigger!, '/documents')).toEqual({
-      value: '使用 /documents 完成',
-      cursor: 13,
+    expect(replaceComposerTrigger('Use /docx-old now', trigger!, '/documents')).toEqual({
+      value: 'Use /documents now',
+      cursor: 14,
     })
   })
 

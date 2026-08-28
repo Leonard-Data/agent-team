@@ -41,7 +41,7 @@ export async function callAgentTeam<M extends AgentTeamMethod>(
     }
     return body.value as AgentTeamResult<M>
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(`请求超时：${method}`)
+    if (controller.signal.aborted) throw new Error(`Request timed out: ${method}`)
     throw error
   } finally {
     clearTimeout(timeout)
@@ -71,7 +71,7 @@ export async function uploadAgentTeamFile(teamId: string, file: File): Promise<W
     }
     return body.value as WorkspaceUploadView
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(`文件上传超时：${file.name}`)
+    if (controller.signal.aborted) throw new Error(`File upload timed out: ${file.name}`)
     throw error
   } finally {
     clearTimeout(timeout)

@@ -44,8 +44,8 @@ export function PendingInteractionCard({
     return (
       <article className={`${css.interactionCard} ${css.approvalCard}`} aria-live="polite">
         <header className={css.interactionHeader}>
-          <strong>需要审批</strong>
-          <span>{submitted ? '已提交' : '等待操作'}</span>
+          <strong>Approval required</strong>
+          <span>{submitted ? 'Submitted' : 'Waiting for action'}</span>
         </header>
         <div className={css.approvalToolName}>{interaction.toolName}</div>
         {interaction.reason && <p className={css.interactionDescription}>{interaction.reason}</p>}
@@ -56,7 +56,7 @@ export function PendingInteractionCard({
             disabled={submitting || submitted}
             onClick={() => { void submitResponse({ kind: 'approval', outcome: 'rejected' }) }}
           >
-            拒绝
+            Deny
           </button>
           <button
             type="button"
@@ -64,7 +64,7 @@ export function PendingInteractionCard({
             disabled={submitting || submitted}
             onClick={() => { void submitResponse({ kind: 'approval', outcome: 'allowed-once' }) }}
           >
-            {submitting ? '提交中…' : submitted ? '已允许' : '允许本次'}
+            {submitting ? 'Submitting…' : submitted ? 'Allowed' : 'Allow once'}
           </button>
         </div>
         {error && <span className={css.interactionError}>{error}</span>}
@@ -98,8 +98,8 @@ export function PendingInteractionCard({
       }}
     >
       <header className={css.interactionHeader}>
-        <strong>{interaction.questions.some(question => question.intent?.kind === 'plan-review') ? '请审阅方案' : '需要你的回答'}</strong>
-        <span>{interaction.questions.length} 个问题</span>
+        <strong>{interaction.questions.some(question => question.intent?.kind === 'plan-review') ? 'Review the plan' : 'Your answer is required'}</strong>
+        <span>{interaction.questions.length} questions</span>
       </header>
       <div className={css.questionList}>
         {interaction.questions.map((question, index) => {
@@ -146,7 +146,7 @@ export function PendingInteractionCard({
                 className={css.questionCustomInput}
                 value={answer.custom ?? ''}
                 rows={2}
-                placeholder={(question.options?.length ?? 0) > 0 ? '其他答案（可选）' : '请输入回答'}
+                placeholder={(question.options?.length ?? 0) > 0 ? 'Other answer (optional)' : 'Enter your answer'}
                 onChange={event => {
                   const custom = event.target.value
                   updateAnswer(question.id, current => ({
@@ -166,7 +166,7 @@ export function PendingInteractionCard({
           className={css.interactionPrimaryButton}
           disabled={!complete || submitting || submitted}
         >
-          {submitting ? '提交中…' : submitted ? '已提交' : '提交回答'}
+          {submitting ? 'Submitting…' : submitted ? 'Submitted' : 'Submit answers'}
         </button>
       </div>
       {error && <span className={css.interactionError}>{error}</span>}

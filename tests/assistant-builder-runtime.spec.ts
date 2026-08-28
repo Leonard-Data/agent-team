@@ -21,7 +21,7 @@ const config: Config = {
 describe('AssistantBuilderRuntime', () => {
   it('lists persisted conversations with a title and progress state', async () => {
     const createdAt = 1_700_000_000_000
-    const events = [userEvent(0, '我需要一个负责 React 前端开发和代码审查的助手')]
+    const events = [userEvent(0, 'I need an assistant for React frontend development and code review')]
     const ctx = {
       on: vi.fn(() => vi.fn()),
       sessionPersistence: {
@@ -47,7 +47,7 @@ describe('AssistantBuilderRuntime', () => {
     await expect(runtime.listConversations()).resolves.toEqual({
       items: [{
         sessionId: 'agent-team:assistant-builder:history-1',
-        title: '我需要一个负责 React 前端开发和代码审查的助手',
+        title: 'I need an assistant for Reac…',
         createdAt: new Date(createdAt).toISOString(),
         updatedAt: new Date(events[0]!.time).toISOString(),
         state: 'in_progress',
@@ -217,7 +217,7 @@ describe('AssistantBuilderRuntime', () => {
     await restartedRuntime.startConversation(
       'zai-coding-cn',
       'glm-5.3',
-      '创建一个代码审查助手',
+      'Create a code review assistant',
     )
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
@@ -229,13 +229,13 @@ describe('AssistantBuilderRuntime', () => {
   })
 
   it('requires a fresh, real user response after preparation', () => {
-    const beforePreparation = userEvent(4, '确认创建')
-    const pluginRelay = userEvent(6, '确认创建', {
+    const beforePreparation = userEvent(4, 'Confirm creation')
+    const pluginRelay = userEvent(6, 'Confirm creation', {
       kind: 'plugin',
       plugin: 'dsh-agent-team',
       form: 'relay',
     })
-    const naturalConfirmation = userEvent(7, '没问题，就这样创建吧')
+    const naturalConfirmation = userEvent(7, 'Looks good, create it')
 
     expect(hasFreshAssistantDraftUserResponse([beforePreparation], 5)).toBe(false)
     expect(hasFreshAssistantDraftUserResponse([pluginRelay], 5)).toBe(false)

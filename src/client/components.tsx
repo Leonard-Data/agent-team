@@ -220,7 +220,7 @@ function FloatingTeamLauncher({ hasExecutingTeam }: { hasExecutingTeam: boolean 
 
   return (
     <Tooltip
-      label="打开团队工作台"
+      label="Open team workbench"
       delayMs={400}
       disabled={dragging || tooltipSuppressed}
     >
@@ -287,13 +287,13 @@ function FloatingTeamLauncher({ hasExecutingTeam }: { hasExecutingTeam: boolean 
         onMouseLeave={() => {
           setTooltipSuppressed(false)
         }}
-        aria-label={hasExecutingTeam ? '打开团队工作台，有团队正在执行任务' : '打开团队工作台'}
+        aria-label={hasExecutingTeam ? 'Open team workbench; a team is running tasks' : 'Open team workbench'}
       >
         <span className={css.floatingTeamLauncherIcon}>
           <IconAgentPresetOutline16 size={18} />
           {hasExecutingTeam && <span className={css.floatingTeamLauncherState} aria-hidden="true" />}
         </span>
-        <span className={css.floatingTeamLauncherLabel}>团队</span>
+        <span className={css.floatingTeamLauncherLabel}>Team</span>
       </button>
     </Tooltip>
   )
@@ -342,7 +342,7 @@ function useAgentTeamData(includeTeams: boolean, active = true): {
   useEffect(() => {
     if (!active) return
     void load()
-    return subscribeAgentTeam(() => { void load() }, () => { setError('事件连接已断开，正在等待重连') })
+    return subscribeAgentTeam(() => { void load() }, () => { setError('Event connection lost; waiting to reconnect') })
   }, [active, load])
 
   return { catalog, assistants, teams, loading, error, load }
@@ -354,11 +354,11 @@ export function AgentTeamSettingsSection(_props: SettingsSectionOwnerProps): JSX
     <section className={css.settingsSection}>
       <div className={css.settingsHeading}>
         <div>
-          <h1 className={css.settingsTitle}>Agent 团队</h1>
-          <p className={css.settingsDescription}>管理可在不同团队间复用的助手、模型和权限配置。</p>
+          <h1 className={css.settingsTitle}>Agent Team</h1>
+          <p className={css.settingsDescription}>Manage assistants, models, and permission settings that can be reused across teams.</p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => { void load() }} disabled={loading}>
-          {loading ? '刷新中…' : '刷新'}
+          {loading ? 'Refreshing…' : 'Refresh'}
         </Button>
       </div>
       {error && <div role="alert" className={css.error}>{error}</div>}
@@ -372,36 +372,36 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
   const { catalog, assistants, teams, error, load } = useAgentTeamData(true)
   const selectedTeam = teams.find(team => team.id === selectedTeamId)
   const hasExecutingTeam = teams.some(isTeamExecuting)
-  const headerTitle = selectedTeam?.name ?? 'Agent 团队'
+  const headerTitle = selectedTeam?.name ?? 'Agent Team'
   const headerSubtitle = selectedTeam === undefined
-    ? '多个平级 Agent，共享一个 Workspace'
-    : `${Object.keys(selectedTeam.members).length} 名成员 · ${selectedTeam.workspacePath}`
+    ? 'Independent Agents sharing one Workspace'
+    : `${Object.keys(selectedTeam.members).length} members · ${selectedTeam.workspacePath}`
 
   if (!visible) return <FloatingTeamLauncher hasExecutingTeam={hasExecutingTeam} />
 
   return (
-    <section className={css.fullscreenWorkbench} aria-label="Agent 团队工作台">
-      <aside className={css.teamNavigator} aria-label="团队列表">
+    <section className={css.fullscreenWorkbench} aria-label="Agent Team workbench">
+      <aside className={css.teamNavigator} aria-label="Team list">
         <div className={css.teamNavigatorHeader}>
           <button
             type="button"
             className={css.teamNavigatorTitle}
             onClick={openTeams}
-            aria-label="查看全部团队"
+            aria-label="View all teams"
             aria-current={selectedTeamId === undefined ? 'page' : undefined}
           >
             <IconAgentPresetOutline16 size={18} />
-            <span>团队</span>
+            <span>Teams</span>
           </button>
-          <Tooltip label="组建团队" delayMs={400}>
-            <button type="button" className={css.teamNavigatorAdd} onClick={openTeamCreator} aria-label="组建团队">
+          <Tooltip label="Create team" delayMs={400}>
+            <button type="button" className={css.teamNavigatorAdd} onClick={openTeamCreator} aria-label="Create team">
               <IconPlusOutline16 size={16} />
             </button>
           </Tooltip>
         </div>
         <div className={css.teamNavigatorList}>
           {teams.length === 0
-            ? <div className={css.teamNavigatorEmpty}>还没有团队</div>
+            ? <div className={css.teamNavigatorEmpty}>No teams yet</div>
             : teams.map(team => {
               const isSelected = team.id === selectedTeamId
               const executing = isTeamExecuting(team)
@@ -415,14 +415,14 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
                 >
                   <span className={css.teamNavigatorItemTop}>
                     <strong>{team.name}</strong>
-                    {executing && <span className={`${css.badge} ${css.badgeSuccess}`}>任务执行中</span>}
+                    {executing && <span className={`${css.badge} ${css.badgeSuccess}`}>Tasks running</span>}
                   </span>
                 </button>
               )
             })}
         </div>
         <div className={css.teamNavigatorFooter}>
-          <span>{teams.length} 个团队</span>
+          <span>{teams.length} teams</span>
         </div>
       </aside>
 
@@ -433,13 +433,13 @@ export function AgentTeamOverlay({ pickWorkspace }: { pickWorkspace: () => Promi
               <h1 className={css.title} title={headerTitle}>{headerTitle}</h1>
               {selectedTeam !== undefined && isTeamExecuting(selectedTeam) && (
                 <span className={`${css.badge} ${css.badgeSuccess ?? ''}`}>
-                  任务执行中
+                  Tasks running
                 </span>
               )}
             </div>
             <p className={css.subtitle} title={headerSubtitle}>{headerSubtitle}</p>
           </div>
-          <button type="button" className={css.iconButton} onClick={closeAgentTeam} aria-label="关闭工作台">
+          <button type="button" className={css.iconButton} onClick={closeAgentTeam} aria-label="Close workbench">
             <IconCloseOutline16 size={16} />
           </button>
         </header>

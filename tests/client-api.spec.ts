@@ -166,7 +166,7 @@ describe('Agent Team client requests', () => {
     vi.stubGlobal('fetch', fetch)
     vi.stubGlobal('crypto', { randomUUID: () => 'request-1' })
     const { uploadAgentTeamFile } = await import('../src/client/api.js')
-    const file = { name: '会议 notes.txt' } as File
+    const file = { name: 'meeting notes.txt' } as File
 
     await expect(uploadAgentTeamFile('team-1', file)).resolves.toMatchObject({
       path: '.agent-team/uploads/notes.txt',
@@ -233,7 +233,7 @@ describe('Agent Team client requests', () => {
       interactionId: 'question:question-rpc-1',
       response: {
         kind: 'question',
-        answers: [{ id: 'name', selected: ['代码审查助手'] }],
+        answers: [{ id: 'name', selected: ['Code review assistant'] }],
       },
     })
 

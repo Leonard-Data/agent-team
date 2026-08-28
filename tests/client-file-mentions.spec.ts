@@ -8,16 +8,16 @@ describe('Workspace file mentions', () => {
   })
 
   it('inserts a mention at the current cursor with readable spacing', () => {
-    expect(insertWorkspaceFileMention('检查文件', 4, 4, 'src/main.ts')).toEqual({
-      value: '检查文件 @src/main.ts',
-      cursor: 17,
+    expect(insertWorkspaceFileMention('Check file', 10, 10, 'src/main.ts')).toEqual({
+      value: 'Check file @src/main.ts',
+      cursor: 23,
     })
   })
 
   it('replaces selected text and preserves surrounding content', () => {
-    expect(insertWorkspaceFileMention('查看 old 然后修改', 3, 6, 'docs/my plan.md')).toEqual({
-      value: '查看 @"docs/my plan.md" 然后修改',
-      cursor: 21,
+    expect(insertWorkspaceFileMention('View old then edit', 5, 8, 'docs/my plan.md')).toEqual({
+      value: 'View @"docs/my plan.md" then edit',
+      cursor: 23,
     })
   })
 })

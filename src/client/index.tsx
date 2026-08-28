@@ -12,7 +12,7 @@ export const inject = ['slots', 'workspaces']
 
 export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register(
-    { name: 'settings.section', id: 'agent-team', order: 40, label: 'Agent 团队' },
+    { name: 'settings.section', id: 'agent-team', order: 40, label: 'Agent Team' },
     AgentTeamSettingsSection,
   ))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register(
@@ -20,7 +20,7 @@ export function apply(ctx: ClientContext): void {
       name: 'shell.overlay',
       id: 'agent-team',
       order: 20,
-      label: '团队',
+      label: 'Team',
       inject: (): { pickWorkspace: () => Promise<WorkspaceChoice | null> } => ({
         pickWorkspace: async () => {
           const path = await ctx.workspaces.pickDirectory()

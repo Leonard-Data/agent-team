@@ -106,10 +106,10 @@ export interface McpCatalogSnapshot {
 }
 
 const PERMISSION_PRESET_LABELS: Readonly<Record<string, string>> = {
-  'read-only': '只读',
-  'workspace-write': '工作区可写',
-  'danger-full-access': '完全访问',
-  standard: '标准',
+  'read-only': 'Read only',
+  'workspace-write': 'Workspace write',
+  'danger-full-access': 'Full access',
+  standard: 'Standard',
 }
 
 export class AgentTeamService extends Service {
